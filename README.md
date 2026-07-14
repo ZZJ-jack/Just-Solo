@@ -1,0 +1,795 @@
+# 🎵 Just Solo
+
+**跨平台音乐播放器** —— 基于 Qt 6.8.3 与 QML 构建，追求极致性能与优雅体验。
+
+---
+
+## 📖 项目简介
+
+Just Solo 是一款**轻量、高性能、界面精美**的桌面音乐播放器。它使用 **C++ + QML** 从零构建，不依赖任何 Web 运行时，在保持现代化 UI 的同时，实现了极低的内存占用和流畅的交互响应。
+
+### 为什么选择 Qt Quick？
+
+| 维度 | 典型 Web 技术栈 (Electron) | Qt Quick (Just Solo) |
+|------|---------------------------|------------------------|
+| 内存占用 | 300MB+ | < 80MB |
+| 启动时间 | ~3s | < 0.5s |
+| 包体积 | 150MB+ | ~40MB |
+| UI 渲染 | 浏览器合成 | GPU 原生加速 |
+| 音频管线 | Web Audio API (受限) | FFmpeg + PortAudio (全格式) |
+| 系统集成 | 有限 | 原生系统托盘、媒体键、通知 |
+
+本项目旨在展示 **Qt Quick** 在消费级桌面应用中的强大能力，并提供一个**高可扩展、模块清晰**的代码架构，方便开发者二次开发。
+
+---
+
+## 🧱 代码架构
+
+### 1. 整体分层架构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      UI 层 (QML + JavaScript)                  │
+│   - 声明式界面组件  - 动画引擎  - 主题系统  - 国际化         │
+└──────────────────────────┬──────────────────────────────────────┘
+                            │ 信号/槽 + 属性绑定（双向）
+┌──────────────────────────▼──────────────────────────────────────┐
+│                 业务逻辑层 (C++ 核心对象)                       │
+│   - PlayerController  - PlaylistManager  - LibraryScanner     │
+│   - LyricProvider  - Equalizer  - ThemeManager                │
+└──────────────────────────┬──────────────────────────────────────┘
+                            │ 依赖接口/抽象类
+┌──────────────────────────▼──────────────────────────────────────┐
+│              基础服务层 (C++ 服务组件)                          │
+│   - IAudioDecoder (FFmpeg)  - IAudioOutput (PortAudio)        │
+│   - ITagReader (TagLib)  - INetworkFetcher (Qt Network)       │
+└──────────────────────────┬──────────────────────────────────────┘
+                            │
+┌──────────────────────────▼──────────────────────────────────────┐
+│               Qt 框架 / 操作系统底层                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 各层职责
+
+**UI 层 (QML + JavaScript)**
+- 纯声明式编写，所有界面元素通过 `Item` / `Rectangle` / `Text` 等基础组件组合而成。
+- 动画系统基于 `NumberAnimation`、`Behavior`、`Transition` 实现，全部由 GPU 加速。
+- 主题颜色通过 QML 单例 `ThemeManager` 注入，切换主题时所有绑定自动更新，无需手动刷新。
+- 国际化字符串通过 `qsTr()` 宏标记，配合 Qt Linguist 工具链导出 `.ts` 翻译文件。
+
+**业务逻辑层 (C++ 核心对象)**
+- 所有核心对象通过 `qmlRegisterSingletonInstance()` 或 `qmlRegisterType()` 暴露给 QML。
+- 业务对象间通过 `EventBus`（基于 `QObject::event()` 或信号/槽广播）实现松耦合通信。
+- 每个核心对象为 `QObject` 子类，使用 `Q_PROPERTY` 宏暴露属性，QML 侧可直接绑定。
+
+**基础服务层 (C++ 服务组件)**
+- 所有外部依赖（解码、输出、标签、网络）均通过接口抽象，业务层仅依赖接口头文件。
+- 具体实现在运行时通过依赖注入构造函数或工厂方法传入，可随时替换。
+- 每个服务运行在独立线程（如解码线程、网络请求线程），避免阻塞 UI。
+
+---
+
+### 2. 音频管线详解
+
+```
+                    ┌──────────────┐
+    音频文件 ──────▶│  ITagReader  │  读取元数据 (标题/艺术家/封面)
+                    └──────┬───────┘
+                           │ 文件路径
+                    ┌──────▼───────┐
+                    │ IAudioDecoder│  FFmpeg 解码 → PCM 数据流
+                    │ (解码线程)    │  格式: float32, 采样率原样
+                    └──────┬───────┘
+                           │ PCM Buffer (ring buffer, 线程安全)
+                    ┌──────▼───────┐      ┌──────────────┐
+                    │ Equalizer    │─────▶│ IAudioOutput  │
+                    │ Controller   │      │ (PortAudio)   │
+                    │ (10段 EQ)    │      │ 输出线程       │
+                    └──────────────┘      └──────────────┘
+```
+
+**解码线程模型：**
+1. `PlayerController::load(url)` → 创建 `FFmpegDecoder` 实例并启动解码线程。
+2. 解码线程循环调用 `av_read_frame()` → `avcodec_send_packet()` / `avcodec_receive_frame()`，将 PCM 数据写入无锁环形缓冲区 (ring buffer)。
+3. 输出线程从环形缓冲区读取数据，经均衡器处理后交给 PortAudio 回调播放。
+4. 环形缓冲区大小设计为 ~500ms，平衡延迟与抗抖动能力。
+
+**支持格式：**
+
+| 格式 | 编码 | 支持 |
+|------|------|------|
+| MP3 | MPEG Audio Layer 3 | ✅ |
+| FLAC | Free Lossless Audio Codec | ✅ |
+| AAC | Advanced Audio Coding | ✅ |
+| OGG | Ogg Vorbis | ✅ |
+| WAV | PCM | ✅ |
+| WMA | Windows Media Audio | ✅ |
+| OPUS | Opus Interactive Audio | ✅ |
+| APE | Monkey's Audio | ✅ |
+
+---
+
+### 3. 播放状态机
+
+`PlayerController` 内部维护一个确定有限状态机，确保状态转换合法：
+
+```
+                    ┌──────────┐
+          ┌───────▶│ Stopped  │◀────────┐
+          │        └────┬─────┘         │
+          │   load()    │ stop()   stop()│
+          │        ┌────▼─────┐         │
+          │        │  Loaded  │         │
+          │        └────┬─────┘         │
+          │   play()    │ play()        │
+          │        ┌────▼─────┐         │
+          │  ┌────▶│ Playing  │────┐    │
+          │  │     └────┬─────┘    │    │
+          │  │pause()   │ endOfMedia│   │
+          │  │     ┌────▼─────┐    │    │
+          │  └─────│  Paused  │    │    │
+          │        └──────────┘    │    │
+          │                        │    │
+          │        ┌───────────────┘    │
+          │        │  next()/prev()     │
+          │        ▼                    │
+          │  ┌──────────────┐           │
+          └──│   Loading    │───────────┘
+             │ (下一首)      │
+             └──────────────┘
+```
+
+**状态枚举 (`PlaybackState`)：**
+```cpp
+enum class PlaybackState {
+    Stopped,   // 初始状态，无媒体加载
+    Loading,   // 正在加载/解码中
+    Loaded,    // 媒体已就绪，等待播放
+    Playing,   // 正在播放
+    Paused,    // 已暂停，可恢复
+    Error      // 解码错误、文件不存在等异常
+};
+```
+
+**关键信号：**
+- `stateChanged(PlaybackState oldState, PlaybackState newState)` — 状态变更
+- `positionChanged(qint64 ms)` — 播放进度（每 100ms 更新）
+- `durationChanged(qint64 ms)` — 总时长
+- `volumeChanged(float vol)` — 音量变化 [0.0, 1.0]
+- `currentTrackChanged(SongMetaData meta)` — 切换曲目
+
+---
+
+### 4. EventBus 事件总线
+
+`EventBus` 是全局单例，提供发布/订阅模式的跨模块通信。所有模块无需互相持有引用，只依赖事件类型即可解耦协作。
+
+**核心接口：**
+```cpp
+class EventBus : public QObject {
+public:
+    static EventBus* instance();
+
+    // 发布事件（线程安全）
+    void publish(const QString& eventType, const QVariantMap& payload);
+
+    // 订阅事件，返回订阅 ID 用于取消
+    int subscribe(const QString& eventType,
+                  std::function<void(const QVariantMap&)> handler);
+
+    // 取消订阅
+    void unsubscribe(int subscriptionId);
+};
+```
+
+**主要事件类型：**
+
+| 事件类型 | 发布者 | 订阅者 | 载荷 |
+|---------|--------|--------|------|
+| `player.state.changed` | PlayerController | LyricsView, PlaylistView, 系统托盘 | `{state, oldState}` |
+| `player.position.changed` | PlayerController | ProgressSlider, LyricsView | `{position, duration}` |
+| `player.track.changed` | PlayerController | LyricsView, PlaylistView, 封面显示 | `{metadata}` |
+| `playlist.changed` | PlaylistManager | PlaylistView | `{action, index}` |
+| `library.scan.complete` | LibraryScanner | PlaylistView | `{addedCount, totalFiles}` |
+| `lyric.line.changed` | LyricProvider | LyricsView | `{lineIndex, text, timestamp}` |
+| `theme.changed` | ThemeManager | 全局 | `{themeName}` |
+| `settings.changed` | SettingsManager | 相关订阅者 | `{key, value}` |
+
+**设计优势：**
+- 新增功能只需订阅已有事件，无需修改发布端代码。
+- 支持多窗口场景（如歌词浮窗、迷你播放器）自动同步。
+- 单元测试中可通过 Mock EventBus 隔离被测模块。
+
+---
+
+### 5. 项目目录结构
+
+```
+just-solo/
+├── CMakeLists.txt                 # 顶层构建文件
+├── README.md
+├── LICENSE
+├── .gitignore
+│
+├── src/
+│   ├── main.cpp                    # 程序入口，初始化 QML 引擎
+│   │
+│   ├── core/                       # 核心业务逻辑
+│   │   ├── player/
+│   │   │   ├── PlayerController.h/.cpp   # 播放总控（状态机、进度、音量）
+│   │   │   ├── PlaybackState.h           # 播放状态枚举
+│   │   │   └── IPlayerEngine.h           # 播放引擎抽象接口
+│   │   │
+│   │   ├── playlist/
+│   │   │   ├── PlaylistManager.h/.cpp    # 歌单管理（增删改查、排序、持久化）
+│   │   │   ├── SongMetaData.h            # 歌曲元数据结构
+│   │   │   └── PlaylistFormat.h          # 导入导出 (m3u/pls)
+│   │   │
+│   │   ├── library/
+│   │   │   ├── LibraryScanner.h/.cpp     # 媒体库扫描（监听文件夹）
+│   │   │   └── LibraryWatcher.h          # 文件系统监控封装
+│   │   │
+│   │   ├── lyric/
+│   │   │   ├── LyricProvider.h/.cpp      # 歌词获取与解析（本地 + 网络）
+│   │   │   └── LyricLine.h               # 歌词时间轴
+│   │   │
+│   │   ├── theme/
+│   │   │   ├── ThemeManager.h/.cpp       # 主题管理（暗/亮/自定义）
+│   │   │   └── ThemeConfig.h             # 颜色主题数据结构
+│   │   │
+│   │   └── equalizer/
+│   │       └── EqualizerController.h/.cpp # 均衡器控制（10段）
+│   │
+│   ├── services/                    # 基础服务（可替换实现）
+│   │   ├── audio/
+│   │   │   ├── IAudioDecoder.h            # 解码器接口
+│   │   │   ├── FFmpegDecoder.h/.cpp       # 基于 FFmpeg 的实现
+│   │   │   ├── IAudioOutput.h             # 输出接口
+│   │   │   └── PortAudioOutput.h/.cpp     # 基于 PortAudio 的实现
+│   │   │
+│   │   ├── tag/
+│   │   │   ├── ITagReader.h
+│   │   │   └── TagLibReader.h/.cpp        # 基于 TagLib 的实现
+│   │   │
+│   │   └── network/
+│   │       ├── INetworkFetcher.h
+│   │       └── QtNetworkFetcher.h/.cpp    # 基于 QNetworkAccessManager
+│   │
+│   ├── common/                      # 通用工具
+│   │   ├── EventBus.h/.cpp               # 全局事件总线（单例）
+│   │   ├── SettingsManager.h/.cpp        # 应用设置（QSettings 封装）
+│   │   ├── Logger.h                     # 日志宏 (分级: DEBUG/INFO/WARN/ERROR)
+│   │   └── Utils.h                      # 字符串、文件工具函数
+│   │
+│   ├── plugin/                      # 插件系统（预留）
+│   │   ├── IPluginInterface.h            # 插件标准接口
+│   │   └── PluginLoader.h/.cpp           # 动态加载 .dll/.so/.dylib
+│   │
+│   └── qml/                         # QML 界面资源
+│       ├── main.qml                      # 主窗口 (ApplicationWindow)
+│       ├── components/                   # 可复用 UI 组件
+│       │   ├── PlayButton.qml            # 播放/暂停按钮（带动画状态切换）
+│       │   ├── ProgressSlider.qml        # 进度条（支持点击跳转、拖拽）
+│       │   ├── VolumeControl.qml         # 音量滑块 + 静音按钮
+│       │   ├── AlbumCover.qml            # 专辑封面（旋转动画、模糊背景）
+│       │   ├── SearchBar.qml             # 搜索框（带防抖）
+│       │   └── ...
+│       ├── views/                        # 页面视图
+│       │   ├── PlayerView.qml            # 播放主界面
+│       │   ├── PlaylistView.qml          # 播放列表（支持拖拽排序）
+│       │   ├── LyricsView.qml            # 桌面歌词（卡拉OK风格）
+│       │   └── SettingsView.qml          # 设置页面
+│       ├── themes/                       # 主题定义
+│       │   ├── DarkTheme.qml             # 暗色主题（QtObject 单例）
+│       │   └── LightTheme.qml            # 亮色主题（QtObject 单例）
+│       └── js/                           # 辅助 JavaScript
+│           ├── ThemeHelper.js
+│           └── FormatHelper.js           # 时间格式化、字节转换等
+│
+├── tests/                         # 测试代码
+│   ├── unit/                       # C++ 单元测试 (GoogleTest)
+│   │   ├── test_player.cpp
+│   │   ├── test_playlist.cpp
+│   │   ├── test_lyric.cpp
+│   │   └── test_eventbus.cpp
+│   └── qml/                        # QML 集成测试 (qmltest)
+│       └── tst_playbutton.qml
+│
+├── resources/                     # 非代码资源
+│   ├── icons/                      # SVG 图标（主题色自适应）
+│   ├── fonts/                      # 嵌入字体
+│   └── qml.qrc                    # Qt 资源文件
+│
+└── deploy/                        # 打包脚本
+    ├── windows/                    # Inno Setup / WiX 脚本
+    ├── macos/                      # DMG 打包脚本
+    └── linux/                      # AppImage / deb 打包脚本
+```
+
+---
+
+### 6. 核心模块设计
+
+#### 6.1 PlaylistManager
+
+歌单管理器负责所有播放列表的增删改查与持久化。
+
+**SongMetaData 结构：**
+```cpp
+struct SongMetaData {
+    QString filePath;       // 文件绝对路径 (唯一标识)
+    QString title;          // 歌曲标题
+    QString artist;         // 艺术家
+    QString album;          // 专辑名
+    int trackNumber;        // 音轨号
+    int year;               // 年份
+    QString genre;          // 风格
+    qint64 durationMs;      // 时长 (毫秒)
+    QImage coverImage;      // 专辑封面
+    QDateTime dateAdded;    // 添加日期
+};
+```
+
+**核心接口：**
+```cpp
+class PlaylistManager : public QObject {
+    Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentIndexChanged)
+    Q_PROPERTY(int count READ count NOTIFY countChanged)
+    Q_PROPERTY(QVariantList playlist READ playlist NOTIFY playlistChanged)
+
+public:
+    // 基础操作
+    void add(const QStringList& filePaths);       // 添加歌曲
+    void remove(int index);                        // 移除指定位置
+    void remove(const QList<int>& indices);        // 批量移除
+    void move(int from, int to);                   // 移动/拖拽排序
+    void clear();                                  // 清空列表
+
+    // 播放控制
+    SongMetaData current() const;                  // 当前歌曲
+    SongMetaData at(int index) const;              // 按索引获取
+    void setCurrentIndex(int index);               // 切换当前
+    int next();                                    // 下一首 → 返回新索引
+    int previous();                                // 上一首 → 返回新索引
+
+    // 持久化
+    void save(const QString& path);                // 导出 m3u/pls
+    void load(const QString& path);                // 导入 m3u/pls
+    void restoreSession();                         // 启动时恢复上次列表
+
+    // 播放模式
+    enum PlayMode { Sequential, Shuffle, RepeatOne, RepeatAll };
+    void setPlayMode(PlayMode mode);
+};
+```
+
+**持久化策略：**
+- 退出时自动保存当前播放列表到 `QStandardPaths::AppLocalDataLocation/playlist.json`。
+- 格式为 JSON，包含歌曲路径列表、当前索引、播放模式、播放位置。
+- 启动时自动恢复，实现"断点续播"体验。
+
+#### 6.2 LibraryScanner
+
+媒体库扫描器在后台线程递归遍历指定目录，提取所有音频文件的元数据。
+
+**设计要点：**
+- `QThread` + `QFileSystemWatcher` 组合：启动时全量扫描，运行中增量监听。
+- 支持多目录注册：用户可添加多个音乐文件夹。
+- 增量更新：通过 `QFileSystemWatcher` 监听文件增删改，仅更新变化部分。
+- 防抖机制：短时间内大量文件变化时，合并为单次更新批次，避免频繁重建索引。
+- 缓存：扫描结果存入本地 SQLite 数据库，后续启动直接读取，仅做差异对比。
+
+#### 6.3 LyricProvider
+
+歌词提供者负责本地 LRC 文件解析与在线歌词搜索。
+
+**查找策略（优先级从高到低）：**
+1. 同目录同名 `.lrc` 文件（如 `song.mp3` → `song.lrc`）
+2. 同目录 `lyrics/` 子文件夹下的 `.lrc` 文件
+3. 用户配置的歌词目录
+4. 在线歌词 API（网易云 / QQ 音乐，通过 `QtNetworkFetcher` 请求）
+5. 内嵌歌词（ID3v2 `USLT` / `SYLT` 帧，通过 `TagLibReader` 读取）
+
+**LyricLine 结构：**
+```cpp
+struct LyricLine {
+    qint64 timestampMs;    // 时间戳 (毫秒)
+    QString text;          // 歌词文本
+    qint64 durationMs;     // 持续时间 (用于逐字高亮，-1 表示未知)
+    QList<WordTime> words; // 逐字时间轴 (卡拉OK模式)
+};
+```
+
+**LRC 解析流程：**
+```
+原始文本 ──▶ 逐行解析 ──▶ 正则匹配 [mm:ss.xx] ──▶ 提取时间戳 + 文本
+                                                      │
+                                          ┌───────────▼───────────┐
+                                          │  合并多时间戳行       │
+                                          │  (同一歌词对应多时间)  │
+                                          └───────────┬───────────┘
+                                                      │
+                                          ┌───────────▼───────────┐
+                                          │  按时间戳升序排序     │
+                                          │  → QList<LyricLine>   │
+                                          └───────────────────────┘
+```
+
+#### 6.4 ThemeManager
+
+主题管理器通过 QML 单例模式注入全局样式。
+
+**ThemeConfig 结构：**
+```cpp
+struct ThemeConfig {
+    QString name;                  // 主题名称
+    QColor primaryColor;           // 主色调
+    QColor backgroundColor;        // 背景色
+    QColor surfaceColor;           // 卡片/表面色
+    QColor textPrimaryColor;       // 主文字色
+    QColor textSecondaryColor;     // 辅助文字色
+    QColor accentColor;            // 强调色 (高亮/选中)
+    QColor dividerColor;           // 分割线色
+    float borderRadius;            // 圆角半径
+};
+```
+
+**切换机制：**
+1. `ThemeManager` 在 C++ 中创建，通过 `qmlRegisterSingletonInstance()` 注册为 QML 单例。
+2. QML 中所有颜色绑定到 `ThemeManager.currentTheme.xxxColor`。
+3. 调用 `ThemeManager::setTheme(name)` 时，内部更新 `ThemeConfig` 属性。
+4. 由于使用 `Q_PROPERTY` + `NOTIFY` 信号，QML 绑定自动刷新所有组件，无需遍历更新。
+
+#### 6.5 EqualizerController
+
+10 段图示均衡器，在 PCM 数据送入 PortAudio 前应用频段增益。
+
+**频段分布：**
+
+| 频段 | 中心频率 | 带宽 |
+|------|---------|------|
+| 1 | 31 Hz | 低音 |
+| 2 | 62 Hz | 低音 |
+| 3 | 125 Hz | 中低音 |
+| 4 | 250 Hz | 中低音 |
+| 5 | 500 Hz | 中音 |
+| 6 | 1 kHz | 中音 |
+| 7 | 2 kHz | 中高音 |
+| 8 | 4 kHz | 中高音 |
+| 9 | 8 kHz | 高音 |
+| 10 | 16 kHz | 高音 |
+
+**实现方式：**
+- 每段增益范围 [-12dB, +12dB]，步长 0.1dB。
+- 使用级联的二阶 IIR 滤波器 (Biquad filter) 实现，支持 peaking / low-shelf / high-shelf 三种滤波器类型。
+- 支持预设管理：内置 `Flat`、`Rock`、`Pop`、`Classical`、`Jazz`、`Vocal` 预设，用户可保存自定义预设到 JSON 文件。
+
+#### 6.6 SettingsManager
+
+封装 `QSettings`，提供类型安全的读写接口。
+
+```cpp
+class SettingsManager : public QObject {
+public:
+    // 分组读写，自动添加前缀
+    Q_INVOKABLE QVariant get(const QString& key, const QVariant& defaultValue = {});
+    Q_INVOKABLE void set(const QString& key, const QVariant& value);
+    Q_INVOKABLE void reset(const QString& key);
+    Q_INVOKABLE void resetAll();
+
+signals:
+    void settingChanged(const QString& key, const QVariant& value);
+};
+```
+
+**存储键一览：**
+
+| 键 | 类型 | 默认值 | 说明 |
+|-----|------|--------|------|
+| `audio/volume` | float | 0.8 | 音量 |
+| `audio/outputDevice` | string | "" | 输出设备名称 |
+| `audio/eqPreset` | string | "Flat" | 均衡器预设 |
+| `playback/playMode` | int | 0 | 播放模式 |
+| `ui/theme` | string | "Dark" | 主题名称 |
+| `ui/language` | string | "zh_CN" | 界面语言 |
+| `ui/alwaysOnTop` | bool | false | 置顶 |
+| `library/scanPaths` | stringList | [] | 媒体库目录 |
+| `library/autoScan` | bool | true | 启动时自动扫描 |
+| `lyric/onlineSearch` | bool | true | 启用在线歌词搜索 |
+| `lyric/fontSize` | int | 16 | 歌词字号 |
+| `general/closeToTray` | bool | true | 关闭时最小化到托盘 |
+
+---
+
+### 7. 核心类图
+
+**播放控制流程：**
+
+```
+┌─────────────────┐      ┌────────────────────┐      ┌─────────────────┐
+│   PlayerView    │───▶  │  PlayerController  │───▶  │  IAudioDecoder  │
+│   (QML)         │      │  (C++ 单例)         │      │  (FFmpeg)       │
+└─────────────────┘      └────────────────────┘      └─────────────────┘
+       │                           │                           │
+       │ 信号/槽                   │ 状态机                    │ 数据流
+       ▼                           ▼                           ▼
+┌─────────────────┐      ┌────────────────────┐      ┌─────────────────┐
+│   LyricView     │◀───  │  EventBus (全局)   │◀───  │  IAudioOutput   │
+│   (QML)         │      │  解耦通信           │      │  (PortAudio)    │
+└─────────────────┘      └────────────────────┘      └─────────────────┘
+```
+
+**依赖关系总览：**
+
+```
+PlayerController
+    ├── IAudioDecoder ◀── FFmpegDecoder
+    ├── IAudioOutput  ◀── PortAudioOutput
+    ├── EqualizerController
+    ├── PlaylistManager
+    │       ├── ITagReader ◀── TagLibReader
+    │       └── PlaylistFormat (m3u/pls)
+    └── EventBus
+
+PlaylistManager
+    ├── SongMetaData
+    └── ITagReader ◀── TagLibReader
+
+LibraryScanner
+    ├── LibraryWatcher (QFileSystemWatcher)
+    └── ITagReader ◀── TagLibReader
+
+LyricProvider
+    ├── LyricLine
+    ├── ITagReader ◀── TagLibReader      (内嵌歌词)
+    └── INetworkFetcher ◀── QtNetworkFetcher (在线搜索)
+
+ThemeManager
+    └── ThemeConfig
+
+SettingsManager
+    └── QSettings (INI 文件, Windows; plist, macOS; ~/.config, Linux)
+
+EventBus
+    └── QHash<QString, QList<Handler>>  (事件 → 处理器列表)
+```
+
+---
+
+### 8. 插件系统
+
+预留插件接口，允许第三方通过动态库扩展功能。
+
+**插件接口：**
+```cpp
+class IPluginInterface {
+public:
+    virtual ~IPluginInterface() = default;
+
+    // 插件元信息
+    virtual QString name() const = 0;
+    virtual QString version() const = 0;
+    virtual QString description() const = 0;
+
+    // 生命周期
+    virtual bool initialize() = 0;      // 插件初始化
+    virtual void shutdown() = 0;        // 插件卸载
+
+    // 自定义设置页（可选）
+    virtual QWidget* settingsPage() { return nullptr; }
+};
+```
+
+**加载流程：**
+1. `PluginLoader` 扫描 `plugins/` 目录下所有 `.dll` / `.so` / `.dylib` 文件。
+2. 使用 `QLibrary` 加载动态库，调用导出函数 `createPlugin()` 获取 `IPluginInterface*` 实例。
+3. 调用 `initialize()` 完成插件注册，失败则卸载。
+4. 退出时按加载逆序调用 `shutdown()` 并释放。
+
+---
+
+### 9. QML 视图架构
+
+```
+main.qml (ApplicationWindow)
+├── SystemTrayIcon (系统托盘)
+│
+├── StackView (页面路由)
+│   ├── PlayerView        # 播放主界面
+│   │   ├── AlbumCover    # 封面 + 旋转动画
+│   │   ├── ProgressSlider
+│   │   ├── PlayButton
+│   │   ├── VolumeControl
+│   │   └── LyricsView    # 内嵌歌词
+│   │
+│   ├── PlaylistView      # 播放列表
+│   │   ├── ListView (拖拽排序)
+│   │   ├── SearchBar (防抖搜索)
+│   │   └── PlayModeSelector
+│   │
+│   └── SettingsView      # 设置页
+│       ├── AudioSettings
+│       ├── AppearanceSettings
+│       ├── LibrarySettings
+│       └── AboutPage
+│
+└── MiniPlayer (迷你模式, Loader 动态创建)
+```
+
+**页面路由** 使用 `StackView` 实现，支持前进/后退动画过渡。迷你播放器通过 `Loader` 按需创建，节省内存。
+
+---
+
+### 10. 线程模型
+
+```
+┌──────────────────────────────────────────┐
+│              主线程 (GUI)                 │
+│  QML 渲染 · 事件循环 · 用户交互          │
+│  PlayerController · PlaylistManager      │
+│  ThemeManager · SettingsManager          │
+└──────────┬───────────────────────────────┘
+           │ QThread
+     ┌─────┴─────┬──────────────┬──────────────┐
+     ▼           ▼              ▼              ▼
+┌─────────┐ ┌─────────┐ ┌────────────┐ ┌──────────┐
+│ 解码线程 │ │ 输出线程 │ │ 文件扫描线程│ │ 网络线程  │
+│ FFmpeg  │ │PortAudio│ │LibraryScan │ │ QtNetwork│
+│ 解码    │ │ 音频IO  │ │  + TagLib  │ │ 请求     │
+└─────────┘ └─────────┘ └────────────┘ └──────────┘
+```
+
+**线程安全要点：**
+- 环形缓冲区使用 `std::atomic` 读写指针实现无锁队列。
+- 跨线程信号/槽自动排队（`Qt::AutoConnection`），无需手动加锁。
+- `EventBus::publish()` 内部使用 `QMutexLocker` 保护订阅者列表。
+- 所有 UI 更新必须通过 `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` 回到主线程。
+
+---
+
+### 11. CMake 构建系统
+
+```
+CMakeLists.txt
+├── cmake/
+│   ├── FindFFmpeg.cmake      # 自定义 Find 模块
+│   └── FindPortAudio.cmake
+│
+├── src/
+│   ├── CMakeLists.txt         # 主程序目标
+│   ├── core/CMakeLists.txt    # 核心库 (STATIC)
+│   ├── services/CMakeLists.txt# 服务库 (STATIC)
+│   └── common/CMakeLists.txt  # 工具库 (STATIC)
+│
+├── tests/
+│   ├── CMakeLists.txt         # 测试目标
+│   └── unit/CMakeLists.txt
+│
+└── resources/
+    └── qml.qrc               # Qt 资源编译
+```
+
+**构建选项：**
+
+| CMake 选项 | 默认值 | 说明 |
+|-----------|--------|------|
+| `BUILD_TESTS` | ON | 编译测试目标 |
+| `BUILD_PLUGINS` | ON | 编译插件系统 |
+| `ENABLE_FFMPEG` | ON | 启用 FFmpeg 解码 |
+| `ENABLE_PORTAUDIO` | ON | 启用 PortAudio 输出 |
+| `ENABLE_TAGLIB` | ON | 启用 TagLib 标签读取 |
+
+---
+
+## 🚀 快速开始
+
+### 环境要求
+
+| 依赖 | 版本 / 说明 |
+|------|------------|
+| **Qt** | 6.8.3+ (含 Qt Quick, Qt Multimedia, Qt LinguistTools) |
+| **CMake** | 3.22+ |
+| **编译工具链** | MSVC 2022 (Windows) / Clang 15+ (macOS) / GCC 13+ (Linux) |
+| **FFmpeg** | 5.0+ (libavformat, libavcodec, libavutil, libswresample) |
+| **PortAudio** | 19.7+ (音频输出) |
+| **TagLib** | 1.13+ (元数据读取) |
+| **GoogleTest** | 1.14+ (单元测试，可选) |
+
+### 各平台安装依赖
+
+**Windows (vcpkg)：**
+```powershell
+vcpkg install qt6:x64-windows ffmpeg:x64-windows portaudio:x64-windows taglib:x64-windows
+```
+
+**macOS (Homebrew)：**
+```bash
+brew install qt@6 ffmpeg portaudio taglib
+```
+
+**Linux (Ubuntu/Debian)：**
+```bash
+sudo apt install qt6-base-dev qt6-declarative-dev qt6-multimedia-dev \
+  libavformat-dev libavcodec-dev libavutil-dev libswresample-dev \
+  portaudio19-dev libtag1-dev
+```
+
+### 构建
+
+```bash
+# 克隆项目
+git clone <repo-url>
+cd just-solo
+
+# 配置构建
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+# 编译
+cmake --build build --config Release -j$(nproc)
+
+# 运行
+./build/just-solo
+```
+
+### 运行测试
+
+```bash
+# C++ 单元测试
+cmake --build build --target test
+
+# 或直接运行
+./build/tests/unit/test_runner
+
+# QML 测试
+qmltestrunner -input tests/qml
+```
+
+---
+
+## ✨ 核心特性
+
+- **高性能音频引擎** — 基于 FFmpeg + PortAudio 的模块化解码/输出管线，支持 MP3/FLAC/AAC/OGG/WAV/WMA/OPUS/APE 等格式
+- **流畅的 QML 界面** — GPU 加速渲染，60fps 动画，所有过渡效果硬件加速
+- **主题系统** — 内置暗色/亮色主题，基于 QML 单例的属性绑定实现零延迟切换
+- **歌词显示** — 支持 LRC 本地解析、内嵌歌词、在线搜索，卡拉OK风格逐行/逐字高亮
+- **媒体库管理** — 后台自动扫描，SQLite 缓存索引，实时监听文件变化
+- **10 段均衡器** — 基于 Biquad IIR 滤波器，内置多种预设，支持自定义存读
+- **插件架构** — 预留扩展接口，支持动态加载 `.dll/.so/.dylib` 插件
+- **事件总线** — 发布/订阅模式解耦模块通信，易于扩展新功能
+- **播放列表** — 支持拖拽排序、m3u/pls 导入导出、断点续播
+- **系统集成** — 系统托盘、媒体键（键盘快捷键）、原生通知
+- **跨平台** — 支持 Windows 10+、macOS 12+、Linux (X11/Wayland)
+
+---
+
+## 📈 性能指标
+
+| 指标 | 目标值 | 说明 |
+|------|--------|------|
+| 内存占用（空闲） | < 60MB | 启动后未播放 |
+| 内存占用（播放中） | < 80MB | FLAC 44.1kHz/16bit |
+| 启动时间 | < 500ms | 冷启动到主界面可交互 |
+| UI 帧率 | 60fps | 所有动画和过渡 |
+| 音频延迟 | < 20ms | PortAudio 低延迟模式 |
+| CPU 占用（播放中） | < 2% | 解码 + EQ + 输出 |
+
+---
+
+## 📄 许可证
+
+[待定]
+
+---
+
+## 🙏 致谢
+
+本项目依赖以下优秀的开源项目：
+
+| 项目 | 用途 | 链接 |
+|------|------|------|
+| Qt | UI 框架 + 核心基础设施 | [qt.io](https://www.qt.io/) |
+| FFmpeg | 音频解码 | [ffmpeg.org](https://ffmpeg.org/) |
+| PortAudio | 跨平台音频输出 | [portaudio.com](http://www.portaudio.com/) |
+| TagLib | 音频元数据读取 | [taglib.org](https://taglib.org/) |
+| GoogleTest | C++ 单元测试框架 | [github.com/google/googletest](https://github.com/google/googletest) |
