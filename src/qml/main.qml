@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
+import QtQuick.Dialogs
 
 Window {
     id: mainWindow
@@ -10,7 +11,7 @@ Window {
     minimumWidth: 900
     minimumHeight: 600
     visible: true
-    title: "Just Solo " + BUILD_VERSION
+    title: "Just Solo"
     color: "#1e1e2e"
     flags: Qt.FramelessWindowHint | Qt.Window
 
@@ -292,7 +293,8 @@ Window {
 
                 Item { Layout.preferredHeight: 32 }
 
-                Row {
+                RowLayout {
+                    Layout.fillWidth: true
                     spacing: 10
 
                     Item {
@@ -329,7 +331,31 @@ Window {
                         font.pixelSize: 24
                         font.bold: true
                         color: "#dddddd"
-                        anchors.verticalCenter: parent.verticalCenter
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // 添加音乐按钮（仅首页显示）
+                    Rectangle {
+                        Layout.preferredWidth: 140
+                        Layout.preferredHeight: 36
+                        radius: 6
+                        color: addMusicBtn.containsMouse ? "#4a4a6a" : "#3a3a5a"
+                        visible: currentMenu === "home"
+                        Label {
+                            anchors.centerIn: parent
+                            text: "+ 添加音乐"
+                            font.family: appFont.name
+                            font.pixelSize: 13
+                            color: "#cccccc"
+                        }
+                        MouseArea {
+                            id: addMusicBtn
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: fileDialog.open()
+                        }
                     }
                 }
 
@@ -339,6 +365,7 @@ Window {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     color: "transparent"
+                    visible: currentMenu === "settings"
 
                     // 设置页内容
                     ColumnLayout {
@@ -410,27 +437,46 @@ Window {
 
                         Item { Layout.preferredHeight: 16 }
 
-                        // 检查更新按钮
+                        // 检查更新按钮（暂禁用）
                         Rectangle {
                             Layout.preferredWidth: 160
                             Layout.preferredHeight: 40
                             radius: 8
-                            color: updateBtn.containsMouse ? "#4a4a6a" : "#3a3a5a"
+                            color: "#2a2a3a"
+                            opacity: 0.5
 
                             Label {
                                 anchors.centerIn: parent
                                 text: "检查更新"
                                 font.family: appFont.name
                                 font.pixelSize: 14
-                                color: "#cccccc"
+                                color: "#666"
                             }
+                        }
 
-                            MouseArea {
-                                id: updateBtn
-                                anchors.fill: parent; hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: console.log("检查更新")
-                            }
+                        // 更新链接
+                        Label {
+                            text: "请前往以下地址查看更新："
+                            font.family: appFont.name; font.pixelSize: 13; color: "#888"
+                            Layout.topMargin: 8
+                        }
+
+                        Label {
+                            text: `<a href="https://gitcode.com/ZZJ-JACK/Just-Solo">https://gitcode.com/ZZJ-JACK/Just-Solo</a>`
+                            textFormat: Text.RichText
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: "#00d4ff"
+                            Layout.topMargin: 4
+                            onLinkActivated: Qt.openUrlExternally(link)
+                        }
+
+                        Label {
+                            text: `<a href="https://github.com/ZZJ-jack/Just-Solo">https://github.com/ZZJ-jack/Just-Solo</a>`
+                            textFormat: Text.RichText
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: "#00d4ff"
+                            Layout.topMargin: 2
+                            onLinkActivated: Qt.openUrlExternally(link)
                         }
 
                         Item { Layout.fillHeight: true }
@@ -485,6 +531,24 @@ Window {
                             color: "#888"
                         }
 
+                        Item { Layout.preferredHeight: 4 }
+
+                        Label {
+                            text: "作者: ZZJ-JACK"
+                            font.family: appFont.name
+                            font.pixelSize: 13
+                            color: "#666"
+                        }
+
+                        Label {
+                            text: `<a href="https://zzjjack.us.kg">https://zzjjack.us.kg</a>`
+                            textFormat: Text.RichText
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: "#00d4ff"
+                            Layout.topMargin: 4
+                            onLinkActivated: Qt.openUrlExternally(link)
+                        }
+
                         Item { Layout.preferredHeight: 8 }
 
                         Label {
@@ -503,25 +567,356 @@ Window {
                             color: "#666"
                         }
 
-                        Item { Layout.fillHeight: true }
-                    }
-
-                    // 非设置页的空状态
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 14
-                        visible: currentMenu !== "settings"
+                        Item { Layout.preferredHeight: 12 }
 
                         Label {
-                            text: currentMenu === "home" ? "开始探索你的音乐库"
-                                   : (currentMenu === "favorite" ? "还没有收藏的歌曲"
-                                   : "还没有历史记录")
+                            text: "项目地址"
                             font.family: appFont.name
-                            font.pixelSize: 16
-                            color: "#666"
-                            anchors.horizontalCenter: parent.horizontalCenter
+                            font.pixelSize: 13
+                            color: "#888"
+                        }
+
+                        Label {
+                            text: `<a href="https://gitcode.com/ZZJ-JACK/Just-Solo">https://gitcode.com/ZZJ-JACK/Just-Solo</a>`
+                            textFormat: Text.RichText
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: "#00d4ff"
+                            Layout.topMargin: 4
+                            onLinkActivated: Qt.openUrlExternally(link)
+                        }
+
+                        Label {
+                            text: `<a href="https://github.com/ZZJ-jack/Just-Solo">https://github.com/ZZJ-jack/Just-Solo</a>`
+                            textFormat: Text.RichText
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: "#00d4ff"
+                            Layout.topMargin: 2
+                            onLinkActivated: Qt.openUrlExternally(link)
+                        }
+
+                        Item { Layout.preferredHeight: 12 }
+
+                        Label {
+                            text: "图标来源: 鸿蒙开发者"
+                            font.family: appFont.name
+                            font.pixelSize: 13
+                            color: "#888"
+                        }
+
+                        Label {
+                            text: `<a href="https://developer.huawei.com/consumer/cn/">https://developer.huawei.com/consumer/cn</a>`
+                            textFormat: Text.RichText
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: "#00d4ff"
+                            Layout.topMargin: 4
+                            onLinkActivated: Qt.openUrlExternally(link)
+                        }
+
+                        Item { Layout.fillHeight: true }
+                    }
+                }
+
+                    // 非设置页的音乐列表/空状态
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: "transparent"
+                        clip: true
+                        visible: currentMenu !== "settings"
+
+                        // 首页音乐列表
+                        ColumnLayout {
+                            id: musicListLayout
+                            anchors.fill: parent
+                            spacing: 0
+                            visible: currentMenu === "home"
+
+                            // ---- 共享列宽：改这里，标题栏和歌行自动对齐 ----
+                            property int colCover: 40
+                            property int colTitle: 120
+                            property int colArtist: 110
+                            property int colAlbum: 120
+                            property int colDuration: 20
+                            property int colPlay: 50
+                            property int colPlayIconSize: 20  // 播放按钮图标大小
+                            property int colSpacing: 5        // 列间距
+
+                            // 列表标题栏
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 32
+                                color: "transparent"
+                                visible: musicManager.playlist.length > 0
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: musicListLayout.colSpacing
+
+                                    Item { Layout.preferredWidth: musicListLayout.colCover }
+
+                                    Label {
+                                        text: "标题"; font.family: appFont.name; font.pixelSize: 14; color: "#888"
+                                        Layout.fillWidth: true; Layout.preferredWidth: musicListLayout.colTitle
+                                    }
+                                    Label {
+                                        text: "歌手"; font.family: appFont.name; font.pixelSize: 14; color: "#888"
+                                        Layout.fillWidth: true; Layout.preferredWidth: musicListLayout.colArtist
+                                    }
+                                    Label {
+                                        text: "专辑"; font.family: appFont.name; font.pixelSize: 14; color: "#888"
+                                        Layout.fillWidth: true; Layout.preferredWidth: musicListLayout.colAlbum
+                                    }
+                                    Label {
+                                        text: "时长"; font.family: appFont.name; font.pixelSize: 14; color: "#888"
+                                        Layout.preferredWidth: musicListLayout.colDuration
+                                    }
+                                    Item { Layout.preferredWidth: musicListLayout.colPlay }
+                                }
+                            }
+
+                            // 分割线
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 1
+                                color: "#2a2a48"
+                                visible: musicManager.playlist.length > 0
+                            }
+
+                            // 音乐列表
+                            ListView {
+                                id: musicListView
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                spacing: 8
+                                clip: true
+                                boundsBehavior: Flickable.StopAtBounds
+                                visible: musicManager.playlist.length > 0
+
+                                // 自定义滚动条
+                                ScrollBar.vertical: ScrollBar {
+                                    id: listScrollBar
+                                    policy: ScrollBar.AsNeeded
+                                    width: 10
+                                    hoverEnabled: false
+                                    palette.mid: "#555577"
+                                    palette.dark: "#2a2a3a"
+                                    palette.button: "#555577"
+                                    palette.window: "#2a2a3a"
+                                    palette.base: "#2a2a3a"
+                                    palette.text: "#555577"
+                                    palette.buttonText: "#555577"
+                                    palette.brightText: "#555577"
+                                    palette.light: "#555577"
+                                    palette.shadow: "#2a2a3a"
+                                    palette.highlight: "#555577"
+                                    palette.highlightedText: "#555577"
+                                    palette.windowText: "#555577"
+                                    palette.accent: "#555577"
+                                    palette.alternateBase: "#2a2a3a"
+                                    background: Rectangle {
+                                        implicitWidth: 10; radius: 5
+                                        color: listScrollBar.palette.dark
+                                    }
+                                    contentItem: Item {
+                                        implicitWidth: 10
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 5
+                                            color: "#555577"
+                                        }
+                                    }
+                                }
+
+                                model: musicManager.playlist
+
+                                delegate: Rectangle {
+                                    width: musicListView.width
+                                    height: 60
+                                    radius: 8
+                                    color: musicManager.currentIndex === index ? "#36365a" : (musicItemMouse.containsMouse ? "#2a2a48" : "#222236")
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: musicListLayout.colSpacing
+
+                                        // 封面
+                                        Rectangle {
+                                            Layout.preferredWidth: musicListLayout.colCover; Layout.preferredHeight: 40
+                                            radius: 6; color: "#3a3a55"
+                                            Image {
+                                                anchors.fill: parent
+                                                anchors.margins: 2
+                                                source: modelData.cover ? modelData.cover : ""
+                                                fillMode: Image.PreserveAspectCrop
+                                                visible: modelData.cover && modelData.cover !== ""
+                                                asynchronous: true
+                                            }
+                                            Label {
+                                                anchors.centerIn: parent
+                                                text: "\u266B"; font.family: appFont.name; font.pixelSize: 18; color: "#666"
+                                                visible: !modelData.cover || modelData.cover === ""
+                                            }
+                                        }
+
+                                        // 标题
+                                        Label {
+                                            text: modelData.name || ""
+                                            font.family: appFont.name; font.pixelSize: 14
+                                            font.bold: true; color: "#cccccc"
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true; Layout.preferredWidth: musicListLayout.colTitle
+                                        }
+
+                                        // 歌手
+                                        Label {
+                                            text: modelData.artist || "未知"
+                                            font.family: appFont.name; font.pixelSize: 14; color: "#888"
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true; Layout.preferredWidth: musicListLayout.colArtist
+                                        }
+
+                                        // 专辑
+                                        Label {
+                                            text: modelData.album || ""
+                                            font.family: appFont.name; font.pixelSize: 14; color: "#777"
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true; Layout.preferredWidth: musicListLayout.colAlbum
+                                        }
+
+                                        // 时长
+                                        Label {
+                                            text: {
+                                                if (modelData.duration > 0) {
+                                                    var m = Math.floor(modelData.duration / 60)
+                                                    var s = Math.floor(modelData.duration % 60)
+                                                    return m + ":" + (s < 10 ? "0" : "") + s
+                                                }
+                                                return ""
+                                            }
+                                            font.family: appFont.name; font.pixelSize: 14; color: "#888"
+                                            Layout.preferredWidth: musicListLayout.colDuration
+                                        }
+
+                                        // 播放状态
+                                        Item {
+                                            Layout.preferredWidth: musicListLayout.colPlay
+                                            Layout.preferredHeight: musicListLayout.colPlayIconSize
+                                            Image {
+                                                anchors.centerIn: parent
+                                                source: "qrc:/qt/qml/JustSolo/data/image/play.png"
+                                                width: musicListLayout.colPlayIconSize
+                                                height: musicListLayout.colPlayIconSize
+                                                opacity: 0.35
+                                                visible: musicManager.currentIndex !== index
+                                            }
+                                            Image {
+                                                anchors.centerIn: parent
+                                                source: "qrc:/qt/qml/JustSolo/data/image/play.png"
+                                                width: musicListLayout.colPlayIconSize
+                                                height: musicListLayout.colPlayIconSize
+                                                visible: musicManager.currentIndex === index && !musicManager.isPlaying
+                                            }
+                                            Image {
+                                                anchors.centerIn: parent
+                                                source: "qrc:/qt/qml/JustSolo/data/image/playing.png"
+                                                width: musicListLayout.colPlayIconSize
+                                                height: musicListLayout.colPlayIconSize
+                                                visible: musicManager.currentIndex === index && musicManager.isPlaying
+                                            }
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: musicItemMouse
+                                        anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (musicManager.currentIndex === index) {
+                                                if (musicManager.isPlaying) musicManager.pause()
+                                                else musicManager.play()
+                                            } else {
+                                                musicManager.playIndex(index)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Component.onCompleted: {
+                                    musicManager.playlistChanged.connect(function() { musicListView.model = musicManager.playlist })
+                                }
+                            }
+
+                            // 空状态
+                            Column {
+                                Layout.alignment: Qt.AlignCenter
+                                spacing: 14
+                                visible: musicManager.playlist.length === 0
+
+                                Label {
+                                    text: "还没有音乐"
+                                    font.family: appFont.name
+                                    font.pixelSize: 16
+                                    color: "#666"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                Label {
+                                    text: "点击上方「添加音乐」导入本地文件"
+                                    font.family: appFont.name
+                                    font.pixelSize: 13
+                                    color: "#555"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                            }
+                        }
+
+                        // 收藏页
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 14
+                            visible: currentMenu === "favorite"
+
+                            Label {
+                                text: "还没有收藏的歌曲"
+                                font.family: appFont.name
+                                font.pixelSize: 16
+                                color: "#666"
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
+                        }
+
+                        // 历史页
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 14
+                            visible: currentMenu === "history"
+
+                            Label {
+                                text: "还没有历史记录"
+                                font.family: appFont.name
+                                font.pixelSize: 16
+                                color: "#666"
+                                anchors.horizontalCenter: parent.horizontalCenter
+                            }
                         }
                     }
+
+                    // 文件选择对话框
+                    FileDialog {
+                        id: fileDialog
+                        title: "选择音乐文件"
+                        modality: Window.Windowed
+                        fileMode: FileDialog.OpenFiles
+                        nameFilters: ["音频文件 (*.mp3 *.flac *.wav *.ogg *.aac *.m4a *.wma *.opus)"]
+                        onAccepted: {
+                            var paths = []
+                            for (var i = 0; i < fileDialog.selectedFiles.length; i++) {
+                                paths.push(fileDialog.selectedFiles[i].toString().replace("file:///", ""))
+                            }
+                            musicManager.addFiles(paths)
+                        }
                 }
             }
         }
@@ -612,6 +1007,16 @@ Window {
         border.color: "#353550"
         border.width: 1
 
+        // 阻止点击穿透到后面的歌曲列表
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+        }
+
+        property double progressFraction: musicManager.duration > 0 ? musicManager.position / Math.max(1, musicManager.duration) : 0
+        property int currentSeconds: Math.floor(musicManager.position / 1000)
+        property int totalSeconds: Math.floor(musicManager.duration / 1000)
+
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 20
@@ -624,66 +1029,145 @@ Window {
 
                 Rectangle {
                     width: 48; height: 48; radius: 6; color: "#3a3a55"
+                    Image {
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        source: musicManager.currentCover || ""
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        visible: musicManager.currentCover !== ""
+                    }
                     Label {
                         anchors.centerIn: parent
-                        text: "♫"; font.family: appFont.name; font.pixelSize: 22; color: "#999"
+                        text: "♫"; font.family: appFont.name; font.pixelSize: 22; color: "#666"
+                        visible: musicManager.currentCover === ""
                     }
                 }
 
                 ColumnLayout {
                     spacing: 2
-                    Label { text: "未在播放"; font.family: appFont.name; font.pixelSize: 14; font.bold: true; color: "#cccccc" }
-                    Label { text: "选择一首歌曲开始"; font.family: appFont.name; font.pixelSize: 12; color: "#777" }
+                    Label {
+                        text: musicManager.currentTitle ? musicManager.currentTitle : "未在播放"
+                        font.family: appFont.name
+                        font.pixelSize: 14
+                        font.bold: true
+                        color: musicManager.currentTitle ? "#cccccc" : "#777"
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: 160
+                    }
+                    Label {
+                        text: musicManager.currentArtist ? musicManager.currentArtist : "选择一首歌曲开始"
+                        font.family: appFont.name
+                        font.pixelSize: 12
+                        color: "#777"
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: 160
+                    }
                 }
             }
 
             Item { Layout.fillWidth: true }
 
             RowLayout {
-                spacing: 28
+                spacing: 24
 
-                Label {
-                    text: "⏮"; font.pixelSize: 20; color: "#aaa"
+                // 上一首
+                Item {
+                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                    Image {
+                        anchors.centerIn: parent
+                        source: "qrc:/qt/qml/JustSolo/data/image/play.png"
+                        width: 22; height: 22
+                        opacity: 0.5
+                        rotation: 180
+                    }
                     MouseArea {
                         anchors.fill: parent; anchors.margins: -8
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: console.log("Previous")
+                        onClicked: musicManager.previous()
                     }
                 }
 
+                // 播放/暂停
                 Rectangle {
                     width: 42; height: 42; radius: 21; color: "#444466"
-                    Label {
+                    Image {
+                        source: "qrc:/qt/qml/JustSolo/data/image/play.png"
+                        width: 22; height: 22
                         anchors.centerIn: parent
-                        text: "▶"; font.pixelSize: 18; color: "#dddddd"
+                        visible: !musicManager.isPlaying
+                    }
+                    Image {
+                        source: "qrc:/qt/qml/JustSolo/data/image/playing.png"
+                        width: 22; height: 22
+                        anchors.centerIn: parent
+                        visible: musicManager.isPlaying
                     }
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: console.log("Play/Pause")
+                        onClicked: {
+                            if (musicManager.currentIndex >= 0) {
+                                if (musicManager.isPlaying) musicManager.pause()
+                                else musicManager.play()
+                            }
+                        }
                     }
                 }
 
-                Label {
-                    text: "⏭"; font.pixelSize: 20; color: "#aaa"
+                // 下一首
+                Item {
+                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                    Image {
+                        anchors.centerIn: parent
+                        source: "qrc:/qt/qml/JustSolo/data/image/play.png"
+                        width: 22; height: 22
+                        opacity: 0.5
+                    }
                     MouseArea {
                         anchors.fill: parent; anchors.margins: -8
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: console.log("Next")
+                        onClicked: musicManager.next()
                     }
                 }
             }
 
             Item { Layout.fillWidth: true }
 
+            // 播放进度
             RowLayout {
-                Layout.preferredWidth: 140; spacing: 8
-                Label { text: "🔊"; font.pixelSize: 17 }
+                Layout.preferredWidth: 220
+                spacing: 8
+
+                // 当前播放时长
+                Label {
+                    text: {
+                        var m = Math.floor(playerBar.currentSeconds / 60)
+                        var s = Math.floor(playerBar.currentSeconds % 60)
+                        return m + ":" + (s < 10 ? "0" : "") + s
+                    }
+                    font.family: appFont.name; font.pixelSize: 12; color: "#888"
+                    Layout.preferredWidth: 35
+                }
+
+                // 进度条
                 Rectangle {
                     Layout.fillWidth: true; Layout.preferredHeight: 4; radius: 2; color: "#3a3a55"
                     Rectangle {
-                        width: parent.width * 0.7; height: parent.height; radius: 2; color: "#888"
+                        width: parent.width * Math.min(1, playerBar.progressFraction)
+                        height: parent.height; radius: 2; color: "#00d4ff"
                     }
+                }
+
+                // 总时长
+                Label {
+                    text: {
+                        var m = Math.floor(playerBar.totalSeconds / 60)
+                        var s = Math.floor(playerBar.totalSeconds % 60)
+                        return m + ":" + (s < 10 ? "0" : "") + s
+                    }
+                    font.family: appFont.name; font.pixelSize: 12; color: "#888"
+                    Layout.preferredWidth: 35
                 }
             }
         }

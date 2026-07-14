@@ -26,8 +26,9 @@ qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
 
 # 可执行文件
-qt_add_executable(JustSolo
+qt_add_executable(JustSolo WIN32
     src/main.cpp
+    src/core/MusicManager.cpp
 )
 
 # QML 模块
@@ -42,6 +43,8 @@ qt_add_qml_module(JustSolo
         data/image/home.png
         data/image/mylike.png
         data/image/history.png
+        data/image/play.png
+        data/image/playing.png
         data/font/HarmonyOS_Sans_SC_Regular.ttf
 )
 
@@ -67,4 +70,4 @@ add_custom_target(GenerateVersion ALL
     BYPRODUCTS "${CMAKE_SOURCE_DIR}/src/version.h"
 )
 add_dependencies(JustSolo GenerateVersion)
-target_include_directories(JustSolo PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(JustSolo PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/core")

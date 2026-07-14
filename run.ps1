@@ -13,6 +13,6 @@ Write-Host "正在部署 Qt 依赖..." -ForegroundColor Cyan
 & "C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe" --qmldir "src\qml" "build\bin\Release\JustSolo.exe" 2>&1 | Out-Null
 
 Write-Host "启动程序..." -ForegroundColor Cyan
-Start-Process "build\bin\Release\JustSolo.exe"
+Start-Process "build\bin\Release\JustSolo.exe" -ArgumentList "--develop"
 
 Write-Host "完成！" -ForegroundColor Green
