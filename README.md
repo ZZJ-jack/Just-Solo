@@ -74,10 +74,7 @@ Just-Solo/
 ├── resources/
 │   ├── fonts/                  # 备用字体目录
 │   └── icons/                  # 备用图标目录
-├── deploy/
-│   ├── windows/                # Windows 部署配置
-│   ├── macos/                  # macOS 部署配置
-│   └── linux/                  # Linux 部署配置
+├── release/                    # 打包输出目录（运行 package.ps1 生成）
 └── tests/
     ├── unit/                   # 单元测试
     └── qml/                    # QML 测试
@@ -128,14 +125,11 @@ cmake --build build --config Release
 ### 打包发布
 
 ```powershell
-# 1. 构建 Release
-cmake --build build --config Release
+# 一键编译 + windeployqt → release/
+.\package.ps1
 
-# 2. windeployqt 自动收集依赖
-windeployqt build\bin\Release\JustSolo.exe --qmldir src\qml
-
-# 3. 打包为 zip
-Compress-Archive -Path build\bin\Release\* -DestinationPath JustSolo_v0.0.2-beta.1.zip -Force
+# 打包为 zip
+Compress-Archive -Path release\* -DestinationPath JustSolo_v0.0.2-beta.1.zip -Force
 ```
 
 ---

@@ -8,7 +8,7 @@ $CMakePath     = "E:\Program Files\CMake\bin\cmake.exe"
 $QtBinDir      = "C:\Qt\6.8.3\msvc2022_64\bin"
 $BuildDir      = "build"
 $AppName       = "JustSolo"
-$OutputDir     = "deploy\windows\$AppName"
+$OutputDir     = "release"
 
 # ============================================================
 # 1. 编译 Release
