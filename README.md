@@ -188,9 +188,9 @@ Compress-Archive -Path build\bin\Release\* -DestinationPath JustSolo_v0.0.2-beta
 - 修复 QML `mouse` 参数声明警告
 - README 精简为项目实际内容
 
-### v0.0.2-beta.1
+### v0.0.2-beta.1（已发行）
 
-> 首个可发行预览版：C++ 音乐管理器、QMediaPlayer 元数据解析、播放控制、进度条、多文件导入与完整 UI 交互。
+> 首个已发行预览版：C++ 音乐管理器、QMediaPlayer 元数据解析、播放控制、进度条、多文件导入与完整 UI 交互。
 
 **新增**
 - C++ MusicManager 模块：播放 / 暂停 / 上一首 / 下一首 / 播放列表管理

@@ -1,0 +1,80 @@
+============================================================
+                        Just Solo
+                    轻量级桌面音乐播放器
+============================================================
+
+  感谢您使用本软件！请务必先阅读此说明文件，感谢你的理解。
+
+  Just Solo 是一款追求简洁、高性能的本地音乐播放器。
+  采用 C++ 原生开发，内存占用低、启动迅速、界面流畅。
+
+【软件简介】
+
+    - 纯本地音乐播放，无需联网
+    - 支持 MP3、FLAC、WAV、OGG、AAC、M4A、WMA、Opus 等主流格式
+    - 导入本地文件即可播放，文件保留在原目录不移动
+    - 封面 / 标题 / 歌手 / 专辑 / 时长 完整展示
+    - 播放控制、进度条、切歌一应俱全
+    - 灰色 / 青色暗色主题
+    - 无边框窗口设计
+
+【环境要求】
+
+    - 操作系统：Windows 10 / 11（64 位）
+    - 磁盘空间：约 200MB
+
+【安装与卸载】
+
+  运行安装程序，按照提示完成安装即可。
+
+  如需卸载，请通过「控制面板 → 程序与功能」找到 Just Solo
+  并选择卸载，系统将自动清理所有相关文件。
+
+
+【声明】
+
+  本软件永久免费，不存在任何收费功能。
+  如果您遇到要求付费、转账或要求您点击不明链接的页面，
+  请立即关闭，切勿进行任何支付操作。
+
+【联系方式】
+
+  如有问题或建议，欢迎联系：
+    zzjjack@zzjjack.us.kg
+
+
+【项目地址】
+
+  GitCode：https://gitcode.com/ZZJ-JACK/Just-Solo
+  GitHub：https://github.com/ZZJ-jack/Just-Solo
+
+
+【许可证】
+
+  MIT License
+
+  Copyright (c) 2026 - NOW ZZJ-JACK
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+  本软件基于 Qt、HarmonyOS Sans 等开源技术构建。
+
+============================================================
+            再次感谢您使用 Just Solo！祝你使用愉快！
+============================================================
