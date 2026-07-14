@@ -19,3 +19,6 @@ ui_*.h
 # OS
 .DS_Store
 Thumbs.db
+
+# Auto-generated
+src/version.h

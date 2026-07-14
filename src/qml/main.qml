@@ -10,7 +10,7 @@ Window {
     minimumWidth: 900
     minimumHeight: 600
     visible: true
-    title: "Just Solo"
+    title: "Just Solo " + BUILD_VERSION
     color: "#1e1e2e"
     flags: Qt.FramelessWindowHint | Qt.Window
 
@@ -21,6 +21,7 @@ Window {
     readonly property int playerBarHeight: 72
 
     property string currentMenu: "home"
+    property string settingsSubMenu: "appearance"
 
     FontLoader {
         id: appFont
@@ -39,31 +40,48 @@ Window {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 18
+                anchors.margins: 10
                 spacing: 0
 
-                RowLayout {
-                    Layout.alignment: Qt.AlignLeft | Qt.AlignTop
-                    spacing: 12
+                // 顶部区域（logo + 标题）
+                Rectangle {
+                    Layout.preferredWidth: sidebarWidth
+                    Layout.preferredHeight: 60
+                    color: "transparent"
 
-                    Image {
-                        source: "qrc:/qt/qml/JustSolo/data/image/logo2.png"
-                        sourceSize.width: 42
-                        sourceSize.height: 42
-                        fillMode: Image.PreserveAspectFit
-                    }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 4
+                        spacing: 12
 
-                    Label {
-                        text: "Just Solo"
-                        font.family: appFont.name
-                        font.pixelSize: 28
-                        font.bold: true
-                        color: "#cccccc"
-                        Layout.alignment: Qt.AlignVCenter
+                        Image {
+                            source: "qrc:/qt/qml/JustSolo/data/image/logo2.png"
+                            sourceSize.width: 42
+                            sourceSize.height: 42
+                            fillMode: Image.PreserveAspectFit
+                        }
+
+                        Column {
+                            Layout.alignment: Qt.AlignVCenter
+                            spacing: 2
+
+                            Label {
+                                text: "Just Solo"
+                                font.family: appFont.name
+                                font.pixelSize: 28
+                                font.bold: true
+                                color: "#cccccc"
+                            }
+
+                            Label {
+                                text: APP_VERSION
+                                font.family: appFont.name
+                                font.pixelSize: 11
+                                color: "#555"
+                            }
+                        }
                     }
                 }
-
-                Item { Layout.preferredHeight: 20 }
 
                 Rectangle {
                     Layout.fillWidth: true
@@ -71,10 +89,60 @@ Window {
                     color: "#3a3a55"
                 }
 
-                Item { Layout.preferredHeight: 12 }
+                Item { Layout.preferredHeight: 14 }
 
+                // 设置按钮（列表上方）
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 42
+                    radius: 6
+                    color: currentMenu === "settings" ? "#36365a" : (settingsTopMouse.containsMouse ? "#2a2a48" : "transparent")
+
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: 12
+                        spacing: 10
+
+                        Rectangle {
+                            width: 34; height: 34; radius: 4; color: "transparent"
+                            Label {
+                                anchors.centerIn: parent
+                                text: "⚙"; font.family: appFont.name; font.pixelSize: 22; color: "#888"
+                            }
+                        }
+
+                        Label {
+                            text: "设置"
+                            font.family: appFont.name
+                            font.pixelSize: 17
+                            color: currentMenu === "settings" ? "#cccccc" : "#888"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    MouseArea {
+                        id: settingsTopMouse
+                        anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: currentMenu = "settings"
+                    }
+                }
+
+                Item { Layout.preferredHeight: 4 }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: "#3a3a55"
+                }
+
+                Item { Layout.preferredHeight: 14 }
+
+                // 主列表（非设置页显示）
                 ColumnLayout {
                     spacing: 2
+                    visible: currentMenu !== "settings"
 
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/home.png"
@@ -99,24 +167,63 @@ Window {
                     }
                 }
 
-                Item { Layout.fillHeight: true }
+                // 设置子菜单（设置页显示）
+                ColumnLayout {
+                    spacing: 2
+                    visible: currentMenu === "settings"
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 38
-                    radius: 6
-                    color: mouseAreaSettings.containsMouse ? "#2e2e4a" : "transparent"
-                    RowLayout {
-                        anchors.fill: parent; anchors.leftMargin: 12; spacing: 10
-                        Label { text: "⚙"; font.family: appFont.name; font.pixelSize: 17; color: "#888" }
-                        Label { text: "设置"; font.family: appFont.name; font.pixelSize: 14; color: "#888" }
+                    SubNavItem {
+                        label: "外观"
+                        active: settingsSubMenu === "appearance"
+                        onClicked: settingsSubMenu = "appearance"
                     }
-                    MouseArea {
-                        id: mouseAreaSettings
-                        anchors.fill: parent; hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
+                    SubNavItem {
+                        label: "软件更新"
+                        active: settingsSubMenu === "update"
+                        onClicked: settingsSubMenu = "update"
+                    }
+                    SubNavItem {
+                        label: "关于"
+                        active: settingsSubMenu === "about"
+                        onClicked: settingsSubMenu = "about"
+                    }
+
+                    Item { Layout.preferredHeight: 8 }
+
+                    // 退出设置按钮
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 38
+                        radius: 6
+                        color: exitSettingsMouse.containsMouse ? "#3e2e3e" : "transparent"
+
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Label {
+                                text: "←"
+                                font.family: appFont.name
+                                font.pixelSize: 14
+                                color: "#888"
+                            }
+                            Label {
+                                text: "退出设置"
+                                font.family: appFont.name
+                                font.pixelSize: 13
+                                color: "#888"
+                            }
+                        }
+
+                        MouseArea {
+                            id: exitSettingsMouse
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: currentMenu = "home"
+                        }
                     }
                 }
+
+                Item { Layout.fillHeight: true }
             }
         }
 
@@ -134,10 +241,11 @@ Window {
                 anchors.rightMargin: 30
                 spacing: 0
 
-                // 搜索框（上移）
+                // 搜索框
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 16
+                    visible: currentMenu !== "settings"
 
                     Rectangle {
                         Layout.preferredWidth: 360
@@ -193,15 +301,30 @@ Window {
                             anchors.centerIn: parent
                             source: currentMenu === "home" ? "qrc:/qt/qml/JustSolo/data/image/home.png"
                                    : (currentMenu === "favorite" ? "qrc:/qt/qml/JustSolo/data/image/mylike.png"
-                                   : "qrc:/qt/qml/JustSolo/data/image/history.png")
+                                   : (currentMenu === "history" ? "qrc:/qt/qml/JustSolo/data/image/history.png"
+                                   : ""))
                             sourceSize.width: 28
                             sourceSize.height: 28
                             fillMode: Image.PreserveAspectFit
+                            visible: currentMenu !== "settings"
+                        }
+
+                        Rectangle {
+                            width: 30; height: 30; radius: 6; color: "transparent"
+                            visible: currentMenu === "settings"
+                            Label {
+                                anchors.centerIn: parent
+                                text: "⚙"; font.family: appFont.name; font.pixelSize: 22; color: "#888"
+                            }
                         }
                     }
 
                     Label {
-                        text: currentMenu === "home" ? "首页" : (currentMenu === "favorite" ? "收藏" : "历史")
+                        text: currentMenu === "home" ? "首页"
+                              : (currentMenu === "favorite" ? "收藏"
+                              : (currentMenu === "history" ? "历史"
+                              : (settingsSubMenu === "update" ? "软件更新"
+                              : (settingsSubMenu === "appearance" ? "外观" : "关于"))))
                         font.family: appFont.name
                         font.pixelSize: 24
                         font.bold: true
@@ -217,13 +340,182 @@ Window {
                     Layout.fillHeight: true
                     color: "transparent"
 
+                    // 设置页内容
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 0
+                        visible: currentMenu === "settings" && settingsSubMenu === "update"
+
+                        Label {
+                            text: "软件更新"
+                            font.family: appFont.name
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: "#dddddd"
+                        }
+
+                        Item { Layout.preferredHeight: 24 }
+
+                        // 软件版本 + 构建版本卡片
+                        Rectangle {
+                            Layout.preferredWidth: 480
+                            Layout.preferredHeight: 80
+                            radius: 8
+                            color: "#2e2e4a"
+                            border.color: "#3a3a55"
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 20
+                                spacing: 6
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: "软件版本"
+                                        font.family: appFont.name
+                                        font.pixelSize: 14
+                                        color: "#888"
+                                        Layout.preferredWidth: 72
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    Label {
+                                        text: APP_VERSION
+                                        font.family: appFont.name
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                        color: "#cccccc"
+                                    }
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Label {
+                                        text: "构建版本"
+                                        font.family: appFont.name
+                                        font.pixelSize: 13
+                                        color: "#666"
+                                        Layout.preferredWidth: 72
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    Label {
+                                        text: BUILD_VERSION
+                                        font.family: appFont.name
+                                        font.pixelSize: 13
+                                        color: "#888"
+                                    }
+                                }
+                            }
+                        }
+
+                        Item { Layout.preferredHeight: 16 }
+
+                        // 检查更新按钮
+                        Rectangle {
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 40
+                            radius: 8
+                            color: updateBtn.containsMouse ? "#4a4a6a" : "#3a3a5a"
+
+                            Label {
+                                anchors.centerIn: parent
+                                text: "检查更新"
+                                font.family: appFont.name
+                                font.pixelSize: 14
+                                color: "#cccccc"
+                            }
+
+                            MouseArea {
+                                id: updateBtn
+                                anchors.fill: parent; hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: console.log("检查更新")
+                            }
+                        }
+
+                        Item { Layout.fillHeight: true }
+                    }
+
+                    // 外观设置页
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 0
+                        visible: currentMenu === "settings" && settingsSubMenu === "appearance"
+
+                        Label {
+                            text: "外观"
+                            font.family: appFont.name
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: "#dddddd"
+                        }
+
+                        Item { Layout.preferredHeight: 16 }
+
+                        Label {
+                            text: "外观设置（开发中）"
+                            font.family: appFont.name
+                            font.pixelSize: 14
+                            color: "#666"
+                        }
+
+                        Item { Layout.fillHeight: true }
+                    }
+
+                    // 关于页
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 0
+                        visible: currentMenu === "settings" && settingsSubMenu === "about"
+
+                        Label {
+                            text: "关于"
+                            font.family: appFont.name
+                            font.pixelSize: 18
+                            font.bold: true
+                            color: "#dddddd"
+                        }
+
+                        Item { Layout.preferredHeight: 16 }
+
+                        Label {
+                            text: "Just Solo - 轻量级桌面音乐播放器"
+                            font.family: appFont.name
+                            font.pixelSize: 14
+                            color: "#888"
+                        }
+
+                        Item { Layout.preferredHeight: 8 }
+
+                        Label {
+                            text: "基于 Qt 6.8.3 + QML 构建"
+                            font.family: appFont.name
+                            font.pixelSize: 13
+                            color: "#666"
+                        }
+
+                        Item { Layout.preferredHeight: 8 }
+
+                        Label {
+                            text: "构建版本: " + BUILD_VERSION
+                            font.family: appFont.name
+                            font.pixelSize: 13
+                            color: "#666"
+                        }
+
+                        Item { Layout.fillHeight: true }
+                    }
+
+                    // 非设置页的空状态
                     Column {
                         anchors.centerIn: parent
                         spacing: 14
+                        visible: currentMenu !== "settings"
 
                         Label {
                             text: currentMenu === "home" ? "开始探索你的音乐库"
-                                   : (currentMenu === "favorite" ? "还没有收藏的歌曲" : "还没有历史记录")
+                                   : (currentMenu === "favorite" ? "还没有收藏的歌曲"
+                                   : "还没有历史记录")
                             font.family: appFont.name
                             font.pixelSize: 16
                             color: "#666"
@@ -287,6 +579,24 @@ Window {
                 anchors.fill: parent; hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: Qt.quit()
+            }
+        }
+    }
+
+    // 顶部全宽拖拽区域（logo 块底部高度以上可拖动窗口）
+    MouseArea {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 70
+        z: -1
+
+        property point lastPos
+        onPressed: function(mouse) { lastPos = Qt.point(mouse.x, mouse.y) }
+        onPositionChanged: function(mouse) {
+            if (pressed) {
+                mainWindow.x += mouse.x - lastPos.x
+                mainWindow.y += mouse.y - lastPos.y
             }
         }
     }
@@ -412,7 +722,7 @@ Window {
         Row {
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
-            anchors.leftMargin: 24
+            anchors.leftMargin: 12
             spacing: 10
 
             Rectangle {
@@ -446,6 +756,34 @@ Window {
 
         MouseArea {
             id: navMouse
+            anchors.fill: parent; hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: parent.clicked()
+        }
+    }
+
+    component SubNavItem: Rectangle {
+        property string label
+        property bool active: false
+        signal clicked()
+
+        Layout.fillWidth: true
+        Layout.preferredHeight: 40
+        radius: 6
+        color: active ? "#36365a" : (subNavMouse.containsMouse ? "#2a2a48" : "transparent")
+
+        Label {
+            text: label
+            font.family: appFont.name
+            font.pixelSize: 14
+            color: active ? "#cccccc" : "#888"
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 20
+        }
+
+        MouseArea {
+            id: subNavMouse
             anchors.fill: parent; hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: parent.clicked()

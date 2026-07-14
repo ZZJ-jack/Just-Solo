@@ -59,3 +59,12 @@ target_link_libraries(JustSolo PRIVATE
 set_target_properties(JustSolo PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# 每次编译自动生成版本号 (yymmddhhmmss)
+add_custom_target(GenerateVersion ALL
+    COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/cmake/GenerateVersion.ps1"
+    COMMENT "Generating version header..."
+    BYPRODUCTS "${CMAKE_SOURCE_DIR}/src/version.h"
+)
+add_dependencies(JustSolo GenerateVersion)
+target_include_directories(JustSolo PRIVATE "${CMAKE_SOURCE_DIR}/src")
