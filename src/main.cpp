@@ -19,7 +19,7 @@
 #define APP_VERSION_MAJOR   0   // 大版本号
 #define APP_VERSION_MINOR   0   // 中版本号
 #define APP_VERSION_PATCH   2   // 小版本号
-#define APP_VERSION_PRE     1   // 预发布号，0=正式版
+#define APP_VERSION_PRE     2   // 预发布号，0=正式版
 
 // 格式化: 0.0.1-pre.2 → v0.0.1-beta.2
 #define STRINGIFY(x) #x
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
             FILE *dummy;
             freopen_s(&dummy, "CONOUT$", "w", stdout);
             freopen_s(&dummy, "CONOUT$", "w", stderr);
-            printf("Just Solo --develop mode\n");
+            printf("\nJust Solo --develop mode\n");
             printf("Build: %ls\n", BUILD_VERSION);
             fflush(stdout);
         }

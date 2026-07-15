@@ -10,6 +10,9 @@
 #include <QMediaMetaData>
 #include <QCoreApplication>
 
+
+#include <QMap>
+
 // ============================================================
 // 工具函数
 // ============================================================
@@ -39,6 +42,61 @@ static QString findExternalCover(const QString &filePath)
         if (QFileInfo::exists(p)) return p;
     }
     return "";
+}
+
+// 音质分级：根据编解码器/码率判定
+// 极低 / 标准 / 高品质 / 无损 / 高解析 / 母带 / 空间音频
+static QString detectQualityLabel(const QString &filePath, const QMediaPlayer &player)
+{
+    QString ext = QFileInfo(filePath).suffix().toLower();
+    QString codec = player.metaData().value(QMediaMetaData::AudioCodec).toString().toLower();
+    int bitrate = player.metaData().value(QMediaMetaData::AudioBitRate).toInt();   // bits/sec
+
+    // 空间音频 (Dolby Atmos, etc.)
+    if (codec.contains("atmos") || codec.contains("dolby") || codec.contains("eac3") || codec.contains("ac3"))
+        return QStringLiteral("空间音频");
+
+    // MQA 母带级
+    if (codec.contains("mqa"))
+        return QStringLiteral("母带");
+
+    // 无损格式：FLAC / ALAC / WAV / APE
+    bool lossless = (ext == "flac" || ext == "alac" || ext == "wav" || ext == "ape" ||
+                     codec.contains("flac") || codec.contains("alac") ||
+                     codec.contains("pcm") || codec.contains("ape"));
+    if (lossless) {
+        // 高解析：码率 > 2000 kbps (推测为 24-bit/192kHz)
+        if (bitrate > 2000000)
+            return QStringLiteral("高解析");
+        // 无损：16-bit/44.1kHz
+        return QStringLiteral("无损");
+    }
+
+    // 有损格式：按码率分级
+    if (bitrate > 0) {
+        if (bitrate >= 256000) return QStringLiteral("高品质");  // 256-320 kbps
+        if (bitrate >= 128000) return QStringLiteral("标准");    // 128-160 kbps
+        return QStringLiteral("极低");                           // 48-96 kbps
+    }
+
+    // 码率未知时，按扩展名推断
+    if (ext == "mp3" || ext == "aac" || ext == "ogg" || ext == "opus" || ext == "wma")
+        return QStringLiteral("标准");
+    return QStringLiteral("标准");
+}
+
+// 音质等级排名（数值越高音质越好）
+static int qualityRank(const QString &quality) {
+    static QMap<QString, int> rank = {
+        {QStringLiteral("极低"), 1},
+        {QStringLiteral("标准"), 2},
+        {QStringLiteral("高品质"), 3},
+        {QStringLiteral("无损"), 4},
+        {QStringLiteral("高解析"), 5},
+        {QStringLiteral("母带"), 6},
+        {QStringLiteral("空间音频"), 7}
+    };
+    return rank.value(quality, 0);
 }
 
 static QVariantMap buildTrack(const QString &filePath)
@@ -91,6 +149,7 @@ static QVariantMap buildTrack(const QString &filePath)
     track["artist"]   = artist.isEmpty() ? "" : artist;
     track["album"]    = album.isEmpty() ? "" : album;
     track["duration"] = duration;
+    track["quality"]  = detectQualityLabel(filePath, player);
 
     // 封面
     QImage coverImg;
@@ -163,8 +222,50 @@ void MusicManager::processNextPending() {
 
     QString path = m_pendingPaths.takeFirst();
     QVariantMap track = buildTrack(path);
-    m_playlist.append(track);
-    emit playlistChanged();
+
+    QString filePath = track["path"].toString();
+    QString songKey = track["name"].toString() + "|||" + track["artist"].toString();
+    int newQualityRank = qualityRank(track["quality"].toString());
+
+    bool shouldAdd = true;
+    bool playlistModified = false;
+
+    for (int i = 0; i < m_playlist.size(); i++) {
+        QVariantMap existing = m_playlist[i].toMap();
+
+        // 1. 同一文件路径 → 跳过
+        if (existing["path"].toString() == filePath) {
+            shouldAdd = false;
+            break;
+        }
+
+        // 2. 同一首歌（同名+同歌手）→ 保留音质更高的
+        QString existingKey = existing["name"].toString() + "|||" + existing["artist"].toString();
+        if (existingKey == songKey) {
+            int existingQualityRank = qualityRank(existing["quality"].toString());
+            if (newQualityRank > existingQualityRank) {
+                // 新文件音质更高 → 替换
+                m_playlist[i] = track;
+                if (m_currentIndex == i) {
+                    m_player->setSource(QUrl::fromLocalFile(track["path"].toString()));
+                    if (m_player->playbackState() == QMediaPlayer::PlayingState)
+                        m_player->play();
+                    emit currentIndexChanged();
+                }
+                playlistModified = true;
+            }
+            shouldAdd = false;
+            break;
+        }
+    }
+
+    if (shouldAdd) {
+        m_playlist.append(track);
+        playlistModified = true;
+    }
+
+    if (playlistModified)
+        emit playlistChanged();
 
     // 下一首排队（让出事件循环保持 UI 响应）
     m_loadTimer->start();
