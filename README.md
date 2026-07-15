@@ -174,7 +174,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.0-beta.1.zip -Fo
 
 ## 更新日志
 
-### v0.0.1-beta.1
+### v0.0.1-beta.1 - 2026.7.12
 
 > 项目初始化，搭建 Qt 6 + QML 无边框窗口框架与侧边栏导航。
 
@@ -192,7 +192,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.0-beta.1.zip -Fo
 - CMake 构建系统 + windeployqt 部署
 - Git 工作流与 .gitignore
 
-### v0.0.1-beta.2
+### v0.0.1-beta.2 - 2026.7.13
 
 > 新增版本号系统与设置页面，优化侧边栏与窗口体验。
 
@@ -211,7 +211,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.0-beta.1.zip -Fo
 **修复**
 - QML `mouse` 参数声明警告
 
-### v0.0.2-beta.1（已发行）
+### v0.0.2-beta.1（已发行） - 2026.7.14
 
 > 首个已发行预览版：C++ 音乐管理器、QMediaPlayer 元数据解析、播放控制、进度条、多文件导入与完整 UI 交互。
 
@@ -246,7 +246,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.0-beta.1.zip -Fo
 - 多文件添加时滚动条卡顿：异步队列 + `processEvents` 让出事件循环
 - 进度条 duration 显示：`durationChanged` 信号替代直接读取
 
-### v0.0.2-beta.2
+### v0.0.2-beta.2 - 2026.7.15
 
 > 自适应布局重构、歌曲去重并补充全量注释。
 
@@ -270,9 +270,9 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.0-beta.1.zip -Fo
 - 播放栏左侧固定 240px 导致宽窗口出现大量留白，改为自适应填充
 - 列表底部内容被 72px 播放栏遮挡，`bottomMargin` 从 30px 调整为 `playerBarHeight + 14`
 
-### v0.3.0-beta.1
+### v0.3.0-beta.1（已作为首个正式版本发行） - 2026.7.15
 
-> 大版本重构！代码架构重构为多文件模块化，新增收藏系统、播放历史记录及全量数据本地持久化。
+> 大版本重构！代码架构重构为多文件模块化，新增收藏系统、播放历史记录及全量数据本地持久化。本版本作为首个正式版本发行，包含所有主要功能（暂缺播放详情页）。
 
 **新增**
 
@@ -336,7 +336,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.0-beta.1.zip -Fo
 - RowLayout 未 `anchors.fill: parent` 导致内容贴边、垂直不居中
 
 **变更**
-- 版本号升至 v0.3.0-beta.1
+- 版本号升至 v0.3.0-beta.1，作为首个正式版本发行
 - 当前功能列表新增封面缓存策略、历史持久化、窗口拖拽说明
 
 ---
