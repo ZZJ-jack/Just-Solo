@@ -11,7 +11,7 @@
 Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++ 高性能核心 + QML 现代界面，无 Electron 依赖，内存占用低，启动迅速。
 
 与常见的 Web 技术栈播放器相比：
-- 平均内存占用 < 100MB（vs Electron 的 400MB+）
+- 平均内存占用 < 150MB（vs Electron 的 500MB+）
 - 冷启动 < 0.5s
 - 原生 GPU 渲染，60fps 流畅动画
 - 完全自主的无边框窗口与自定义控件
@@ -33,6 +33,9 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 - HarmonyOS Sans 内置字体
 - 灰色 / 青色暗色主题
 - CMake 构建系统 + windeployqt 部署
+- 封面智能缓存：列表/播放栏用小尺寸纹理降低内存，原画质保留至用户目录持久存储
+- 播放历史本地持久化，启动自动恢复
+- 最大化窗口拖拽还原：任意位置点击均能准确定位到鼠标
 
 ---
 
@@ -60,8 +63,18 @@ Just-Solo/
 │   ├── core/
 │   │   ├── MusicManager.h      # C++ 音乐管理器（播放/暂停/切歌/列表）
 │   │   └── MusicManager.cpp
+│   ├── common/                 # 公共工具（预留）
+│   ├── services/               # 业务服务层（预留）
 │   └── qml/
-│       └── main.qml            # 主窗口 (所有 UI)
+│       ├── main.qml            # 主窗口 —— 侧边栏、播放栏、路由控制
+│       ├── components/         # 可复用 QML 组件
+│       │   ├── NavItem.qml     #   侧边栏主菜单项
+│       │   └── SubNavItem.qml  #   设置页子菜单项
+│       └── views/              # 页面视图（按需加载，切换销毁）
+│           ├── HomePage.qml    #   首页 —— 音乐列表
+│           ├── FavoritePage.qml#   收藏页
+│           ├── HistoryPage.qml #   历史页
+│           └── SettingsPage.qml#   设置页 —— 外观/更新/关于
 ├── data/
 │   ├── image/
 │   │   ├── logo.png            # 程序图标
@@ -78,8 +91,8 @@ Just-Solo/
 │   └── icons/                  # 备用图标目录
 ├── release/                    # 打包输出目录（运行 package.ps1 生成）
 └── tests/
-    ├── unit/                   # 单元测试
-    └── qml/                    # QML 测试
+    ├── unit/                   # 单元测试（预留）
+    └── qml/                    # QML 测试（预留）
 ```
 
 ---
@@ -131,7 +144,7 @@ cmake --build build --config Release
 .\package.ps1
 
 # 打包为 zip
-Compress-Archive -Path release\* -DestinationPath JustSolo_v0.0.2-beta.2.zip -Force
+Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.0-beta.1.zip -Force
 ```
 
 ---
@@ -256,6 +269,75 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.0.2-beta.2.zip -Fo
 - 音乐列表标题在上、音质标签在下左对齐（原为右下角）
 - 播放栏左侧固定 240px 导致宽窗口出现大量留白，改为自适应填充
 - 列表底部内容被 72px 播放栏遮挡，`bottomMargin` 从 30px 调整为 `playerBarHeight + 14`
+
+### v0.3.0-beta.1
+
+> 大版本重构！代码架构重构为多文件模块化，新增收藏系统、播放历史记录及全量数据本地持久化。
+
+**新增**
+
+**代码重构**
+- 所有页面视图从 `main.qml` 内联组件拆分为独立 QML 文件：`src/qml/views/{HomePage,FavoritePage,HistoryPage,SettingsPage}.qml`
+- `NavItem` / `SubNavItem` 组件拆分为独立文件：`src/qml/components/{NavItem,SubNavItem}.qml`
+- 清理 `.gitkeep` 占位文件
+
+**音乐收藏系统**
+- `MusicManager` 新增 `favorites` 属性 + `favoritesChanged` 信号
+- `toggleFavorite(track)`: 有则删除、无则新增，写入 `favorites_cache.json`
+- `removeFavorite(index)`: 按索引删除
+- `isFavorite(track)`: 检查是否已收藏，供 UI 判断图标状态
+
+**播放历史系统**
+- `MusicManager` 新增 `history` 属性 + `historyChanged` 信号
+- `addToHistory(track)`: 播放时自动调用，同文件去重置顶，上限 500 条
+- `clearHistory()` / `removeHistoryItem(index)`: 清空/单项删除
+- 历史页右上角「清空全部历史」按钮（列表外部独立定位）
+- 持久化到 `history_cache.json`，启动自动恢复
+
+**数据持久化**
+- 新增通用 JSON 读写工具函数 `writeVariantListToFile` / `readVariantListFromFile`
+- 播放列表缓存 `playlist_cache.json`，添加/删除/清空歌曲时自动保存
+- 启动时自动加载缓存，自动跳过已删除/移动的文件
+- 路径：`%APPDATA%/Just Solo/`（Windows），`~/.local/share/Just Solo/`（Linux/macOS）
+- `--develop` 模式每次启动先删除缓存目录，从零开始
+
+**导入体验**
+- `MusicManager` 新增 `importProgress` / `importProcessed` / `importTotal` 属性
+- 导入时显示 Loader 覆盖层：文件名 + 处理进度（N/M）+ 带渐变动画的进度条
+- 百分比实时更新，导入完成后 Loader 自动失活销毁释放内存
+- 支持增量添加（追加文件时 total 自动累加）
+
+**封面存储策略**
+- 原画质 JPEG 从 `QStandardPaths::CacheLocation`（可被系统清理）迁移到 `AppDataLocation`（持久保留）
+- `cacheDir()` 重命名为 `coverDir()`，体现持久化语义
+
+**变更**
+- 版本号：v0.0.2-beta.2 → v0.3.0-beta.1
+- `CMakeLists.txt`: 移除内联编译依赖，所有 QML 文件加入 `.qrc`
+- `main.qml`: 从 ~1000+ 行精简至 ~840 行，NavItem/SubNavItem 组件定义移除
+- 播放按钮改用 opacity 淡入淡出动画替代 visible 切换
+- 播放按钮中心 Rectangle 添加 hover 颜色动画
+- 进度条圆角宽度变化添加 300ms EaseOutCubic 动画
+- `toggleMaximize()` 还原窗口时保留 X 坐标（之前强制设 lastGeo.x）
+- `play.png` 图标重新导出（1422→2381 字节）
+
+**优化**
+- 封面内存大幅降低：列表 delegate 中 `sourceSize: 30×30`（~0.9KB/张），播放栏 `40×40`（~1.6KB/张），不再按原始分辨率解码 GPU 纹理
+- 行高从 60px 降至 50px，内边距同步缩小，同屏可展示更多歌曲
+- 全部文字颜色微调提亮：标题 `#ccc→#d4d4d4`，歌手/时长 `#888→#969696`，专辑 `#777→#888`，空状态文字 `#666→#757575`
+- 列表行内容上下居中，封面与左边缘保留 8px 间距
+- 导入完成后 `Loader` 自动失活销毁覆盖层，释放相关内存
+
+**修复**
+- 封面图片未按 `Rectangle` 容器尺寸裁剪 → 添加 `anchors.fill: parent`
+- delegate 销毁时 `memReleaseTimer.restart()` 空指针崩溃 → 添加 null 检查
+- 最大化窗口从右侧拖拽还原时窗口不跟随鼠标 → 改为按比例计算定位
+- 滚动条滑块尺寸为 0 不可见 → `contentItem` 从嵌套结构改为直接 `Rectangle`
+- RowLayout 未 `anchors.fill: parent` 导致内容贴边、垂直不居中
+
+**变更**
+- 版本号升至 v0.3.0-beta.1
+- 当前功能列表新增封面缓存策略、历史持久化、窗口拖拽说明
 
 ---
 

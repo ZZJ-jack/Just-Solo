@@ -9,9 +9,11 @@
 #include <QEventLoop>
 #include <QMediaMetaData>
 #include <QCoreApplication>
-
-
 #include <QMap>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QFile>
 
 // ============================================================
 // 工具函数
@@ -21,9 +23,9 @@ static QStringList supportedAudioExtensions() {
     return {"*.mp3", "*.flac", "*.wav", "*.ogg", "*.aac", "*.m4a", "*.wma", "*.opus"};
 }
 
-static QString cacheDir()
+static QString coverDir()
 {
-    QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/covers";
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/covers";
     QDir().mkpath(dir);
     return dir;
 }
@@ -166,7 +168,7 @@ static QVariantMap buildTrack(const QString &filePath)
     }
     if (!coverImg.isNull()) {
         QByteArray hash = QCryptographicHash::hash(filePath.toUtf8(), QCryptographicHash::Md5).toHex();
-        QString cacheFile = cacheDir() + "/" + QString::fromLatin1(hash) + ".jpg";
+        QString cacheFile = coverDir() + "/" + QString::fromLatin1(hash) + ".jpg";
         if (coverImg.save(cacheFile, "JPEG"))
             track["cover"] = QUrl::fromLocalFile(cacheFile).toString();
     }
@@ -204,19 +206,139 @@ MusicManager::MusicManager(QObject *parent)
     });
 }
 
+// ============================================================
+// 缓存：持久化播放列表到用户目录（开发者模式跳过）
+// ============================================================
+
+void MusicManager::setUseCache(bool use) {
+    m_useCache = use;
+    if (!m_useCache) {
+        // 开发者模式：删除已有持久化数据，每次启动从头开始
+        QString devCache = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QDir(devCache).removeRecursively();
+        return;
+    }
+
+    // 缓存目录：%APPDATA%/Just Solo （Windows）
+    //            ~/.local/share/Just Solo （Linux / macOS）
+    m_cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(m_cacheDir);
+    loadCache();
+    loadFavorites();
+    loadHistory();
+}
+
+// ---- 通用：QVariantList <-> JSON 文件读写 ----
+
+static void writeVariantListToFile(const QVariantList &list, const QString &filePath) {
+    QJsonArray arr;
+    for (const QVariant &item : list) {
+        QVariantMap map = item.toMap();
+        QJsonObject obj;
+        for (auto it = map.cbegin(); it != map.cend(); ++it)
+            obj[it.key()] = QJsonValue::fromVariant(it.value());
+        arr.append(obj);
+    }
+    QJsonDocument doc(arr);
+    QFile file(filePath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        file.write(doc.toJson(QJsonDocument::Indented));
+        file.close();
+    }
+}
+
+static QVariantList readVariantListFromFile(const QString &filePath) {
+    QVariantList result;
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) return result;
+    QByteArray data = file.readAll();
+    file.close();
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isArray()) return result;
+    for (const QJsonValue &val : doc.array()) {
+        QJsonObject obj = val.toObject();
+        QVariantMap map;
+        for (auto it = obj.begin(); it != obj.end(); ++it)
+            map[it.key()] = it.value().toVariant();
+        result.append(map);
+    }
+    return result;
+}
+
+// ---- 播放列表缓存 ----
+
+void MusicManager::saveCache() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    writeVariantListToFile(m_playlist, m_cacheDir + "/playlist_cache.json");
+}
+
+void MusicManager::loadCache() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    QVariantList list = readVariantListFromFile(m_cacheDir + "/playlist_cache.json");
+    bool removed = false;
+    for (const QVariant &item : list) {
+        QVariantMap map = item.toMap();
+        // 文件已被删除/移动 → 跳过
+        if (!QFileInfo::exists(map["path"].toString())) {
+            removed = true;
+            continue;
+        }
+        m_playlist.append(map);
+    }
+    if (removed) saveCache();
+    if (!m_playlist.isEmpty())
+        emit playlistChanged();
+}
+
+// ---- 收藏缓存 ----
+
+void MusicManager::saveFavorites() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    writeVariantListToFile(m_favorites, m_cacheDir + "/favorites_cache.json");
+}
+
+void MusicManager::loadFavorites() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    m_favorites = readVariantListFromFile(m_cacheDir + "/favorites_cache.json");
+    if (!m_favorites.isEmpty())
+        emit favoritesChanged();
+}
+
+// ---- 历史缓存 ----
+
+void MusicManager::saveHistory() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    writeVariantListToFile(m_history, m_cacheDir + "/history_cache.json");
+}
+
+void MusicManager::loadHistory() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    m_history = readVariantListFromFile(m_cacheDir + "/history_cache.json");
+    if (!m_history.isEmpty())
+        emit historyChanged();
+}
+
 void MusicManager::addFiles(const QStringList &paths) {
     m_pendingPaths.append(paths);
     if (!m_loading) {
         m_loading = true;
+        m_importProcessed = 0;
+        m_importTotal = paths.size();
         emit isLoadingChanged();
+        emit importProgressChanged();
         m_loadTimer->start();
+    } else {
+        m_importTotal += paths.size();
+        emit importProgressChanged();
     }
 }
 
 void MusicManager::processNextPending() {
     if (m_pendingPaths.isEmpty()) {
         m_loading = false;
+        m_importProcessed = m_importTotal;
         emit isLoadingChanged();
+        emit importProgressChanged();
         return;
     }
 
@@ -264,8 +386,13 @@ void MusicManager::processNextPending() {
         playlistModified = true;
     }
 
-    if (playlistModified)
+    if (playlistModified) {
         emit playlistChanged();
+        saveCache();    // 有变更就持久化
+    }
+
+    m_importProcessed++;
+    emit importProgressChanged();
 
     // 下一首排队（让出事件循环保持 UI 响应）
     m_loadTimer->start();
@@ -302,6 +429,7 @@ void MusicManager::removeTrack(int index) {
         m_currentIndex--;
     }
     emit playlistChanged();
+    saveCache();
 }
 
 void MusicManager::clearPlaylist() {
@@ -309,16 +437,20 @@ void MusicManager::clearPlaylist() {
     m_currentIndex = -1;
     m_player->stop();
     emit playlistChanged();
+    saveCache();
     emit currentIndexChanged();
 }
 
 void MusicManager::playIndex(int index) {
     if (index < 0 || index >= m_playlist.size()) return;
     m_currentIndex = index;
-    QUrl url = QUrl::fromLocalFile(m_playlist[index].toMap()["path"].toString());
+    QVariantMap track = m_playlist[index].toMap();
+    QUrl url = QUrl::fromLocalFile(track["path"].toString());
     m_player->setSource(url);
     m_player->play();
     emit currentIndexChanged();
+    // 自动加入历史（最近播放）
+    addToHistory(track);
 }
 
 void MusicManager::play() {
@@ -375,4 +507,74 @@ qint64 MusicManager::duration() const {
 
 void MusicManager::seek(qint64 ms) {
     if (m_player) m_player->setPosition(ms);
+}
+
+// ============================================================
+// 收藏
+// ============================================================
+
+void MusicManager::toggleFavorite(const QVariantMap &track) {
+    QString path = track["path"].toString();
+    for (int i = 0; i < m_favorites.size(); i++) {
+        if (m_favorites[i].toMap()["path"].toString() == path) {
+            m_favorites.removeAt(i);
+            saveFavorites();
+            emit favoritesChanged();
+            return;
+        }
+    }
+    // 不存在则添加
+    m_favorites.prepend(track);
+    saveFavorites();
+    emit favoritesChanged();
+}
+
+void MusicManager::removeFavorite(int index) {
+    if (index < 0 || index >= m_favorites.size()) return;
+    m_favorites.removeAt(index);
+    saveFavorites();
+    emit favoritesChanged();
+}
+
+bool MusicManager::isFavorite(const QVariantMap &track) {
+    QString path = track["path"].toString();
+    for (const QVariant &item : m_favorites) {
+        if (item.toMap()["path"].toString() == path)
+            return true;
+    }
+    return false;
+}
+
+// ============================================================
+// 历史（最近播放）
+// ============================================================
+
+void MusicManager::addToHistory(const QVariantMap &track) {
+    // 去重：同一文件移到最前面
+    QString path = track["path"].toString();
+    for (int i = 0; i < m_history.size(); i++) {
+        if (m_history[i].toMap()["path"].toString() == path) {
+            m_history.removeAt(i);
+            break;
+        }
+    }
+    // 限制最大 500 条
+    while (m_history.size() >= 500)
+        m_history.removeLast();
+    m_history.prepend(track);
+    saveHistory();
+    emit historyChanged();
+}
+
+void MusicManager::clearHistory() {
+    m_history.clear();
+    saveHistory();
+    emit historyChanged();
+}
+
+void MusicManager::removeHistoryItem(int index) {
+    if (index < 0 || index >= m_history.size()) return;
+    m_history.removeAt(index);
+    saveHistory();
+    emit historyChanged();
 }

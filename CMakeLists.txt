@@ -37,6 +37,12 @@ qt_add_qml_module(JustSolo
     VERSION 1.0
     QML_FILES
         src/qml/main.qml
+        src/qml/components/NavItem.qml
+        src/qml/components/SubNavItem.qml
+        src/qml/views/HomePage.qml
+        src/qml/views/FavoritePage.qml
+        src/qml/views/HistoryPage.qml
+        src/qml/views/SettingsPage.qml
     RESOURCES
         data/image/logo.png
         data/image/logo2.png
