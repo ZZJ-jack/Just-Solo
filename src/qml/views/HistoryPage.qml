@@ -16,6 +16,9 @@ ColumnLayout {
     property int windowWidth: 1200
     property string fontFamily: ""
 
+    // ---- 缓存右键点击的索引（避免 reuseItems 滚动后 index 错乱） ----
+    property int rightClickedIndex: -1
+
     // ---- 列表列宽计算 ----
     property int colCover: 40
     property int colPlay: 50
@@ -40,8 +43,8 @@ ColumnLayout {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 120
+            anchors.margins: 5
+            anchors.leftMargin: 8
             spacing: historyLayout.colSpacing
 
             Item { Layout.preferredWidth: historyLayout.colCover }
@@ -64,6 +67,7 @@ ColumnLayout {
                 text: "时长"; font.family: fontFamily; font.pixelSize: 14; color: "#969696"
                 Layout.preferredWidth: historyLayout.colDuration
                 verticalAlignment: Text.AlignVCenter
+                horizontalAlignment: Text.AlignRight
             }
             Item { Layout.preferredWidth: historyLayout.colPlay }
         }
@@ -104,6 +108,7 @@ ColumnLayout {
         boundsBehavior: Flickable.StopAtBounds
         visible: musicManager.history.length > 0
         cacheBuffer: height * 2
+        reuseItems: true
 
         ScrollBar.vertical: ScrollBar {
             id: histScrollBar
@@ -147,7 +152,6 @@ ColumnLayout {
                         id: histCoverImg
                         anchors.fill: parent
                         anchors.margins: 2
-                        cache: false
                         sourceSize.width: 30
                         sourceSize.height: 30
                         source: modelData.cover || ""
@@ -211,16 +215,10 @@ ColumnLayout {
                 }
 
                 Label {
-                    text: {
-                        if (modelData.duration > 0) {
-                            var m = Math.floor(modelData.duration / 60)
-                            var s = Math.floor(modelData.duration % 60)
-                            return m + ":" + (s < 10 ? "0" : "") + s
-                        }
-                        return ""
-                    }
+                    text: modelData.durationText || ""
                     font.family: fontFamily; font.pixelSize: 14; color: "#969696"
                     verticalAlignment: Text.AlignVCenter
+                    horizontalAlignment: Text.AlignRight
                     Layout.fillHeight: true
                     Layout.preferredWidth: historyLayout.colDuration
                 }
@@ -248,7 +246,7 @@ ColumnLayout {
                 MenuItem {
                     id: histMenuItem
                     text: "删除记录"
-                    onClicked: musicManager.removeHistoryItem(index)
+                    onClicked: musicManager.removeHistoryItem(historyLayout.rightClickedIndex)
                     contentItem: Label {
                         text: histMenuItem.text
                         font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"
@@ -269,6 +267,7 @@ ColumnLayout {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 onClicked: {
                     if (mouse.button === Qt.RightButton) {
+                        historyLayout.rightClickedIndex = index
                         histContextMenu.popup()
                     }
                 }

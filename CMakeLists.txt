@@ -29,6 +29,8 @@ qt_policy(SET QTP0004 NEW)
 qt_add_executable(JustSolo WIN32
     src/main.cpp
     src/core/MusicManager.cpp
+    src/core/MetadataReader.cpp
+    resources/app.rc
 )
 
 # QML 模块
@@ -43,6 +45,7 @@ qt_add_qml_module(JustSolo
         src/qml/views/FavoritePage.qml
         src/qml/views/HistoryPage.qml
         src/qml/views/SettingsPage.qml
+        src/qml/views/PlayerDetailPage.qml
     RESOURCES
         data/image/logo.png
         data/image/logo2.png

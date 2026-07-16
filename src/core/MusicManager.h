@@ -22,12 +22,18 @@ class MusicManager : public QObject
     Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY currentTrackChanged)
     Q_PROPERTY(QString currentArtist READ currentArtist NOTIFY currentTrackChanged)
     Q_PROPERTY(QString currentCover READ currentCover NOTIFY currentTrackChanged)
+    Q_PROPERTY(QString currentAlbum READ currentAlbum NOTIFY currentTrackChanged)
     Q_PROPERTY(bool isLoading READ isLoading NOTIFY isLoadingChanged)
     Q_PROPERTY(qreal importProgress READ importProgress NOTIFY importProgressChanged)
     Q_PROPERTY(int importProcessed READ importProcessed NOTIFY importProgressChanged)
     Q_PROPERTY(int importTotal READ importTotal NOTIFY importProgressChanged)
     Q_PROPERTY(qint64 position READ position NOTIFY positionChanged)
     Q_PROPERTY(qint64 duration READ duration NOTIFY durationChanged)
+    Q_PROPERTY(QVariantList currentLyrics READ currentLyrics NOTIFY currentLyricsChanged)
+    Q_PROPERTY(int lyricIndex READ lyricIndex NOTIFY lyricIndexChanged)
+    Q_PROPERTY(qreal lyricProgress READ lyricProgress NOTIFY lyricProgressChanged)
+    Q_PROPERTY(qreal detailOpacity READ detailOpacity WRITE setDetailOpacity NOTIFY detailOpacityChanged)
+    Q_PROPERTY(int lyricOffset READ lyricOffset WRITE setLyricOffset NOTIFY lyricOffsetChanged)
 
 public:
     explicit MusicManager(QObject *parent = nullptr);
@@ -41,6 +47,7 @@ public:
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
     Q_INVOKABLE void stop();
+    Q_INVOKABLE void shutdown();
     Q_INVOKABLE void next();
     Q_INVOKABLE void previous();
 
@@ -57,10 +64,26 @@ public:
     QString currentTitle() const;
     QString currentArtist() const;
     QString currentCover() const { return m_currentCover; }
+    QString currentAlbum() const;
+    QVariantList currentLyrics() const { return m_currentLyrics; }
+    int lyricIndex() const { return m_lyricIndex; }
+    qreal lyricProgress() const { return m_lyricProgress; }
+    qreal detailOpacity() const { return m_detailOpacity; }
+    void setDetailOpacity(qreal v);
+    int lyricOffset() const { return m_lyricOffset; }
+    void setLyricOffset(int v);
 
     Q_INVOKABLE qint64 position() const;
     Q_INVOKABLE qint64 duration() const;
     Q_INVOKABLE void seek(qint64 ms);
+
+    // 原画质封面：从音频文件中提取原始封面并保存为 PNG，返回 file:// 路径
+    Q_INVOKABLE QString loadOriginalCover();
+    // 释放原画质封面内存（删除临时文件）
+    Q_INVOKABLE void releaseOriginalCover();
+
+    // 歌词：解析 LRC 文件，返回 [{time: ms, text: "..."}]
+    Q_INVOKABLE QVariantList loadLyricsForFile(const QString &filePath);
 
     // 缓存控制：开发者模式不启用，非开发者模式持久化到用户目录
     Q_INVOKABLE void setUseCache(bool use);
@@ -82,6 +105,11 @@ signals:
     void currentIndexChanged();
     void playbackStateChanged();
     void currentTrackChanged();
+    void currentLyricsChanged();
+    void lyricIndexChanged();
+    void lyricProgressChanged();
+    void detailOpacityChanged();
+    void lyricOffsetChanged();
     void positionChanged(qint64 ms);
     void durationChanged();
     void isLoadingChanged();
@@ -89,8 +117,11 @@ signals:
 
 private:
     void updateCurrentTrack();
+    void updateLyricIndex();
+    void onMetaDataChanged();
     void scanFolder(const QString &path);
     void processNextPending();
+    QVariantList parseEmbeddedLyrics(const QString &text);
     static QStringList supportedExtensions();
 
     // ---- 缓存 ----
@@ -106,14 +137,28 @@ private:
     QVariantList m_playlist;
     QVariantList m_favorites;
     QVariantList m_history;
+    QVariantList m_currentLyrics;
+    int m_lyricIndex = -1;
+    qreal m_lyricProgress = 0.0;
+    qreal m_detailOpacity = 0.90;  // 播放详情页背景透明度 (0.3-1.0)
+    int m_lyricOffset = 130;       // 用户可调基础偏移 (ms)，最终 = base + 2.15×歌词长度
+    void loadSettings();
+    void saveSettings();
     int m_currentIndex = -1;
     QString m_currentCover;
+    QString m_currentAlbum;
+    QString m_currentMediaPath;    // 当前媒体文件路径
+    QString m_originalCoverPath;   // 原画质封面临时文件路径
     bool m_loading = false;
     int m_importProcessed = 0;
     int m_importTotal = 0;
 
     QStringList m_pendingPaths;
     QTimer *m_loadTimer = nullptr;
+    QTimer *m_lyricTimer = nullptr;     // 节流歌词索引更新（100ms debounce）
+
+    // 嵌入式歌词异步加载
+    bool m_embeddedLyricsLoaded = false;
 
     QMediaPlayer *m_player = nullptr;
     QAudioOutput *m_audioOutput = nullptr;

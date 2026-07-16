@@ -20,14 +20,16 @@ public:
     static AudioMetadata read(const QString &filePath, const QString &cacheDir);
 
 private:
-    // ID3v2 (MP3) - 返回 text frame 字典 + 封面
+    // ID3v2 (MP3) - 返回 text frame 字典 + 封面 + TLEN 时长
     static QMap<QString, QString> readID3v2TextFrames(const QString &filePath, QImage *outCover);
-    // FLAC Vorbis comment - 返回字段字典 + 封面
-    static QMap<QString, QString> readFlacComments(const QString &filePath, QImage *outCover);
+    // FLAC Vorbis comment + STREAMINFO 时长
+    static QMap<QString, QString> readFlacComments(const QString &filePath, QImage *outCover, int *outDuration);
     // MP4/M4A
     static QImage readMP4Cover(const QString &filePath);
     // 同目录外部封面
     static QString findExternalCover(const QString &filePath);
+    // MP3 估算时长（读首个帧头 bitrate → file_size*8/bitrate）
+    static int estimateMP3Duration(const QString &filePath, quint32 id3TagSize);
 
     // ID3v2 工具
     static quint32 readSynchsafeInt(const QByteArray &data, int offset);

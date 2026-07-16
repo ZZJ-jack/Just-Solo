@@ -1,4 +1,5 @@
 #include "MusicManager.h"
+#include "MetadataReader.h"
 #include <QFileInfo>
 #include <QDirIterator>
 #include <QUrl>
@@ -8,12 +9,17 @@
 #include <QTimer>
 #include <QEventLoop>
 #include <QMediaMetaData>
+#include <algorithm>
 #include <QCoreApplication>
 #include <QMap>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QFile>
+#include <QTextStream>
+#include <QStringConverter>
+#include <QRegularExpression>
+#include <algorithm>
 
 // ============================================================
 // 工具函数
@@ -101,11 +107,105 @@ static int qualityRank(const QString &quality) {
     return rank.value(quality, 0);
 }
 
+// 根据文件扩展名猜测音质（快路径用，无 QMediaPlayer 开销）
+static QString guessQualityFromExtension(const QFileInfo &fi) {
+    QString ext = fi.suffix().toLower();
+    qint64 size = fi.size();
+    if (ext == "flac") return QStringLiteral("无损");
+    if (ext == "wav")  return size > 50 * 1024 * 1024 ? QStringLiteral("高解析") : QStringLiteral("无损");
+    if (ext == "ape")  return QStringLiteral("无损");
+    if (ext == "dsf" || ext == "dff") return QStringLiteral("高解析");
+    if (ext == "m4a" || ext == "alac") return QStringLiteral("高品质");
+    if (ext == "mp3") {
+        if (size > 10 * 1024 * 1024) return QStringLiteral("高品质");
+        return QStringLiteral("标准");
+    }
+    return QStringLiteral("标准");
+}
+
+static QString normalizeArtist(const QString &raw) {
+    QString s = raw;
+    s.replace(QRegularExpression("[/;｜|]"), QStringLiteral("、"));
+    return s;
+}
+
 static QVariantMap buildTrack(const QString &filePath)
 {
     QVariantMap track;
     QFileInfo fi(filePath);
 
+    // ---- 快路径：MetadataReader 二进制解析（无 QMediaPlayer 开销） ----
+    QString ext = fi.suffix().toLower();
+    bool fastPath = (ext == "mp3" || ext == "flac" || ext == "m4a" || ext == "mp4");
+
+    if (fastPath) {
+        AudioMetadata meta = MetadataReader::read(filePath, coverDir());
+
+        if (!meta.title.isEmpty()) {
+            // 时长从 QMediaPlayer 获取（准），其他元数据用 MetadataReader（快）
+            int dur = 0;
+            QString durText;
+            QString cover;
+            if (!meta.coverPath.isEmpty())
+                cover = QUrl::fromLocalFile(meta.coverPath).toString();
+
+            // 统一用 QMediaPlayer 提取时长 + 兜底封面
+            {
+                QMediaPlayer player;
+                QAudioOutput audioOut;
+                player.setAudioOutput(&audioOut);
+                QEventLoop loop;
+                QTimer t; t.setSingleShot(true);
+                QObject::connect(&player, &QMediaPlayer::mediaStatusChanged, [&](QMediaPlayer::MediaStatus s) {
+                    if (s == QMediaPlayer::LoadedMedia || s == QMediaPlayer::BufferedMedia)
+                        t.start(30);
+                });
+                QObject::connect(&t, &QTimer::timeout, &loop, &QEventLoop::quit);
+                QTimer fb; fb.setSingleShot(true);
+                QObject::connect(&fb, &QTimer::timeout, &loop, &QEventLoop::quit);
+                player.setSource(QUrl::fromLocalFile(filePath));
+                fb.start(2000);
+                loop.exec();
+
+                dur = (int)(player.duration() / 1000);
+                if (dur > 0 && dur <= 3600)
+                    durText = QString("%1:%2").arg(dur / 60).arg(dur % 60, 2, 10, QChar('0'));
+
+                // 封面兜底
+                if (cover.isEmpty()) {
+                    QImage coverImg;
+                    QMediaMetaData md = player.metaData();
+                    for (QMediaMetaData::Key k : {QMediaMetaData::CoverArtImage, QMediaMetaData::ThumbnailImage}) {
+                        QVariant v = md.value(k);
+                        if (v.isValid()) { coverImg = v.value<QImage>(); if (!coverImg.isNull()) break; }
+                    }
+                    if (!coverImg.isNull()) {
+                        QByteArray hash = QCryptographicHash::hash(filePath.toUtf8(), QCryptographicHash::Md5).toHex();
+                        QString cacheFile = coverDir() + "/" + QString::fromLatin1(hash) + ".jpg";
+                        if (coverImg.save(cacheFile, "JPEG"))
+                            cover = QUrl::fromLocalFile(cacheFile).toString();
+                    }
+                    if (cover.isEmpty()) {
+                        QString extCover = findExternalCover(filePath);
+                        if (!extCover.isEmpty())
+                            cover = QUrl::fromLocalFile(extCover).toString();
+                    }
+                }
+            }
+
+            track["path"]         = fi.absoluteFilePath();
+            track["name"]         = meta.title;
+            track["artist"]       = normalizeArtist(meta.artist);
+            track["album"]        = meta.album;
+            track["duration"]     = dur;
+            track["durationText"] = durText;
+            track["cover"]        = cover;
+            track["quality"]      = guessQualityFromExtension(fi);
+            return track;
+        }
+    }
+
+    // ---- 慢路径：QMediaPlayer 回退（.ogg/.wav/.opus 等或快路径失败） ----
     QMediaPlayer player;
     QAudioOutput audioOut;
     player.setAudioOutput(&audioOut);
@@ -114,12 +214,10 @@ static QVariantMap buildTrack(const QString &filePath)
     QTimer debounce;
     debounce.setSingleShot(true);
 
-    // metaDataChanged 后等 30ms 收齐
     QObject::connect(&player, &QMediaPlayer::metaDataChanged,
         [&]() { debounce.start(30); });
     QObject::connect(&debounce, &QTimer::timeout, &loop, &QEventLoop::quit);
 
-    // 最大等待 1 秒
     QTimer fallbackTimer;
     fallbackTimer.setSingleShot(true);
     QObject::connect(&fallbackTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
@@ -128,7 +226,6 @@ static QVariantMap buildTrack(const QString &filePath)
     fallbackTimer.start(1000);
     loop.exec();
 
-    // 提取元数据
     QString title  = player.metaData().value(QMediaMetaData::Title).toString();
     QString artist = player.metaData().value(QMediaMetaData::ContributingArtist).toString();
     if (artist.isEmpty())
@@ -146,14 +243,18 @@ static QVariantMap buildTrack(const QString &filePath)
     if (title.isEmpty())
         title = fi.baseName();
 
+    QString durText;
+    if (duration > 0)
+        durText = QString("%1:%2").arg(duration / 60).arg(duration % 60, 2, 10, QChar('0'));
+
     track["path"]     = fi.absoluteFilePath();
     track["name"]     = title;
-    track["artist"]   = artist.isEmpty() ? "" : artist;
+    track["artist"]   = normalizeArtist(artist.isEmpty() ? "" : artist);
     track["album"]    = album.isEmpty() ? "" : album;
     track["duration"] = duration;
+    track["durationText"] = durText;
     track["quality"]  = detectQualityLabel(filePath, player);
 
-    // 封面
     QImage coverImg;
     QMediaMetaData md = player.metaData();
     for (QMediaMetaData::Key k : {QMediaMetaData::CoverArtImage, QMediaMetaData::ThumbnailImage}) {
@@ -197,13 +298,38 @@ MusicManager::MusicManager(QObject *parent)
     m_loadTimer->setInterval(0);
     connect(m_loadTimer, &QTimer::timeout, this, &MusicManager::processNextPending);
 
-    connect(m_player, &QMediaPlayer::positionChanged, this, &MusicManager::positionChanged);
+    // 歌词索引节流：positionChanged 每帧触发 → debounce 100ms 后计算
+    m_lyricTimer = new QTimer(this);
+    m_lyricTimer->setSingleShot(true);
+    m_lyricTimer->setInterval(30);
+    connect(m_lyricTimer, &QTimer::timeout, this, &MusicManager::updateLyricIndex);
+
+    connect(m_player, &QMediaPlayer::positionChanged, this, [this](qint64) {
+        emit positionChanged(m_player->position());
+        updateLyricIndex();  // 直接计算，无延迟
+    });
     connect(m_player, &QMediaPlayer::playbackStateChanged, this, &MusicManager::playbackStateChanged);
     connect(m_player, &QMediaPlayer::sourceChanged, this, &MusicManager::updateCurrentTrack);
     connect(m_player, &QMediaPlayer::mediaStatusChanged, this, [this](QMediaPlayer::MediaStatus s) {
-        if (s == QMediaPlayer::LoadedMedia || s == QMediaPlayer::BufferedMedia)
+        if (s == QMediaPlayer::LoadedMedia || s == QMediaPlayer::BufferedMedia) {
+            // 用真实播放时长修正列表中的 duration
+            qint64 dur = m_player ? m_player->duration() : 0;
+            if (dur > 0 && m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+                QVariantMap track = m_playlist[m_currentIndex].toMap();
+                int durSec = (int)(dur / 1000);
+                if (durSec > 0 && durSec <= 3600) {
+                    track["duration"] = durSec;
+                    track["durationText"] = QString("%1:%2")
+                        .arg(durSec / 60).arg(durSec % 60, 2, 10, QChar('0'));
+                    m_playlist[m_currentIndex] = track;
+                    emit playlistChanged();
+                }
+            }
             emit durationChanged();
+        }
     });
+    // 嵌入式歌词：等媒体元数据加载完成后尝试提取
+    connect(m_player, &QMediaPlayer::metaDataChanged, this, &MusicManager::onMetaDataChanged);
 }
 
 // ============================================================
@@ -223,9 +349,59 @@ void MusicManager::setUseCache(bool use) {
     //            ~/.local/share/Just Solo （Linux / macOS）
     m_cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(m_cacheDir);
+    loadSettings();
     loadCache();
     loadFavorites();
     loadHistory();
+}
+
+// ---- 设置文件（透明度等） ----
+
+void MusicManager::loadSettings() {
+    if (m_cacheDir.isEmpty()) return;
+    QFile file(m_cacheDir + "/settings.json");
+    if (!file.open(QIODevice::ReadOnly)) return;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    if (!doc.isObject()) return;
+    QJsonObject obj = doc.object();
+    if (obj.contains("detailOpacity")) {
+        m_detailOpacity = obj.value("detailOpacity").toDouble(m_detailOpacity);
+        emit detailOpacityChanged();
+    }
+    if (obj.contains("lyricOffset")) {
+        m_lyricOffset = obj.value("lyricOffset").toInt(m_lyricOffset);
+        emit lyricOffsetChanged();
+    }
+}
+
+void MusicManager::saveSettings() {
+    if (m_cacheDir.isEmpty()) return;
+    QJsonObject obj;
+    obj["detailOpacity"] = m_detailOpacity;
+    obj["lyricOffset"] = m_lyricOffset;
+    QJsonDocument doc(obj);
+    QFile file(m_cacheDir + "/settings.json");
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(doc.toJson());
+        file.close();
+    }
+}
+
+void MusicManager::setDetailOpacity(qreal v) {
+    v = qBound(0.3, v, 1.0);
+    if (qFuzzyCompare(v, m_detailOpacity)) return;
+    m_detailOpacity = v;
+    emit detailOpacityChanged();
+    saveSettings();
+}
+
+void MusicManager::setLyricOffset(int v) {
+    v = qBound(-500, v, 500);
+    if (v == m_lyricOffset) return;
+    m_lyricOffset = v;
+    emit lyricOffsetChanged();
+    saveSettings();
 }
 
 // ---- 通用：QVariantList <-> JSON 文件读写 ----
@@ -342,59 +518,64 @@ void MusicManager::processNextPending() {
         return;
     }
 
-    QString path = m_pendingPaths.takeFirst();
-    QVariantMap track = buildTrack(path);
-
-    QString filePath = track["path"].toString();
-    QString songKey = track["name"].toString() + "|||" + track["artist"].toString();
-    int newQualityRank = qualityRank(track["quality"].toString());
-
-    bool shouldAdd = true;
+    // 批处理：每轮处理最多 BATCH_SIZE 个快路径文件，减少事件循环轮次
+    static const int BATCH_SIZE = 8;
+    int processed = 0;
     bool playlistModified = false;
 
-    for (int i = 0; i < m_playlist.size(); i++) {
-        QVariantMap existing = m_playlist[i].toMap();
+    while (!m_pendingPaths.isEmpty() && processed < BATCH_SIZE) {
+        QString path = m_pendingPaths.takeFirst();
+        QVariantMap track = buildTrack(path);
 
-        // 1. 同一文件路径 → 跳过
-        if (existing["path"].toString() == filePath) {
-            shouldAdd = false;
-            break;
-        }
+        QString filePath = track["path"].toString();
+        QString songKey = track["name"].toString() + "|||" + track["artist"].toString();
+        int newQualityRank = qualityRank(track["quality"].toString());
 
-        // 2. 同一首歌（同名+同歌手）→ 保留音质更高的
-        QString existingKey = existing["name"].toString() + "|||" + existing["artist"].toString();
-        if (existingKey == songKey) {
-            int existingQualityRank = qualityRank(existing["quality"].toString());
-            if (newQualityRank > existingQualityRank) {
-                // 新文件音质更高 → 替换
-                m_playlist[i] = track;
-                if (m_currentIndex == i) {
-                    m_player->setSource(QUrl::fromLocalFile(track["path"].toString()));
-                    if (m_player->playbackState() == QMediaPlayer::PlayingState)
-                        m_player->play();
-                    emit currentIndexChanged();
-                }
-                playlistModified = true;
+        bool shouldAdd = true;
+
+        for (int i = 0; i < m_playlist.size(); i++) {
+            QVariantMap existing = m_playlist[i].toMap();
+
+            if (existing["path"].toString() == filePath) {
+                shouldAdd = false;
+                break;
             }
-            shouldAdd = false;
-            break;
+
+            QString existingKey = existing["name"].toString() + "|||" + existing["artist"].toString();
+            if (existingKey == songKey) {
+                int existingQualityRank = qualityRank(existing["quality"].toString());
+                if (newQualityRank > existingQualityRank) {
+                    m_playlist[i] = track;
+                    if (m_currentIndex == i) {
+                        m_player->setSource(QUrl::fromLocalFile(track["path"].toString()));
+                        if (m_player->playbackState() == QMediaPlayer::PlayingState)
+                            m_player->play();
+                        emit currentIndexChanged();
+                    }
+                    playlistModified = true;
+                }
+                shouldAdd = false;
+                break;
+            }
         }
+
+        if (shouldAdd) {
+            m_playlist.append(track);
+            playlistModified = true;
+        }
+
+        m_importProcessed++;
+        processed++;
     }
 
-    if (shouldAdd) {
-        m_playlist.append(track);
-        playlistModified = true;
-    }
-
+    // 批量发一次信号，减少 QML 绑定刷新次数
     if (playlistModified) {
         emit playlistChanged();
-        saveCache();    // 有变更就持久化
+        saveCache();
     }
-
-    m_importProcessed++;
     emit importProgressChanged();
 
-    // 下一首排队（让出事件循环保持 UI 响应）
+    // 如果批量里遇到了慢路径文件（QMediaPlayer），提前结束本轮让 UI 刷新
     m_loadTimer->start();
 }
 
@@ -465,6 +646,15 @@ void MusicManager::pause() {
 
 void MusicManager::stop() {
     m_player->stop();
+    releaseOriginalCover();
+}
+
+void MusicManager::shutdown() {
+    m_player->stop();
+    m_loadTimer->stop();
+    m_lyricTimer->stop();
+    releaseOriginalCover();
+    QCoreApplication::exit(0);
 }
 
 void MusicManager::next() {
@@ -483,8 +673,310 @@ void MusicManager::updateCurrentTrack() {
     if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
         QVariantMap track = m_playlist[m_currentIndex].toMap();
         m_currentCover = track["cover"].toString();
+        m_currentAlbum = track["album"].toString();
+        m_currentMediaPath = track["path"].toString();
+        // 加载歌词
+        m_currentLyrics = loadLyricsForFile(m_currentMediaPath);
+        m_lyricIndex = -1;
+        m_embeddedLyricsLoaded = false;  // 等待 metaDataChanged 回调
+    } else {
+        m_currentCover.clear();
+        m_currentAlbum.clear();
+        m_currentMediaPath.clear();
+        m_currentLyrics.clear();
     }
     emit currentTrackChanged();
+    emit currentLyricsChanged();
+}
+
+// ---- C++ 端计算歌词索引（节流到 100ms，避免每帧 QML JS 计算） ----
+void MusicManager::updateLyricIndex() {
+    if (m_currentLyrics.isEmpty()) {
+        if (m_lyricIndex != -1) {
+            m_lyricIndex = -1;
+            emit lyricIndexChanged();
+        }
+        return;
+    }
+
+    qint64 rawPos = m_player ? m_player->position() : 0;
+    int newIdx = -1;
+
+    // 按行遍历：每行用各自歌词长度算偏移（2.15×字长）
+    for (int i = 0; i < m_currentLyrics.size(); i++) {
+        int lineLen = m_currentLyrics[i].toMap()["text"].toString().length();
+        qint64 lineOffset = m_lyricOffset + qint64(2.15 * lineLen);
+        if (m_currentLyrics[i].toMap()["time"].toInt() <= rawPos + lineOffset) {
+            newIdx = i;
+        } else {
+            break;
+        }
+    }
+
+    if (newIdx != m_lyricIndex) {
+        m_lyricIndex = newIdx;
+        emit lyricIndexChanged();
+    }
+
+    // 逐字进度：当前行内的时间偏移比例 (0.0 - 1.0)
+    qreal progress = 0.0;
+    if (newIdx >= 0 && newIdx < m_currentLyrics.size()) {
+        qint64 curTime = m_currentLyrics[newIdx].toMap()["time"].toInt();
+        qint64 nextTime = (newIdx + 1 < m_currentLyrics.size())
+            ? m_currentLyrics[newIdx + 1].toMap()["time"].toInt()
+            : (curTime + 5000);  // 最后一行默认5秒
+        if (nextTime > curTime && rawPos > curTime) {
+            progress = qMin(1.0, (qreal)(rawPos - curTime) / (nextTime - curTime));
+        }
+    }
+    if (!qFuzzyCompare(progress, m_lyricProgress)) {
+        m_lyricProgress = progress;
+        emit lyricProgressChanged();
+    }
+}
+
+// ---- 从音频文件二进制数据中提取嵌入式歌词 ----
+static QString extractEmbeddedLyricsFromFile(const QString &filePath) {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) return {};
+
+    QByteArray data = file.readAll();
+    file.close();
+    if (data.isEmpty()) return {};
+
+    // === MP3 ID3v2 USLT (Unsynchronized Lyrics) ===
+    if (data.startsWith("ID3")) {
+        // 读取 ID3v2 头大小（syncsafe 编码）
+        quint32 tagSize = 0;
+        for (int i = 6; i <= 9; ++i) {
+            tagSize = (tagSize << 7) | (static_cast<quint8>(data[i]) & 0x7F);
+        }
+        tagSize += 10; // 加上头本身
+
+        if (tagSize > static_cast<quint32>(data.size())) tagSize = data.size();
+
+        // 遍历 ID3v2 帧
+        int pos = 10; // 跳过头部
+        while (pos + 10 <= static_cast<int>(tagSize)) {
+            QString frameId = QString::fromLatin1(data.mid(pos, 4));
+            // 帧大小: ID3v2.3 中是 4 字节大端，ID3v2.4 中也是 4 字节大端
+            quint32 frameSize = static_cast<quint8>(data[pos + 4]) << 24
+                              | static_cast<quint8>(data[pos + 5]) << 16
+                              | static_cast<quint8>(data[pos + 6]) << 8
+                              | static_cast<quint8>(data[pos + 7]);
+            // quint16 frameFlags = (static_cast<quint8>(data[pos + 8]) << 8) | static_cast<quint8>(data[pos + 9]);
+
+            if (frameSize == 0) break; // 空帧
+            if (pos + 10 + static_cast<int>(frameSize) > static_cast<int>(tagSize)) break;
+
+            if (frameId == "USLT") {
+                // USLT 帧: encoding(1B) + language(3B) + descriptor(null-terminated) + lyrics
+                int dataPos = pos + 10;
+                int dataEnd = dataPos + frameSize;
+
+                // 跳过 encoding(1B) + language(3B)
+                int textStart = dataPos + 4;
+
+                // 跳过 content descriptor（null-terminated）
+                while (textStart < dataEnd && data[textStart] != '\0') ++textStart;
+                if (textStart < dataEnd) ++textStart; // 跳过 null
+
+                // 提取歌词文本
+                quint8 encoding = static_cast<quint8>(data[dataPos]);
+                QString lyrics;
+                QByteArray lyricBytes = data.mid(textStart, dataEnd - textStart);
+                if (encoding == 0) {
+                    // ISO-8859-1
+                    lyrics = QString::fromLatin1(lyricBytes).trimmed();
+                } else if (encoding == 1 || encoding == 2) {
+                    // UTF-16 with BOM or UTF-16BE
+                    lyrics = QString::fromUtf16(
+                        reinterpret_cast<const char16_t*>(lyricBytes.constData()),
+                        lyricBytes.size() / 2).trimmed();
+                } else if (encoding == 3) {
+                    // UTF-8
+                    lyrics = QString::fromUtf8(lyricBytes).trimmed();
+                }
+
+                if (!lyrics.isEmpty()) return lyrics;
+            }
+
+            pos += 10 + frameSize;
+        }
+    }
+
+    // === FLAC Vorbis Comment ===
+    if (data.startsWith("fLaC")) {
+        int pos = 4; // 跳过 "fLaC"
+        while (pos + 4 <= data.size()) {
+            quint8 blockType = static_cast<quint8>(data[pos]) & 0x7F;
+            quint32 blockLen = (static_cast<quint8>(data[pos + 1]) << 16)
+                             | (static_cast<quint8>(data[pos + 2]) << 8)
+                             | static_cast<quint8>(data[pos + 3]);
+            bool isLast = (static_cast<quint8>(data[pos]) & 0x80) != 0;
+
+            if (blockType == 4) { // Vorbis Comment
+                int vcPos = pos + 4;
+                int vcEnd = vcPos + blockLen;
+
+                // 读取 vendor string 长度并跳过
+                if (vcPos + 4 > vcEnd) break;
+                quint32 vendorLen = *reinterpret_cast<const quint32*>(data.constData() + vcPos);
+                vcPos += 4 + vendorLen;
+                if (vcPos + 4 > vcEnd) break;
+
+                // 读取注释数量
+                quint32 numComments = *reinterpret_cast<const quint32*>(data.constData() + vcPos);
+                vcPos += 4;
+
+                for (quint32 i = 0; i < numComments && vcPos + 4 <= vcEnd; ++i) {
+                    quint32 commentLen = *reinterpret_cast<const quint32*>(data.constData() + vcPos);
+                    vcPos += 4;
+                    if (vcPos + static_cast<int>(commentLen) > vcEnd) break;
+
+                    QByteArray comment = data.mid(vcPos, commentLen);
+                    vcPos += commentLen;
+
+                    // 查找 "LYRICS="
+                    if (comment.toUpper().startsWith("LYRICS=")) {
+                        QString lyrics = QString::fromUtf8(comment.mid(7)).trimmed();
+                        if (!lyrics.isEmpty()) return lyrics;
+                    }
+                }
+            }
+
+            if (isLast) break;
+            pos += 4 + blockLen;
+        }
+    }
+
+    return {};
+}
+
+// ---- 从媒体元数据中提取嵌入式歌词 ----
+void MusicManager::onMetaDataChanged() {
+    if (m_embeddedLyricsLoaded) return;
+
+    // 优先使用外部 .lrc 文件
+    if (!m_currentLyrics.isEmpty()) {
+        m_embeddedLyricsLoaded = true;
+        return;
+    }
+
+    // 从文件二进制数据中提取嵌入式歌词（兼容 Qt 6.8 无 Lyrics 键）
+    if (!m_currentMediaPath.isEmpty()) {
+        QString lyrics = extractEmbeddedLyricsFromFile(m_currentMediaPath);
+        if (!lyrics.isEmpty()) {
+            m_currentLyrics = parseEmbeddedLyrics(lyrics);
+            if (!m_currentLyrics.isEmpty()) {
+                m_lyricIndex = -1;
+                emit currentLyricsChanged();
+                emit lyricIndexChanged();
+            }
+        }
+    }
+
+    m_embeddedLyricsLoaded = true;
+}
+
+// ============================================================
+// 歌词解析工具函数
+// ============================================================
+
+// lrc 时间标签解析: [mm:ss.xx] 或 [mm:ss]
+static int parseLrcTime(const QString &tag) {
+    // tag 形如 "[01:23.45]" 或 "[01:23]"
+    QString inner = tag.mid(1, tag.length() - 2);  // 去掉 [ ]
+    int colonIdx = inner.indexOf(':');
+    if (colonIdx < 0) return -1;
+    int minutes = inner.left(colonIdx).toInt();
+    QString secPart = inner.mid(colonIdx + 1);
+    // 处理 "12.34" 或 "12"
+    int dotIdx = secPart.indexOf('.');
+    int seconds = 0, centiseconds = 0;
+    if (dotIdx >= 0) {
+        seconds = secPart.left(dotIdx).toInt();
+        QString cs = secPart.mid(dotIdx + 1);
+        if (cs.length() == 1) cs += '0';       // "5" → "50" 百分秒
+        else if (cs.length() == 3) {            // "665" → 665 毫秒
+            int ms = cs.toInt();
+            return minutes * 60000 + seconds * 1000 + ms;
+        }
+        centiseconds = cs.toInt();               // 2位 = 百分秒
+    } else {
+        seconds = secPart.toInt();
+    }
+    return minutes * 60000 + seconds * 1000 + centiseconds * 10;
+}
+
+// ---- 解析嵌入式歌词文本（可能是 LRC 格式或纯文本） ----
+QVariantList MusicManager::parseEmbeddedLyrics(const QString &text) {
+    QVariantList result;
+    if (text.isEmpty()) return result;
+
+    // 检查是否包含 LRC 时间标签
+    static QRegularExpression lrcRx(R"(\[\d{1,3}:\d{1,3}[\.\:]\d{1,3}\])");
+    if (text.contains(lrcRx)) {
+        // LRC 格式：复用已有的解析逻辑
+        // 按行拆分并解析时间标签
+        QStringList lines = text.split('\n', Qt::SkipEmptyParts);
+        for (const QString &line : lines) {
+            QString trimmed = line.trimmed();
+            if (trimmed.isEmpty()) continue;
+
+            QRegularExpressionMatchIterator it = lrcRx.globalMatch(trimmed);
+            QList<int> times;
+            while (it.hasNext()) {
+                QRegularExpressionMatch m = it.next();
+                times.append(parseLrcTime(m.captured(0)));
+            }
+            if (times.isEmpty()) continue;
+
+            // 提取文本（去掉所有时间标签）
+            QString lyricText = trimmed;
+            lyricText.replace(lrcRx, QString());
+
+            for (int t : times) {
+                QVariantMap item;
+                item["time"] = t;
+                item["text"] = lyricText;
+                result.append(item);
+            }
+        }
+        // 按时间排序
+        std::stable_sort(result.begin(), result.end(), [](const QVariant &a, const QVariant &b) {
+            return a.toMap()["time"].toInt() < b.toMap()["time"].toInt();
+        });
+
+        // 双语歌词：合并同时间戳的行（第一行=text，第二行=translation）
+        QVariantList grouped;
+        for (int i = 0; i < result.size(); ++i) {
+            QVariantMap item = result[i].toMap();
+            int curTime = item["time"].toInt();
+            // 检查下一行是否同时间戳
+            if (i + 1 < result.size() && result[i + 1].toMap()["time"].toInt() == curTime) {
+                item["translation"] = result[i + 1].toMap()["text"].toString();
+                ++i;  // 跳过下一行
+            }
+            grouped.append(item);
+        }
+        result = grouped;
+    } else {
+        // 纯文本：按行拆分，均匀分配时间戳（基于歌曲时长）
+        QStringList lines = text.split('\n', Qt::SkipEmptyParts);
+        qint64 duration = m_player ? m_player->duration() : 0;
+        int count = lines.size();
+        for (int i = 0; i < count; ++i) {
+            QString trimmed = lines[i].trimmed();
+            if (trimmed.isEmpty()) continue;
+            QVariantMap item;
+            // 均匀分布：每行 = duration / count 间隔
+            item["time"] = count > 1 ? int(i * duration / (count - 1)) : 0;
+            item["text"] = trimmed;
+            result.append(item);
+        }
+    }
+    return result;
 }
 
 QString MusicManager::currentTitle() const {
@@ -495,6 +987,11 @@ QString MusicManager::currentTitle() const {
 QString MusicManager::currentArtist() const {
     if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) return "";
     return m_playlist[m_currentIndex].toMap()["artist"].toString();
+}
+
+QString MusicManager::currentAlbum() const {
+    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) return "";
+    return m_playlist[m_currentIndex].toMap()["album"].toString();
 }
 
 qint64 MusicManager::position() const {
@@ -577,4 +1074,121 @@ void MusicManager::removeHistoryItem(int index) {
     m_history.removeAt(index);
     saveHistory();
     emit historyChanged();
+}
+
+// ============================================================
+// 原画质封面：从音频文件中提取原始内嵌封面，保存为 PNG
+// ============================================================
+
+QString MusicManager::loadOriginalCover() {
+    releaseOriginalCover();
+
+    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size())
+        return QString();
+
+    // 直接使用已有缓存封面，避免临时 QMediaPlayer 阻塞 UI 线程
+    return m_currentCover;
+}
+
+void MusicManager::releaseOriginalCover() {
+    if (!m_originalCoverPath.isEmpty()) {
+        QFile::remove(m_originalCoverPath);
+        m_originalCoverPath.clear();
+    }
+}
+
+
+
+QVariantList MusicManager::loadLyricsForFile(const QString &filePath) {
+    QVariantList result;
+    if (filePath.isEmpty()) return result;
+
+    // 查找同名的 .lrc 文件
+    QFileInfo fi(filePath);
+    QString dir = fi.absolutePath();
+    QString base = fi.completeBaseName();
+
+    QStringList candidates = {
+        dir + "/" + base + ".lrc",
+        dir + "/" + base + ".LRC",
+    };
+
+    QString lrcPath;
+    for (const QString &c : candidates) {
+        if (QFileInfo::exists(c)) { lrcPath = c; break; }
+    }
+    if (lrcPath.isEmpty()) return result;
+
+    QFile file(lrcPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return result;
+
+    QTextStream in(&file);
+    in.setEncoding(QStringConverter::Utf8);
+
+    QRegularExpression timeRx(R"(\[(\d{1,3}):(\d{1,3})(?:\.(\d{1,3}))?\])");
+    QRegularExpression metaRx(R"(^\[(ti|ar|al|by|offset|length):)");  // 元数据标签，跳过
+
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (line.isEmpty()) continue;
+        // 跳过元数据标签行
+        if (metaRx.match(line).hasMatch()) continue;
+
+        // 提取所有时间标签
+        QRegularExpressionMatchIterator it = timeRx.globalMatch(line);
+        QList<int> times;
+        while (it.hasNext()) {
+            QRegularExpressionMatch m = it.next();
+            int min = m.captured(1).toInt();
+            int sec = m.captured(2).toInt();
+            int cs = 0;
+            if (!m.captured(3).isEmpty()) {
+                QString csStr = m.captured(3);
+                if (csStr.length() == 1) cs = csStr.toInt() * 100;       // "5" → 500ms
+                else if (csStr.length() == 2) cs = csStr.toInt() * 10;   // "90" → 900ms
+                else if (csStr.length() == 3) cs = csStr.toInt();        // "665" → 665ms
+            }
+            times.append(min * 60000 + sec * 1000 + cs);
+        }
+
+        if (times.isEmpty()) continue;
+
+        // 去除所有时间标签，得到歌词文本
+        QString text = line;
+        text.replace(timeRx, "");
+        text = text.trimmed();
+        if (text.isEmpty()) continue;
+
+        for (int t : times) {
+            QVariantMap entry;
+            entry["time"] = t;
+            entry["text"] = text;
+            result.append(entry);
+        }
+    }
+    file.close();
+
+    // 按时间排序
+    std::stable_sort(result.begin(), result.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap()["time"].toInt() < b.toMap()["time"].toInt();
+    });
+
+    // 双语：合并同时间戳的行
+    QVariantList grouped;
+    for (int i = 0; i < result.size(); ++i) {
+        QVariantMap item = result[i].toMap();
+        int curTime = item["time"].toInt();
+        if (i + 1 < result.size() && result[i + 1].toMap()["time"].toInt() == curTime) {
+            item["translation"] = result[i + 1].toMap()["text"].toString();
+            ++i;
+        }
+        grouped.append(item);
+    }
+    result = grouped;
+    std::sort(result.begin(), result.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap()["time"].toInt() < b.toMap()["time"].toInt();
+    });
+
+    return result;
 }

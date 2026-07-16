@@ -15,6 +15,9 @@ ColumnLayout {
     // ---- 外部注入属性 ----
     property int sidebarWidth: 230
     property int windowWidth: 1200
+
+    // ---- 缓存右键点击的曲目（避免 reuseItems 导致 modelData 错乱） ----
+    property var rightClickedTrack: null
     property string fontFamily: ""
 
     // ---- 列表列宽计算 ----
@@ -40,8 +43,9 @@ ColumnLayout {
         visible: musicManager.playlist.length > 0
 
         RowLayout {
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
+            anchors.fill: parent
+            anchors.margins: 5
+            anchors.leftMargin: 8
             spacing: musicListLayout.colSpacing
 
             Item { Layout.preferredWidth: musicListLayout.colCover }
@@ -65,6 +69,7 @@ ColumnLayout {
                 text: "时长"; font.family: fontFamily; font.pixelSize: 14; color: "#969696"
                 Layout.preferredWidth: musicListLayout.colDuration
                 verticalAlignment: Text.AlignVCenter
+                horizontalAlignment: Text.AlignRight
             }
             Item { Layout.preferredWidth: musicListLayout.colPlay }
         }
@@ -87,6 +92,7 @@ ColumnLayout {
         boundsBehavior: Flickable.StopAtBounds
         visible: musicManager.playlist.length > 0
         cacheBuffer: height * 2
+        reuseItems: true
 
         ScrollBar.vertical: ScrollBar {
             id: listScrollBar
@@ -132,7 +138,6 @@ ColumnLayout {
                         id: coverImg
                         anchors.fill: parent
                         anchors.margins: 2
-                        cache: false
                         sourceSize.width: 30
                         sourceSize.height: 30
                         source: modelData.cover || ""
@@ -198,16 +203,10 @@ ColumnLayout {
                 }
 
                 Label {
-                    text: {
-                        if (modelData.duration > 0) {
-                            var m = Math.floor(modelData.duration / 60)
-                            var s = Math.floor(modelData.duration % 60)
-                            return m + ":" + (s < 10 ? "0" : "") + s
-                        }
-                        return ""
-                    }
+                    text: modelData.durationText || ""
                     font.family: fontFamily; font.pixelSize: 14; color: "#969696"
                     verticalAlignment: Text.AlignVCenter
+                    horizontalAlignment: Text.AlignRight
                     Layout.fillHeight: true
                     Layout.preferredWidth: musicListLayout.colDuration
                 }
@@ -249,8 +248,11 @@ ColumnLayout {
                 }
                 MenuItem {
                     id: homeMenuItem
-                    text: musicManager.isFavorite(modelData) ? "取消收藏" : "收藏"
-                    onClicked: musicManager.toggleFavorite(modelData)
+                    text: musicListLayout.rightClickedTrack ? (musicManager.isFavorite(musicListLayout.rightClickedTrack) ? "取消收藏" : "收藏") : "收藏"
+                    onClicked: {
+                        if (musicListLayout.rightClickedTrack)
+                            musicManager.toggleFavorite(musicListLayout.rightClickedTrack)
+                    }
                     contentItem: Label {
                         text: homeMenuItem.text
                         font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"
@@ -269,8 +271,9 @@ ColumnLayout {
                 anchors.fill: parent; hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
-                onClicked: {
+                onClicked: function(mouse) {
                     if (mouse.button === Qt.RightButton) {
+                        musicListLayout.rightClickedTrack = modelData
                         homeContextMenu.popup()
                     } else {
                         if (musicManager.currentIndex === index) {

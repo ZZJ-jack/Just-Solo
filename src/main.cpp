@@ -18,8 +18,8 @@
 // 软件版本号: 大版本.中版本.小版本.预发布
 #define APP_VERSION_MAJOR   0   // 大版本号
 #define APP_VERSION_MINOR   3   // 中版本号
-#define APP_VERSION_PATCH   0   // 小版本号
-#define APP_VERSION_PRE     1   // 预发布号，0=正式版
+#define APP_VERSION_PATCH   5   // 小版本号
+#define APP_VERSION_PRE     0   // 预发布号，0=正式版
 
 // 格式化: 0.0.1-pre.2 → v0.0.1-beta.2
 #define STRINGIFY(x) #x

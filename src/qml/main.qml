@@ -43,6 +43,9 @@ Window {
     property string currentMenu: ""              // 空串 = 未选择，不加载页面
     property string settingsSubMenu: "appearance"
 
+    // ---- 播放详情页控制 ----
+    property bool showPlayerDetail: false
+
     // ============================================================
     // 字体加载
     // ============================================================
@@ -207,10 +210,16 @@ Window {
                     visible: currentMenu === "settings"
 
                     SubNavItem {
-                        label: "外观"
+                        label: "外观设置"
                         active: settingsSubMenu === "appearance"
                         fontFamily: appFont.name
                         onClicked: settingsSubMenu = "appearance"
+                    }
+                    SubNavItem {
+                        label: "播放设置"
+                        active: settingsSubMenu === "playback"
+                        fontFamily: appFont.name
+                        onClicked: settingsSubMenu = "playback"
                     }
                     SubNavItem {
                         label: "软件更新"
@@ -219,7 +228,7 @@ Window {
                         onClicked: settingsSubMenu = "update"
                     }
                     SubNavItem {
-                        label: "关于"
+                        label: "关于JustSolo"
                         active: settingsSubMenu === "about"
                         fontFamily: appFont.name
                         onClicked: settingsSubMenu = "about"
@@ -367,8 +376,9 @@ Window {
                               : currentMenu === "home" ? "首页"
                               : (currentMenu === "favorite" ? "收藏"
                               : (currentMenu === "history" ? "历史"
+                              : (settingsSubMenu === "playback" ? "播放设置"
                               : (settingsSubMenu === "update" ? "软件更新"
-                              : (settingsSubMenu === "appearance" ? "外观" : "关于"))))
+                              : (settingsSubMenu === "appearance" ? "外观设置" : "关于JustSolo")))))
                         font.family: appFont.name
                         font.pixelSize: 24
                         font.bold: true
@@ -400,6 +410,15 @@ Window {
                             onClicked: fileDialog.open()
                         }
                     }
+                }
+
+                // 欢迎页提示语（仅无菜单时显示）
+                Label {
+                    text: "点击左侧列表开始使用"
+                    font.family: appFont.name; font.pixelSize: 14; color: "#888"
+                    visible: currentMenu === ""
+                    Layout.alignment: Qt.AlignLeft
+                    Layout.leftMargin: 40
                 }
 
                 Item { Layout.preferredHeight: 16 }
@@ -565,6 +584,11 @@ Window {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: mainWindow.visibility = Window.Minimized
             }
+            ToolTip {
+                visible: btnMinimize.containsMouse
+                text: "最小化"
+                delay: 600
+            }
         }
 
         // 最大化 / 还原
@@ -581,7 +605,27 @@ Window {
                 id: btnMaximize
                 anchors.fill: parent; hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: toggleMaximize()
+                onClicked: function(mouse) {
+                    if (isMaximized) {
+                        var ratioX = mouse.x / lastGeo.w
+                        var ratioY = mouse.y / lastGeo.h
+                        mainWindow.x = mouse.screenX - ratioX * lastGeo.w
+                        mainWindow.y = mouse.screenY - ratioY * lastGeo.h
+                        mainWindow.width = lastGeo.w
+                        mainWindow.height = lastGeo.h
+                        mainWindow.visibility = Window.Windowed
+                        isMaximized = false
+                    } else {
+                        lastGeo = { x: mainWindow.x, y: mainWindow.y, w: mainWindow.width, h: mainWindow.height }
+                        mainWindow.visibility = Window.Maximized
+                        isMaximized = true
+                    }
+                }
+            }
+            ToolTip {
+                visible: btnMaximize.containsMouse
+                text: isMaximized ? "还原" : "最大化"
+                delay: 600
             }
         }
 
@@ -599,39 +643,283 @@ Window {
                 id: btnClose
                 anchors.fill: parent; hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: Qt.quit()
+                onClicked: mainWindow.close()
+            }
+            ToolTip {
+                visible: btnClose.containsMouse
+                text: "关闭"
+                delay: 600
             }
         }
     }
 
+    // 统一关闭入口：停所有循环 → 退出
+    onClosing: function(close) {
+        close.accepted = true
+        playerDetail.visible = false   // 关 ShaderEffectSource live
+        musicManager.stop()            // 停播放
+        musicManager.shutdown()        // 停所有定时器 + exit(0)
+    }
+
     // ============================================================
-    // 顶部拖拽区域
+    // 顶部拖拽区域 — 最大化还原后由原生 startSystemMove 接管
     // ============================================================
     MouseArea {
+        id: dragArea
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         height: 70
         z: -1
+        acceptedButtons: Qt.LeftButton
+        cursorShape: pressed && !isMaximized ? Qt.ClosedHandCursor : Qt.ArrowCursor
 
-        property point lastPos
+        Timer {
+            id: dragRestoreTimer
+            interval: 0; repeat: false
+            onTriggered: mainWindow.startSystemMove()
+        }
+
+        property real pressOffsetX: 0
+        property real pressOffsetY: 0
+
         onPressed: function(mouse) {
             if (isMaximized) {
-                var ratioX = mouse.x / mainWindow.width
-                var ratioY = mouse.y / mainWindow.height
-                toggleMaximize()
-                mainWindow.x = mouse.screenX - ratioX * mainWindow.width
-                mainWindow.y = mouse.screenY - ratioY * mainWindow.height
-                lastPos = Qt.point(ratioX * mainWindow.width, ratioY * mainWindow.height)
+                var maxW = mainWindow.width
+                var maxH = mainWindow.height
+                var ratioX = mouse.x / maxW
+                var ratioY = mouse.y / maxH
+                mainWindow.width = lastGeo.w
+                mainWindow.height = lastGeo.h
+                mainWindow.x = mouse.screenX - ratioX * lastGeo.w
+                mainWindow.y = mouse.screenY - ratioY * lastGeo.h
+                mainWindow.visibility = Window.Windowed
+                isMaximized = false
+                // 延迟一帧再接原生拖拽，等位置先生效
+                dragRestoreTimer.start()
+            } else {
+                mainWindow.startSystemMove()
+            }
+        }
+    }
+
+    // ============================================================
+    // 窗口边缘 Resize 拖拽区域（无边框窗口必须手动实现）
+    // ============================================================
+    readonly property int resizeMargin: 5
+
+    // 从最大化还原并定位窗口（鼠标相对于最大化窗口的位置映射到 lastGeo）
+    function restoreFromMaximized(mouseX, mouseY) {
+        var maxW = mainWindow.width
+        var maxH = mainWindow.height
+        var ratioX = mouseX / maxW
+        var ratioY = mouseY / maxH
+        mainWindow.x = mouseX - ratioX * lastGeo.w
+        mainWindow.y = mouseY - ratioY * lastGeo.h
+        mainWindow.width = lastGeo.w
+        mainWindow.height = lastGeo.h
+        mainWindow.visibility = Window.Windowed
+        isMaximized = false
+    }
+
+    // ---- 顶边 ----
+    MouseArea {
+        anchors.top: parent.top
+        anchors.left: parent.left; anchors.leftMargin: resizeMargin
+        anchors.right: parent.right; anchors.rightMargin: resizeMargin
+        height: resizeMargin
+        z: 2
+        cursorShape: Qt.SizeVerCursor
+        property real _startY: 0
+        property real _startGeoY: 0
+        property real _startGeoH: 0
+        onPressed: function(mouse) {
+            if (isMaximized) {
+                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
                 return
             }
-            lastPos = Qt.point(mouse.x, mouse.y)
+            _startY = mouse.y; _startGeoY = mainWindow.y; _startGeoH = mainWindow.height
         }
         onPositionChanged: function(mouse) {
-            if (pressed) {
-                mainWindow.x += mouse.x - lastPos.x
-                mainWindow.y += mouse.y - lastPos.y
+            var dy = mouse.y - _startY
+            var newH = Math.max(mainWindow.minimumHeight, _startGeoH - dy)
+            mainWindow.y = _startGeoY + (_startGeoH - newH)
+            mainWindow.height = newH
+        }
+    }
+
+    // ---- 底边 ----
+    MouseArea {
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left; anchors.leftMargin: resizeMargin
+        anchors.right: parent.right; anchors.rightMargin: resizeMargin
+        height: resizeMargin
+        z: 2
+        cursorShape: Qt.SizeVerCursor
+        property real _startY: 0
+        property real _startGeoH: 0
+        onPressed: function(mouse) {
+            if (isMaximized) {
+                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
+                return
             }
+            _startY = mouse.y; _startGeoH = mainWindow.height
+        }
+        onPositionChanged: function(mouse) {
+            mainWindow.height = Math.max(mainWindow.minimumHeight, _startGeoH + (mouse.y - _startY))
+        }
+    }
+
+    // ---- 左边 ----
+    MouseArea {
+        anchors.left: parent.left
+        anchors.top: parent.top; anchors.topMargin: resizeMargin
+        anchors.bottom: parent.bottom; anchors.bottomMargin: resizeMargin
+        width: resizeMargin
+        z: 2
+        cursorShape: Qt.SizeHorCursor
+        property real _startX: 0
+        property real _startGeoX: 0
+        property real _startGeoW: 0
+        onPressed: function(mouse) {
+            if (isMaximized) {
+                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
+                return
+            }
+            _startX = mouse.x; _startGeoX = mainWindow.x; _startGeoW = mainWindow.width
+        }
+        onPositionChanged: function(mouse) {
+            var dx = mouse.x - _startX
+            var newW = Math.max(mainWindow.minimumWidth, _startGeoW - dx)
+            mainWindow.x = _startGeoX + (_startGeoW - newW)
+            mainWindow.width = newW
+        }
+    }
+
+    // ---- 右边 ----
+    MouseArea {
+        anchors.right: parent.right
+        anchors.top: parent.top; anchors.topMargin: resizeMargin
+        anchors.bottom: parent.bottom; anchors.bottomMargin: resizeMargin
+        width: resizeMargin
+        z: 2
+        cursorShape: Qt.SizeHorCursor
+        property real _startX: 0
+        property real _startGeoW: 0
+        onPressed: function(mouse) {
+            if (isMaximized) {
+                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
+                return
+            }
+            _startX = mouse.x; _startGeoW = mainWindow.width
+        }
+        onPositionChanged: function(mouse) {
+            mainWindow.width = Math.max(mainWindow.minimumWidth, _startGeoW + (mouse.x - _startX))
+        }
+    }
+
+    // ---- 左上角 ----
+    MouseArea {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        width: resizeMargin; height: resizeMargin
+        z: 2
+        cursorShape: Qt.SizeFDiagCursor
+        property real _startX: 0; property real _startY: 0
+        property real _startGeoX: 0; property real _startGeoY: 0
+        property real _startGeoW: 0; property real _startGeoH: 0
+        onPressed: function(mouse) {
+            if (isMaximized) {
+                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
+                return
+            }
+            _startX = mouse.x; _startY = mouse.y
+            _startGeoX = mainWindow.x; _startGeoY = mainWindow.y
+            _startGeoW = mainWindow.width; _startGeoH = mainWindow.height
+        }
+        onPositionChanged: function(mouse) {
+            var dx = mouse.x - _startX; var dy = mouse.y - _startY
+            var newW = Math.max(mainWindow.minimumWidth, _startGeoW - dx)
+            var newH = Math.max(mainWindow.minimumHeight, _startGeoH - dy)
+            mainWindow.x = _startGeoX + (_startGeoW - newW)
+            mainWindow.y = _startGeoY + (_startGeoH - newH)
+            mainWindow.width = newW
+            mainWindow.height = newH
+        }
+    }
+
+    // ---- 右上角 ----
+    MouseArea {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        width: resizeMargin; height: resizeMargin
+        z: 2
+        cursorShape: Qt.SizeBDiagCursor
+        property real _startX: 0; property real _startY: 0
+        property real _startGeoY: 0; property real _startGeoW: 0; property real _startGeoH: 0
+        onPressed: function(mouse) {
+            if (isMaximized) {
+                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
+                return
+            }
+            _startX = mouse.x; _startY = mouse.y
+            _startGeoY = mainWindow.y; _startGeoW = mainWindow.width; _startGeoH = mainWindow.height
+        }
+        onPositionChanged: function(mouse) {
+            var newW = Math.max(mainWindow.minimumWidth, _startGeoW + (mouse.x - _startX))
+            var newH = Math.max(mainWindow.minimumHeight, _startGeoH - (mouse.y - _startY))
+            mainWindow.y = _startGeoY + (_startGeoH - newH)
+            mainWindow.width = newW
+            mainWindow.height = newH
+        }
+    }
+
+    // ---- 左下角 ----
+    MouseArea {
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        width: resizeMargin; height: resizeMargin
+        z: 2
+        cursorShape: Qt.SizeBDiagCursor
+        property real _startX: 0; property real _startY: 0
+        property real _startGeoX: 0; property real _startGeoW: 0; property real _startGeoH: 0
+        onPressed: function(mouse) {
+            if (isMaximized) {
+                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
+                return
+            }
+            _startX = mouse.x; _startY = mouse.y
+            _startGeoX = mainWindow.x; _startGeoW = mainWindow.width; _startGeoH = mainWindow.height
+        }
+        onPositionChanged: function(mouse) {
+            var newW = Math.max(mainWindow.minimumWidth, _startGeoW - (mouse.x - _startX))
+            var newH = Math.max(mainWindow.minimumHeight, _startGeoH + (mouse.y - _startY))
+            mainWindow.x = _startGeoX + (_startGeoW - newW)
+            mainWindow.width = newW
+            mainWindow.height = newH
+        }
+    }
+
+    // ---- 右下角 ----
+    MouseArea {
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        width: resizeMargin; height: resizeMargin
+        z: 2
+        cursorShape: Qt.SizeFDiagCursor
+        property real _startX: 0; property real _startY: 0
+        property real _startGeoW: 0; property real _startGeoH: 0
+        onPressed: function(mouse) {
+            if (isMaximized) {
+                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
+                return
+            }
+            _startX = mouse.x; _startY = mouse.y
+            _startGeoW = mainWindow.width; _startGeoH = mainWindow.height
+        }
+        onPositionChanged: function(mouse) {
+            mainWindow.width = Math.max(mainWindow.minimumWidth, _startGeoW + (mouse.x - _startX))
+            mainWindow.height = Math.max(mainWindow.minimumHeight, _startGeoH + (mouse.y - _startY))
         }
     }
 
@@ -669,6 +957,7 @@ Window {
                 spacing: 12
 
                 Rectangle {
+                    id: playerCoverRect
                     width: 48; height: 48; radius: 6; color: "#3a3a55"
                     Image {
                         anchors.fill: parent
@@ -690,6 +979,17 @@ Window {
                         anchors.centerIn: parent
                         text: "♫"; font.family: appFont.name; font.pixelSize: 22; color: "#666"
                         visible: musicManager.currentCover === ""
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+                        onEntered: playerCoverRect.color = "#4a4a6a"
+                        onExited: playerCoverRect.color = "#3a3a55"
+                        onClicked: {
+                            if (musicManager.currentIndex >= 0)
+                                showPlayerDetail = true
+                        }
                     }
                 }
 
@@ -715,8 +1015,6 @@ Window {
                     }
                 }
             }
-
-            Item { Layout.fillWidth: true }
 
             // ---- 中间：播放控制按钮 ----
             RowLayout {
@@ -783,11 +1081,11 @@ Window {
                 }
             }
 
-            // ---- 右侧：播放进度 ----
-            Item { Layout.fillWidth: true }
-
+            // ---- 右侧：播放进度（固定宽度） ----
             RowLayout {
-                Layout.preferredWidth: Math.max(180, Math.min((mainWindow.width - sidebarWidth - 80) * 0.25, 300))
+                Layout.preferredWidth: 280
+                Layout.minimumWidth: 280
+                Layout.maximumWidth: 280
                 spacing: 8
 
                 Label {
@@ -839,5 +1137,27 @@ Window {
             mainWindow.visibility = Window.Maximized
             isMaximized = true
         }
+    }
+
+    // ============================================================
+    // 播放详情页覆盖层（z: 100，高于所有界面元素）
+    // ============================================================
+    PlayerDetailPage {
+        id: playerDetail
+        anchors.fill: parent
+        z: 100
+        fontFamily: appFont.name
+        visible: false
+
+        onVisibleChanged: {
+            if (!visible)
+                mainWindow.showPlayerDetail = false
+        }
+    }
+
+    // 外部触发详情页显隐
+    onShowPlayerDetailChanged: {
+        if (showPlayerDetail)
+            playerDetail.visible = true
     }
 }

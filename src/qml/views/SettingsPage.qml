@@ -22,7 +22,7 @@ Rectangle {
         Label {
             text: "软件更新"
             font.family: fontFamily; font.pixelSize: 18; font.bold: true
-            color: "#dddddd"
+            color: "#f4f4f4"
         }
         Item { Layout.preferredHeight: 24 }
         Rectangle {
@@ -33,15 +33,15 @@ Rectangle {
                 anchors.fill: parent; anchors.margins: 20; spacing: 6
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "软件版本"; font.family: fontFamily; font.pixelSize: 14; color: "#888"; Layout.preferredWidth: 72 }
+                    Label { text: "软件版本"; font.family: fontFamily; font.pixelSize: 14; color: "#aaa"; Layout.preferredWidth: 72 }
                     Item { Layout.fillWidth: true }
-                    Label { text: APP_VERSION; font.family: fontFamily; font.pixelSize: 14; font.bold: true; color: "#cccccc" }
+                    Label { text: APP_VERSION; font.family: fontFamily; font.pixelSize: 14; font.bold: true; color: "#e8e8e8" }
                 }
                 RowLayout {
                     Layout.fillWidth: true
                     Label { text: "构建版本"; font.family: fontFamily; font.pixelSize: 13; color: "#666"; Layout.preferredWidth: 72 }
                     Item { Layout.fillWidth: true }
-                    Label { text: BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#888" }
+                    Label { text: BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#aaa" }
                 }
             }
         }
@@ -51,9 +51,83 @@ Rectangle {
             radius: 8; color: "#2a2a3a"; opacity: 0.5
             Label { anchors.centerIn: parent; text: "检查更新"; font.family: fontFamily; font.pixelSize: 14; color: "#666" }
         }
-        Label { text: "请前往以下地址查看更新："; font.family: fontFamily; font.pixelSize: 13; color: "#888"; Layout.topMargin: 8 }
+        Label { text: "请前往以下地址查看更新："; font.family: fontFamily; font.pixelSize: 13; color: "#aaa"; Layout.topMargin: 8 }
         Label { text: `<a href="https://gitcode.com/ZZJ-JACK/Just-Solo">https://gitcode.com/ZZJ-JACK/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Label { text: `<a href="https://github.com/ZZJ-jack/Just-Solo">https://github.com/ZZJ-jack/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 2; onLinkActivated: Qt.openUrlExternally(link) }
+        Item { Layout.fillHeight: true }
+    }
+
+    // ---- 播放设置 ----
+    ColumnLayout {
+        anchors.fill: parent; spacing: 0
+        visible: settingsSubMenu === "playback"
+        Label { text: "播放设置"; font.family: fontFamily; font.pixelSize: 18; font.bold: true; color: "#f4f4f4" }
+        Item { Layout.preferredHeight: 20 }
+
+        // 歌词延时
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 110; radius: 8
+            color: "#2e2e4a"; border.color: "#3a3a55"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "歌词预读偏移"
+                        font.family: fontFamily; font.pixelSize: 14; color: "#e8e8e8"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: {
+                            var off = (musicManager.lyricOffset || 130) - 130
+                            if (off === 0) return "0ms (默认)"
+                            return (off > 0 ? "+" : "") + off + "ms"
+                        }
+                        font.family: fontFamily; font.pixelSize: 14; color: "#00d4ff"
+                    }
+                }
+
+                Slider {
+                    Layout.fillWidth: true
+                    from: 50; to: 350; stepSize: 5
+                    value: musicManager.lyricOffset || 130
+                    onMoved: musicManager.lyricOffset = Math.round(value / 5) * 5
+
+                    background: Rectangle {
+                        x: 0; y: parent.height / 2 - 2
+                        width: parent.width; height: 4; radius: 2; color: "#3a3a55"
+                    }
+                    contentItem: Rectangle {
+                        width: parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from)
+                        height: 4; radius: 2; color: "#FFD700"
+                        visible: parent.visible
+                    }
+                    handle: Rectangle {
+                        x: parent.leftPadding + parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from) - width / 2
+                        y: parent.height / 2 - height / 2
+                        width: 16; height: 16; radius: 8; color: "#FFD700"
+                    }
+                }
+
+                Label {
+                    text: {
+                        var off = (musicManager.lyricOffset || 130) - 130
+                        if (off === 0) return "未调整"
+                        return "已调整: " + (off > 0 ? "+" : "") + off + "ms"
+                    }
+                    font.family: fontFamily; font.pixelSize: 12; color: "#555"
+                }
+            }
+        }
+
+        Label {
+            text: "修改后实时生效，重启后保持设置"
+            font.family: fontFamily; font.pixelSize: 12; color: "#666"
+            Layout.topMargin: 8
+        }
         Item { Layout.fillHeight: true }
     }
 
@@ -61,9 +135,146 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "appearance"
-        Label { text: "外观"; font.family: fontFamily; font.pixelSize: 18; font.bold: true; color: "#dddddd" }
-        Item { Layout.preferredHeight: 16 }
-        Label { text: "外观设置（开发中）"; font.family: fontFamily; font.pixelSize: 14; color: "#666" }
+        Label { text: "外观设置"; font.family: fontFamily; font.pixelSize: 18; font.bold: true; color: "#f4f4f4" }
+        Item { Layout.preferredHeight: 20 }
+
+        // 设置语言
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 72; radius: 8
+            color: "#2e2e4a"; border.color: "#3a3a55"
+
+            RowLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 16
+
+                Label {
+                    text: "设置语言"
+                    font.family: fontFamily; font.pixelSize: 14; color: "#e8e8e8"
+                    Layout.preferredWidth: 80
+                }
+
+                Item { Layout.fillWidth: true }
+
+                ComboBox {
+                    id: languageCombo
+                    Layout.preferredWidth: 160
+                    font.family: fontFamily
+                    font.pixelSize: 13
+                    model: ["简体中文", "English"]
+                    currentIndex: 0
+
+                    background: Rectangle {
+                        radius: 6
+                        color: languageCombo.hovered ? "#3a3a55" : "#2a2a48"
+                        border.color: languageCombo.activeFocus ? "#00d4ff" : "#3a3a55"
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                    }
+
+                    contentItem: Label {
+                        text: languageCombo.displayText
+                        font: languageCombo.font
+                        color: "#cccccc"
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: 12
+                    }
+
+                    indicator: Label {
+                        x: languageCombo.width - 28; y: languageCombo.height / 2 - height / 2
+                        text: "▾"; font.family: fontFamily; font.pixelSize: 10; color: "#888"
+                    }
+
+                    delegate: ItemDelegate {
+                        width: languageCombo.width
+                        contentItem: Label {
+                            text: modelData
+                            font: languageCombo.font
+                            color: highlighted ? "#00d4ff" : "#cccccc"
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: 12
+                        }
+                        highlighted: languageCombo.highlightedIndex === index
+                        background: Rectangle {
+                            radius: 4
+                            color: languageCombo.highlightedIndex === index ? "#36365a" : "#2a2a48"
+                        }
+                    }
+
+                    popup: Popup {
+                        y: languageCombo.height
+                        width: languageCombo.width
+                        implicitHeight: contentItem.implicitHeight
+                        padding: 4
+                        contentItem: ListView {
+                            clip: true
+                            implicitHeight: contentHeight
+                            model: languageCombo.popup.visible ? languageCombo.delegateModel : null
+                            spacing: 2
+                        }
+                        background: Rectangle {
+                            radius: 6
+                            color: "#2a2a48"
+                            border.color: "#3a3a55"
+                            border.width: 1
+                        }
+                    }
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 12 }
+
+        // 播放详情页透明度
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 90; radius: 8
+            color: "#2e2e4a"; border.color: "#3a3a55"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "播放详情页透明度"
+                        font.family: fontFamily; font.pixelSize: 14; color: "#e8e8e8"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: Math.round((musicManager.detailOpacity || 0.85) * 100) + "%"
+                        font.family: fontFamily; font.pixelSize: 14; color: "#00d4ff"
+                    }
+                }
+
+                Slider {
+                    Layout.fillWidth: true
+                    from: 0.3; to: 1.0; stepSize: 0.01
+                    value: musicManager.detailOpacity || 0.90
+                    onMoved: musicManager.detailOpacity = value
+
+                    background: Rectangle {
+                        x: 0; y: parent.height / 2 - 2
+                        width: parent.width; height: 4; radius: 2; color: "#3a3a55"
+                    }
+                    contentItem: Rectangle {
+                        width: parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from)
+                        height: 4; radius: 2; color: "#00d4ff"
+                        visible: parent.visible
+                    }
+                    handle: Rectangle {
+                        x: parent.leftPadding + parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from) - width / 2
+                        y: parent.height / 2 - height / 2
+                        width: 16; height: 16; radius: 8; color: "#00d4ff"
+                    }
+                }
+            }
+        }
+
+        Label {
+            text: "修改后立即生效，重启后保持设置"
+            font.family: fontFamily; font.pixelSize: 12; color: "#666"
+            Layout.topMargin: 8
+        }
         Item { Layout.fillHeight: true }
     }
 
@@ -71,9 +282,9 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "about"
-        Label { text: "关于"; font.family: fontFamily; font.pixelSize: 18; font.bold: true; color: "#dddddd" }
+        Label { text: "关于JustSolo"; font.family: fontFamily; font.pixelSize: 18; font.bold: true; color: "#f4f4f4" }
         Item { Layout.preferredHeight: 16 }
-        Label { text: "Just Solo - 轻量级桌面音乐播放器"; font.family: fontFamily; font.pixelSize: 14; color: "#888" }
+        Label { text: "Just Solo - 轻量级桌面音乐播放器"; font.family: fontFamily; font.pixelSize: 14; color: "#aaa" }
         Item { Layout.preferredHeight: 4 }
         Label { text: "作者: ZZJ-JACK"; font.family: fontFamily; font.pixelSize: 13; color: "#666" }
         Label { text: `<a href="https://zzjjack.us.kg">https://zzjjack.us.kg</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
@@ -82,11 +293,11 @@ Rectangle {
         Item { Layout.preferredHeight: 8 }
         Label { text: "构建版本: " + BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#666" }
         Item { Layout.preferredHeight: 12 }
-        Label { text: "项目地址"; font.family: fontFamily; font.pixelSize: 13; color: "#888" }
+        Label { text: "项目地址"; font.family: fontFamily; font.pixelSize: 13; color: "#aaa" }
         Label { text: `<a href="https://gitcode.com/ZZJ-JACK/Just-Solo">https://gitcode.com/ZZJ-JACK/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Label { text: `<a href="https://github.com/ZZJ-jack/Just-Solo">https://github.com/ZZJ-jack/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 2; onLinkActivated: Qt.openUrlExternally(link) }
         Item { Layout.preferredHeight: 12 }
-        Label { text: "图标来源: 鸿蒙开发者"; font.family: fontFamily; font.pixelSize: 13; color: "#888" }
+        Label { text: "图标来源: 鸿蒙开发者"; font.family: fontFamily; font.pixelSize: 13; color: "#aaa" }
         Label { text: `<a href="https://developer.huawei.com/consumer/cn/">https://developer.huawei.com/consumer/cn</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Item { Layout.fillHeight: true }
     }

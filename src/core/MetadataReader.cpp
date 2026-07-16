@@ -27,8 +27,27 @@ AudioMetadata MetadataReader::read(const QString &filePath, const QString &cache
         meta.title  = tags.value("TIT2");
         meta.artist = tags.value("TPE1");
         meta.album  = tags.value("TALB");
+        // TLEN 帧 → 毫秒
+        if (tags.contains("TLEN")) {
+            bool ok = false;
+            int ms = tags.value("TLEN").toInt(&ok);
+            if (ok && ms > 0) meta.durationSecs = ms / 1000;
+        }
+        // 无 TLEN → 从帧头估算
+        if (meta.durationSecs == 0) {
+            QFile f(filePath);
+            if (f.open(QIODevice::ReadOnly)) {
+                QByteArray hdr = f.read(10);
+                quint32 tagSize = 0;
+                bool hasID3 = (hdr.size() >= 10 && hdr.startsWith("ID3"));
+                if (hasID3)
+                    tagSize = readSynchsafeInt(hdr, 6) + 10;  // 数据 + 头
+                f.close();
+                meta.durationSecs = estimateMP3Duration(filePath, tagSize);
+            }
+        }
     } else if (ext == "flac") {
-        QMap<QString, QString> tags = readFlacComments(filePath, &embeddedCover);
+        QMap<QString, QString> tags = readFlacComments(filePath, &embeddedCover, &meta.durationSecs);
         meta.title  = tags.value("TITLE");
         meta.artist = tags.value("ARTIST");
         meta.album  = tags.value("ALBUM");
@@ -42,7 +61,12 @@ AudioMetadata MetadataReader::read(const QString &filePath, const QString &cache
         if (!cache.exists()) cache.mkpath(".");
         QByteArray hash = QCryptographicHash::hash(filePath.toUtf8(), QCryptographicHash::Md5).toHex();
         QString cacheFile = cache.filePath(QString::fromLatin1(hash) + ".jpg");
-        if (embeddedCover.save(cacheFile, "JPEG"))
+        if (!embeddedCover.save(cacheFile, "JPEG")) {
+            cacheFile = cache.filePath(QString::fromLatin1(hash) + ".png");
+            if (!embeddedCover.save(cacheFile, "PNG"))
+                cacheFile.clear();
+        }
+        if (!cacheFile.isEmpty())
             meta.coverPath = cacheFile;
     } else {
         QString external = findExternalCover(filePath);
@@ -184,7 +208,8 @@ QMap<QString, QString> MetadataReader::readID3v2TextFrames(const QString &filePa
         // Text frames
         if (frameId == "TIT2" || frameId == "TT2" ||
             frameId == "TPE1" || frameId == "TP1" ||
-            frameId == "TALB" || frameId == "TAL") {
+            frameId == "TALB" || frameId == "TAL" ||
+            frameId == "TLEN") {
             QString text = readID3v2String(frameData, 0, frameData.size());
             if (!text.isEmpty())
                 tags[frameId.left(v22 ? 3 : 4)] = text;
@@ -231,7 +256,7 @@ QMap<QString, QString> MetadataReader::readID3v2TextFrames(const QString &filePa
 // FLAC 全量解析
 // ============================================================
 
-QMap<QString, QString> MetadataReader::readFlacComments(const QString &filePath, QImage *outCover)
+QMap<QString, QString> MetadataReader::readFlacComments(const QString &filePath, QImage *outCover, int *outDuration)
 {
     QMap<QString, QString> tags;
     QFile file(filePath);
@@ -256,6 +281,21 @@ QMap<QString, QString> MetadataReader::readFlacComments(const QString &filePath,
 
         QByteArray data = file.read(blockSize);
         if (data.size() < (int)blockSize) break;
+
+        // STREAMINFO (type 0) → 解析时长
+        if (blockType == 0 && outDuration && blockSize >= 18) {
+            quint32 sampleRate = ((quint8)data[10] << 12) | ((quint8)data[11] << 4) | ((quint8)data[12] >> 4);
+            if (sampleRate > 0) {
+                // total_samples: 36 bits (byte 12 低 4 位 + byte 13-17)
+                quint64 totalSamples = ((quint64)((quint8)data[12] & 0x0F) << 32)
+                                     | ((quint64)(quint8)data[13] << 24)
+                                     | ((quint64)(quint8)data[14] << 16)
+                                     | ((quint64)(quint8)data[15] << 8)
+                                     | (quint64)(quint8)data[16];
+                if (totalSamples > 0)
+                    *outDuration = (int)(totalSamples / sampleRate);
+            }
+        }
 
         if (blockType == 4) {
             // Vorbis Comment
@@ -390,4 +430,62 @@ QString MetadataReader::findExternalCover(const QString &filePath)
         if (QFileInfo::exists(p)) return p;
     }
     return "";
+}
+
+// ============================================================
+// MP3 时长估算：读首个 MPEG 帧头 → bitrate → file_size * 8 / bitrate
+// ============================================================
+
+int MetadataReader::estimateMP3Duration(const QString &filePath, quint32 id3TagSize)
+{
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly))
+        return 0;
+
+    qint64 fileSize = file.size();
+    if (fileSize <= (qint64)id3TagSize)
+        return 0;
+
+    file.seek(id3TagSize);
+    QByteArray buf = file.read(8192);
+    file.close();
+
+    // MPEG1 Layer3 bitrate 表
+    static const int brMpeg1[16] = {0,32,40,48,56,64,80,96,112,128,160,192,224,256,320,0};
+    // MPEG2/2.5 Layer3 bitrate 表
+    static const int brMpeg2[16] = {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160,0};
+
+    for (int i = 0; i + 3 < buf.size(); i++) {
+        if ((quint8)buf[i] != 0xFF)
+            continue;
+
+        quint8 b2 = (quint8)buf[i + 1];
+        // 帧同步：高 3 位必须全 1 (0xE0 mask)
+        if ((b2 & 0xE0) != 0xE0)
+            continue;
+
+        quint8 mpegVer = (b2 >> 3) & 0x03;  // 0=2.5, 1=reserved, 2=MPEG2, 3=MPEG1
+        quint8 layer = (b2 >> 1) & 0x03;     // 0=reserved, 1=Layer3, 2=Layer2, 3=Layer1
+        if (mpegVer == 1 || layer != 1)
+            continue;
+
+        quint8 b3 = (quint8)buf[i + 2];
+        int bitrateIdx = (b3 >> 4) & 0x0F;
+        if (bitrateIdx == 0 || bitrateIdx == 15)
+            continue;
+
+        // MPEG1 用 brMpeg1，MPEG2/2.5 用 brMpeg2
+        const int *table = (mpegVer == 3) ? brMpeg1 : brMpeg2;
+        int bitrate = table[bitrateIdx] * 1000;
+        if (bitrate <= 0)
+            continue;
+
+        qint64 audioBytes = fileSize - id3TagSize;
+        int dur = (int)(audioBytes * 8 / bitrate);
+        // 合理性检查
+        if (dur <= 0 || dur > 3600) return 0;
+        return dur;
+    }
+
+    return 0;
 }
