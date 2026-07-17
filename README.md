@@ -515,6 +515,33 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
 - 主页 `mouse` 参数弃用警告：`onClicked` → `onClicked: function(mouse)`
 - CMake 编译：漏加 `MetadataReader.cpp` + `app.rc`
 
+### v0.3.6 — 2026.7.17
+
+> UI 重构：原生标题栏、共享组件、歌词三色、列宽优化。
+
+**窗口**
+- 系统原生标题栏替代自定义无边框（删除 ~350 行手动实现代码）
+- Windows DWM API 深度自定义：暗黑模式、边框颜色与背景同色（Win11 视觉无边框）
+
+**歌词**
+- 三色方案：已播=黄 `#FFD700`、当前=青 `#00d4ff`（58px 大字）、未播=蓝 `#6a9ac0`
+- 300ms 过渡动画，平移字号/颜色/透明度
+- FLAC 嵌入歌词同时间戳行智能堆叠（`looksLikeTranslation` 启发式判断双语）
+- 元数据行（作词/作曲/编曲/OP/SP）保留为歌词同时滚动
+
+**歌曲列表**
+- 提取 `SongRow.qml` 共享组件，首页/收藏/历史三页统一，改一处全局生效
+- 列宽比例 2:2:2:2:1（封面:标题:歌手:专辑:时长），专辑列不再被挤压
+- 封面固定 40x40 正方形，`sourceSize` 40px，列间 spacing=0 无缝
+- 底部进度条自适应屏幕 1/2 宽度（最大 600px）
+- 收藏/历史页播放按钮修复：play/pause 切换逻辑对齐首页
+
+**工程**
+- 构建版本号：`ts-machineId-vX.Y.Z`
+- 版本号统一由 CMakeLists.txt 管理
+- 移除设置页无效语言选择器
+- 修复关闭时异步 Loader 引擎销毁警告
+
 ---
 
 ## 许可证
@@ -540,3 +567,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+

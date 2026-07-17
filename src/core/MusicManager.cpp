@@ -25,6 +25,23 @@
 // 工具函数
 // ============================================================
 
+// 判断文本是否看起来像翻译（非 CJK 字符占主导 → 很可能是英文翻译）
+static bool looksLikeTranslation(const QString &text) {
+    if (text.isEmpty()) return false;
+    int cjk = 0, latin = 0;
+    for (const QChar &ch : text) {
+        ushort u = ch.unicode();
+        if ((u >= 0x4E00 && u <= 0x9FFF) || (u >= 0x3400 && u <= 0x4DBF) ||
+            (u >= 0x3040 && u <= 0x309F) || (u >= 0x30A0 && u <= 0x30FF) ||
+            (u >= 0xAC00 && u <= 0xD7AF))
+            ++cjk;
+        else if ((u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z'))
+            ++latin;
+    }
+    // 拉丁字母明显多于 CJK → 翻译行
+    return latin > 0 && latin >= cjk;
+}
+
 static QStringList supportedAudioExtensions() {
     return {"*.mp3", "*.flac", "*.wav", "*.ogg", "*.aac", "*.m4a", "*.wma", "*.opus"};
 }
@@ -654,7 +671,6 @@ void MusicManager::shutdown() {
     m_loadTimer->stop();
     m_lyricTimer->stop();
     releaseOriginalCover();
-    QCoreApplication::exit(0);
 }
 
 void MusicManager::next() {
@@ -716,22 +732,6 @@ void MusicManager::updateLyricIndex() {
     if (newIdx != m_lyricIndex) {
         m_lyricIndex = newIdx;
         emit lyricIndexChanged();
-    }
-
-    // 逐字进度：当前行内的时间偏移比例 (0.0 - 1.0)
-    qreal progress = 0.0;
-    if (newIdx >= 0 && newIdx < m_currentLyrics.size()) {
-        qint64 curTime = m_currentLyrics[newIdx].toMap()["time"].toInt();
-        qint64 nextTime = (newIdx + 1 < m_currentLyrics.size())
-            ? m_currentLyrics[newIdx + 1].toMap()["time"].toInt()
-            : (curTime + 5000);  // 最后一行默认5秒
-        if (nextTime > curTime && rawPos > curTime) {
-            progress = qMin(1.0, (qreal)(rawPos - curTime) / (nextTime - curTime));
-        }
-    }
-    if (!qFuzzyCompare(progress, m_lyricProgress)) {
-        m_lyricProgress = progress;
-        emit lyricProgressChanged();
     }
 }
 
@@ -948,15 +948,18 @@ QVariantList MusicManager::parseEmbeddedLyrics(const QString &text) {
             return a.toMap()["time"].toInt() < b.toMap()["time"].toInt();
         });
 
-        // 双语歌词：合并同时间戳的行（第一行=text，第二行=translation）
+        // 同时间戳行：真翻译 → translation；否则堆叠为双行 text
         QVariantList grouped;
         for (int i = 0; i < result.size(); ++i) {
             QVariantMap item = result[i].toMap();
             int curTime = item["time"].toInt();
-            // 检查下一行是否同时间戳
             if (i + 1 < result.size() && result[i + 1].toMap()["time"].toInt() == curTime) {
-                item["translation"] = result[i + 1].toMap()["text"].toString();
-                ++i;  // 跳过下一行
+                QString nextText = result[i + 1].toMap()["text"].toString();
+                if (looksLikeTranslation(nextText))
+                    item["translation"] = nextText;
+                else
+                    item["text"] = item["text"].toString() + "\n" + nextText;
+                ++i;
             }
             grouped.append(item);
         }
@@ -1174,13 +1177,17 @@ QVariantList MusicManager::loadLyricsForFile(const QString &filePath) {
         return a.toMap()["time"].toInt() < b.toMap()["time"].toInt();
     });
 
-    // 双语：合并同时间戳的行
+    // 同时间戳行：真翻译 → translation；否则堆叠为双行 text
     QVariantList grouped;
     for (int i = 0; i < result.size(); ++i) {
         QVariantMap item = result[i].toMap();
         int curTime = item["time"].toInt();
         if (i + 1 < result.size() && result[i + 1].toMap()["time"].toInt() == curTime) {
-            item["translation"] = result[i + 1].toMap()["text"].toString();
+            QString nextText = result[i + 1].toMap()["text"].toString();
+            if (looksLikeTranslation(nextText))
+                item["translation"] = nextText;
+            else
+                item["text"] = item["text"].toString() + "\n" + nextText;
             ++i;
         }
         grouped.append(item);

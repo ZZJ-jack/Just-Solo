@@ -1,6 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
 project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 
+# ---- 软件版本号 ----
+set(APP_VERSION_MAJOR 0)
+set(APP_VERSION_MINOR 3)
+set(APP_VERSION_PATCH 6)
+set(APP_VERSION_PRE   0)   # 0=正式版, >0=beta.N
+
+# 格式化显示版本: v0.3.5 或 v0.3.5-beta.2
+if(APP_VERSION_PRE GREATER 0)
+    set(APP_VERSION_DISPLAY "v${APP_VERSION_MAJOR}.${APP_VERSION_MINOR}.${APP_VERSION_PATCH}-beta.${APP_VERSION_PRE}")
+else()
+    set(APP_VERSION_DISPLAY "v${APP_VERSION_MAJOR}.${APP_VERSION_MINOR}.${APP_VERSION_PATCH}")
+endif()
+message(STATUS "App version: ${APP_VERSION_DISPLAY}")
+
 # 指定 Qt 安装目录
 set(Qt6_DIR "C:/Qt/6.8.3/msvc2022_64/lib/cmake/Qt6")
 set(CMAKE_PREFIX_PATH "C:/Qt/6.8.3/msvc2022_64")
@@ -41,6 +55,7 @@ qt_add_qml_module(JustSolo
         src/qml/main.qml
         src/qml/components/NavItem.qml
         src/qml/components/SubNavItem.qml
+        src/qml/components/SongRow.qml
         src/qml/views/HomePage.qml
         src/qml/views/FavoritePage.qml
         src/qml/views/HistoryPage.qml
@@ -67,16 +82,27 @@ target_link_libraries(JustSolo PRIVATE
     Qt6::Network
 )
 
+# Windows: 链接 DWM API，用于自定义标题栏颜色/边框
+if(WIN32)
+    target_link_libraries(JustSolo PRIVATE dwmapi)
+endif()
+
 # 输出目录
 set_target_properties(JustSolo PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-# 每次编译自动生成版本号 (yymmddhhmmss)
+# 每次编译自动生成版本号: $ts-$machineId-vX.Y.Z
 add_custom_target(GenerateVersion ALL
     COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/cmake/GenerateVersion.ps1"
+        -Version "${APP_VERSION_DISPLAY}"
     COMMENT "Generating version header..."
     BYPRODUCTS "${CMAKE_SOURCE_DIR}/src/version.h"
 )
 add_dependencies(JustSolo GenerateVersion)
 target_include_directories(JustSolo PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/core")
+
+# 版本号从 CMake 传入源码（单一定义源）
+target_compile_definitions(JustSolo PRIVATE
+    APP_VERSION_DISPLAY="${APP_VERSION_DISPLAY}"
+)

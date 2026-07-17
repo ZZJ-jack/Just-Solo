@@ -31,7 +31,6 @@ class MusicManager : public QObject
     Q_PROPERTY(qint64 duration READ duration NOTIFY durationChanged)
     Q_PROPERTY(QVariantList currentLyrics READ currentLyrics NOTIFY currentLyricsChanged)
     Q_PROPERTY(int lyricIndex READ lyricIndex NOTIFY lyricIndexChanged)
-    Q_PROPERTY(qreal lyricProgress READ lyricProgress NOTIFY lyricProgressChanged)
     Q_PROPERTY(qreal detailOpacity READ detailOpacity WRITE setDetailOpacity NOTIFY detailOpacityChanged)
     Q_PROPERTY(int lyricOffset READ lyricOffset WRITE setLyricOffset NOTIFY lyricOffsetChanged)
 
@@ -67,7 +66,6 @@ public:
     QString currentAlbum() const;
     QVariantList currentLyrics() const { return m_currentLyrics; }
     int lyricIndex() const { return m_lyricIndex; }
-    qreal lyricProgress() const { return m_lyricProgress; }
     qreal detailOpacity() const { return m_detailOpacity; }
     void setDetailOpacity(qreal v);
     int lyricOffset() const { return m_lyricOffset; }
@@ -107,7 +105,6 @@ signals:
     void currentTrackChanged();
     void currentLyricsChanged();
     void lyricIndexChanged();
-    void lyricProgressChanged();
     void detailOpacityChanged();
     void lyricOffsetChanged();
     void positionChanged(qint64 ms);
@@ -139,7 +136,6 @@ private:
     QVariantList m_history;
     QVariantList m_currentLyrics;
     int m_lyricIndex = -1;
-    qreal m_lyricProgress = 0.0;
     qreal m_detailOpacity = 0.90;  // 播放详情页背景透明度 (0.3-1.0)
     int m_lyricOffset = 130;       // 用户可调基础偏移 (ms)，最终 = base + 2.15×歌词长度
     void loadSettings();

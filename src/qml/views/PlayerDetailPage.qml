@@ -137,7 +137,7 @@ Item {
             id: coverArea
             anchors.top: parent.top; anchors.bottom: parent.bottom
             anchors.left: parent.left
-            width: mainWindow.isMaximized ? parent.width * 0.333 : Math.min(parent.width * 0.38, 360)
+            width: mainWindow.visibility === Window.Maximized ? parent.width * 0.333 : Math.min(parent.width * 0.38, 360)
 
             Rectangle {
                 id: coverBox
@@ -257,26 +257,9 @@ Item {
                     property bool isCurrent: (typeof musicManager !== "undefined" && musicManager) && index === musicManager.lyricIndex
                     property bool isPast: (typeof musicManager !== "undefined" && musicManager) && index < musicManager.lyricIndex
                     property bool hasTrans: (modelData.translation || "") !== ""
-                    // 逐字进度：纯位置计算，不依赖 isCurrent/isPast，避免切换帧丢失
-                    property real rawProgress: {
-                        var pos = musicManager.position
-                        var curT = modelData.time || 0
-                        var lyrics = musicManager.currentLyrics || []
-                        var nextT = (index + 1 < lyrics.length) ? (lyrics[index + 1].time || 0) : (curT + 5000)
-                        if (pos <= curT) return 0
-                        var base = musicManager.lyricOffset || 130
-                        var lineLen = (modelData.text || "").length
-                        var offset = base + 2.25 * lineLen
-                        var highlightEnd = Math.max(curT + 1, nextT - offset)
-                        if (pos >= highlightEnd) return 1.0  // 已滚完，全高光
-                        return Math.min(1, (pos - curT) / (highlightEnd - curT))
-                    }
                     property bool highlight: isCurrent || isPast
-                    // 多行歌词行数（隐含高度 > 字号×1.3 判定换行）
-                    property int mainLines: mainGray.implicitHeight > 52 ? 2 : 1
-                    property int transLines: transGray.implicitHeight > 40 ? 2 : 1
 
-                    // 歌词+翻译（WordWrap，行高自适应，逐字高光）
+                    // 歌词+翻译（WordWrap，行高自适应，整段高光）
                     Item {
                         id: mainContainer
                         anchors.left: parent.left; anchors.leftMargin: 4
@@ -301,49 +284,30 @@ Item {
                                     width: parent.width
                                     text: modelData.text || ""
                                     font.family: root.fontFamily
-                                    font.pixelSize: lyricDelegate.isCurrent ? 38 : 30
-                                    color: lyricDelegate.highlight ? "#444" : "#555"
+                                    font.pixelSize: lyricDelegate.isCurrent ? 58 : 36
+                                    color: lyricDelegate.isPast ? "#3a3a3a"
+                                         : (lyricDelegate.isCurrent ? "#555" : "#6a9ac0")
                                     horizontalAlignment: Text.AlignLeft
                                     wrapMode: Text.WordWrap
+                                    Behavior on font.pixelSize { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                                    Behavior on color { ColorAnimation { duration: 300 } }
                                 }
 
-                                // 单行：一字字扫过；多行：逐行展开，每行各自扫过
-                                Item {
-                                    id: mainOverlay
+                                // 整段高亮覆盖层：已播=黄色，当前=青色
+                                Text {
                                     anchors.left: parent.left
                                     anchors.top: mainGray.top
                                     width: parent.width
                                     height: mainGray.implicitHeight
-                                    visible: lyricDelegate.highlight && lyricDelegate.rawProgress > 0
-
-                                    // 第 1 行 overlay
-                                    Item {
-                                        width: Math.min(mainOverlay.width, mainGray.contentWidth * Math.min(1, lyricDelegate.mainLines * lyricDelegate.rawProgress))
-                                        height: mainGray.implicitHeight / lyricDelegate.mainLines
-                                        clip: true
-                                        Text {
-                                            text: modelData.text || ""
-                                            font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 38 : 30
-                                            color: "#00d4ff"
-                                            width: mainGray.width; wrapMode: Text.WordWrap
-                                        }
-                                    }
-                                    // 第 2 行 overlay（仅多行时存在）
-                                    Item {
-                                        anchors.top: parent.top; anchors.topMargin: mainGray.implicitHeight / lyricDelegate.mainLines
-                                        width: lyricDelegate.mainLines < 2 ? 0
-                                            : Math.min(mainOverlay.width, mainGray.contentWidth * Math.max(0, (lyricDelegate.rawProgress - 1.0 / lyricDelegate.mainLines) * lyricDelegate.mainLines))
-                                        height: mainGray.implicitHeight / lyricDelegate.mainLines
-                                        clip: true
-                                        visible: lyricDelegate.mainLines > 1 && lyricDelegate.rawProgress > 1.0 / lyricDelegate.mainLines
-                                        Text {
-                                            y: -(mainGray.implicitHeight / lyricDelegate.mainLines)
-                                            text: modelData.text || ""
-                                            font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 38 : 30
-                                            color: "#00d4ff"
-                                            width: mainGray.width; wrapMode: Text.WordWrap
-                                        }
-                                    }
+                                    visible: lyricDelegate.highlight
+                                    text: modelData.text || ""
+                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 58 : 36
+                                    color: lyricDelegate.isPast ? "#FFD700" : "#00d4ff"
+                                    horizontalAlignment: Text.AlignLeft
+                                    wrapMode: Text.WordWrap
+                                    Behavior on font.pixelSize { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                                    Behavior on opacity { NumberAnimation { duration: 250 } }
+                                    Behavior on color { ColorAnimation { duration: 300 } }
                                 }
                             }
 
@@ -361,47 +325,29 @@ Item {
                                     width: parent.width
                                     text: modelData.translation || ""
                                     font.family: root.fontFamily
-                                    font.pixelSize: lyricDelegate.isCurrent ? 26 : 20
-                                    color: lyricDelegate.highlight ? "#333" : "#444"
+                                    font.pixelSize: lyricDelegate.isCurrent ? 34 : 24
+                                    color: lyricDelegate.isPast ? "#2a2a2a"
+                                         : (lyricDelegate.isCurrent ? "#333" : "#4a6a8a")
                                     horizontalAlignment: Text.AlignLeft
                                     wrapMode: Text.WordWrap
+                                    Behavior on font.pixelSize { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                                    Behavior on color { ColorAnimation { duration: 300 } }
                                 }
 
-                                // 翻译逐行 overlay，比主歌词快 5%
-                                Item {
-                                    id: transOverlay
+                                // 翻译整段高亮覆盖层：已播=暗金，当前=金色
+                                Text {
                                     anchors.left: parent.left
                                     anchors.top: transGray.top
                                     width: parent.width
                                     height: transGray.implicitHeight
-                                    visible: lyricDelegate.highlight && lyricDelegate.hasTrans && lyricDelegate.rawProgress > 0
-
-                                    Item {
-                                        width: Math.min(transOverlay.width, transGray.contentWidth * Math.min(1, lyricDelegate.transLines * Math.min(1, lyricDelegate.rawProgress * 1.05)))
-                                        height: transGray.implicitHeight / lyricDelegate.transLines
-                                        clip: true
-                                        Text {
-                                            text: modelData.translation || ""
-                                            font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 26 : 20
-                                            color: "#FFD700"
-                                            width: transGray.width; wrapMode: Text.WordWrap
-                                        }
-                                    }
-                                    Item {
-                                        anchors.top: parent.top; anchors.topMargin: transGray.implicitHeight / lyricDelegate.transLines
-                                        width: lyricDelegate.transLines < 2 ? 0
-                                            : Math.min(transOverlay.width, transGray.contentWidth * Math.max(0, (Math.min(1, lyricDelegate.rawProgress * 1.05) - 1.0 / lyricDelegate.transLines) * lyricDelegate.transLines))
-                                        height: transGray.implicitHeight / lyricDelegate.transLines
-                                        clip: true
-                                        visible: lyricDelegate.transLines > 1 && Math.min(1, lyricDelegate.rawProgress * 1.05) > 1.0 / lyricDelegate.transLines
-                                        Text {
-                                            y: -(transGray.implicitHeight / lyricDelegate.transLines)
-                                            text: modelData.translation || ""
-                                            font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 26 : 20
-                                            color: "#FFD700"
-                                            width: transGray.width; wrapMode: Text.WordWrap
-                                        }
-                                    }
+                                    visible: lyricDelegate.highlight && lyricDelegate.hasTrans
+                                    text: modelData.translation || ""
+                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 34 : 24
+                                    color: lyricDelegate.isPast ? "#b8960f" : "#FFD700"
+                                    horizontalAlignment: Text.AlignLeft
+                                    wrapMode: Text.WordWrap
+                                    Behavior on font.pixelSize { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                                    Behavior on opacity { NumberAnimation { duration: 250 } }
                                 }
                             }
                         }

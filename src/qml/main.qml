@@ -3,7 +3,7 @@
 // 技术栈: Qt 6.8.3 + QML + QtQuick Layouts
 // 设计要点:
 //   - 全自适应的响应式布局，所有尺寸随窗口大小弹性变化
-//   - 无边框窗口 (FramelessWindowHint)，自定义标题栏按钮
+//   - 系统原生标题栏，C++ 端通过 DWM API 深度自定义暗黑/边框颜色
 //   - 支持 Home / 收藏 / 历史 / 设置 四个视图切换
 //   - 页面按需加载，切换时销毁旧页面释放内存
 // ============================================================
@@ -29,11 +29,7 @@ Window {
     title: "Just Solo"
     color: "#1e1e2e"
 
-    flags: Qt.FramelessWindowHint | Qt.Window
-
-    // ---- 窗口状态 ----
-    property bool isMaximized: false
-    property var lastGeo: ({ x: 100, y: 100, w: 1200, h: 800 })
+    flags: Qt.Window
 
     // ---- 布局常量 ----
     readonly property int sidebarWidth: 230
@@ -559,368 +555,13 @@ Window {
         }
     }
 
-    // ============================================================
-    // 右上角：窗口控制按钮（最小化 / 最大化 / 关闭）
-    // ============================================================
-    RowLayout {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.topMargin: 6
-        anchors.rightMargin: 6
-        spacing: 6
-
-        // 最小化
-        Rectangle {
-            width: 36; height: 36; radius: 6
-            color: btnMinimize.containsMouse ? "#3a3a55" : "transparent"
-            Behavior on color { ColorAnimation { duration: 120 } }
-            Label {
-                anchors.centerIn: parent
-                text: "─"; font.family: appFont.name; font.pixelSize: 17; color: "#999"
-            }
-            MouseArea {
-                id: btnMinimize
-                anchors.fill: parent; hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: mainWindow.visibility = Window.Minimized
-            }
-            ToolTip {
-                visible: btnMinimize.containsMouse
-                text: "最小化"
-                delay: 600
-            }
-        }
-
-        // 最大化 / 还原
-        Rectangle {
-            width: 36; height: 36; radius: 6
-            color: btnMaximize.containsMouse ? "#3a3a55" : "transparent"
-            Behavior on color { ColorAnimation { duration: 120 } }
-            Label {
-                anchors.centerIn: parent
-                text: isMaximized ? "❐" : "□"
-                font.family: appFont.name; font.pixelSize: 17; color: "#999"
-            }
-            MouseArea {
-                id: btnMaximize
-                anchors.fill: parent; hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: function(mouse) {
-                    if (isMaximized) {
-                        var ratioX = mouse.x / lastGeo.w
-                        var ratioY = mouse.y / lastGeo.h
-                        mainWindow.x = mouse.screenX - ratioX * lastGeo.w
-                        mainWindow.y = mouse.screenY - ratioY * lastGeo.h
-                        mainWindow.width = lastGeo.w
-                        mainWindow.height = lastGeo.h
-                        mainWindow.visibility = Window.Windowed
-                        isMaximized = false
-                    } else {
-                        lastGeo = { x: mainWindow.x, y: mainWindow.y, w: mainWindow.width, h: mainWindow.height }
-                        mainWindow.visibility = Window.Maximized
-                        isMaximized = true
-                    }
-                }
-            }
-            ToolTip {
-                visible: btnMaximize.containsMouse
-                text: isMaximized ? "还原" : "最大化"
-                delay: 600
-            }
-        }
-
-        // 关闭
-        Rectangle {
-            width: 36; height: 36; radius: 6
-            color: btnClose.containsMouse ? "#e94560" : "transparent"
-            Behavior on color { ColorAnimation { duration: 120 } }
-            Label {
-                anchors.centerIn: parent
-                text: "✕"; font.family: appFont.name; font.pixelSize: 17
-                color: btnClose.containsMouse ? "white" : "#999"
-            }
-            MouseArea {
-                id: btnClose
-                anchors.fill: parent; hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: mainWindow.close()
-            }
-            ToolTip {
-                visible: btnClose.containsMouse
-                text: "关闭"
-                delay: 600
-            }
-        }
-    }
-
     // 统一关闭入口：停所有循环 → 退出
     onClosing: function(close) {
+        pageLoader.asynchronous = false   // 防止异步加载未完成时引擎销毁告警
         close.accepted = true
-        playerDetail.visible = false   // 关 ShaderEffectSource live
-        musicManager.stop()            // 停播放
-        musicManager.shutdown()        // 停所有定时器 + exit(0)
-    }
-
-    // ============================================================
-    // 顶部拖拽区域 — 最大化还原后由原生 startSystemMove 接管
-    // ============================================================
-    MouseArea {
-        id: dragArea
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: 70
-        z: -1
-        acceptedButtons: Qt.LeftButton
-        cursorShape: pressed && !isMaximized ? Qt.ClosedHandCursor : Qt.ArrowCursor
-
-        Timer {
-            id: dragRestoreTimer
-            interval: 0; repeat: false
-            onTriggered: mainWindow.startSystemMove()
-        }
-
-        property real pressOffsetX: 0
-        property real pressOffsetY: 0
-
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                var maxW = mainWindow.width
-                var maxH = mainWindow.height
-                var ratioX = mouse.x / maxW
-                var ratioY = mouse.y / maxH
-                mainWindow.width = lastGeo.w
-                mainWindow.height = lastGeo.h
-                mainWindow.x = mouse.screenX - ratioX * lastGeo.w
-                mainWindow.y = mouse.screenY - ratioY * lastGeo.h
-                mainWindow.visibility = Window.Windowed
-                isMaximized = false
-                // 延迟一帧再接原生拖拽，等位置先生效
-                dragRestoreTimer.start()
-            } else {
-                mainWindow.startSystemMove()
-            }
-        }
-    }
-
-    // ============================================================
-    // 窗口边缘 Resize 拖拽区域（无边框窗口必须手动实现）
-    // ============================================================
-    readonly property int resizeMargin: 5
-
-    // 从最大化还原并定位窗口（鼠标相对于最大化窗口的位置映射到 lastGeo）
-    function restoreFromMaximized(mouseX, mouseY) {
-        var maxW = mainWindow.width
-        var maxH = mainWindow.height
-        var ratioX = mouseX / maxW
-        var ratioY = mouseY / maxH
-        mainWindow.x = mouseX - ratioX * lastGeo.w
-        mainWindow.y = mouseY - ratioY * lastGeo.h
-        mainWindow.width = lastGeo.w
-        mainWindow.height = lastGeo.h
-        mainWindow.visibility = Window.Windowed
-        isMaximized = false
-    }
-
-    // ---- 顶边 ----
-    MouseArea {
-        anchors.top: parent.top
-        anchors.left: parent.left; anchors.leftMargin: resizeMargin
-        anchors.right: parent.right; anchors.rightMargin: resizeMargin
-        height: resizeMargin
-        z: 2
-        cursorShape: Qt.SizeVerCursor
-        property real _startY: 0
-        property real _startGeoY: 0
-        property real _startGeoH: 0
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
-                return
-            }
-            _startY = mouse.y; _startGeoY = mainWindow.y; _startGeoH = mainWindow.height
-        }
-        onPositionChanged: function(mouse) {
-            var dy = mouse.y - _startY
-            var newH = Math.max(mainWindow.minimumHeight, _startGeoH - dy)
-            mainWindow.y = _startGeoY + (_startGeoH - newH)
-            mainWindow.height = newH
-        }
-    }
-
-    // ---- 底边 ----
-    MouseArea {
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left; anchors.leftMargin: resizeMargin
-        anchors.right: parent.right; anchors.rightMargin: resizeMargin
-        height: resizeMargin
-        z: 2
-        cursorShape: Qt.SizeVerCursor
-        property real _startY: 0
-        property real _startGeoH: 0
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
-                return
-            }
-            _startY = mouse.y; _startGeoH = mainWindow.height
-        }
-        onPositionChanged: function(mouse) {
-            mainWindow.height = Math.max(mainWindow.minimumHeight, _startGeoH + (mouse.y - _startY))
-        }
-    }
-
-    // ---- 左边 ----
-    MouseArea {
-        anchors.left: parent.left
-        anchors.top: parent.top; anchors.topMargin: resizeMargin
-        anchors.bottom: parent.bottom; anchors.bottomMargin: resizeMargin
-        width: resizeMargin
-        z: 2
-        cursorShape: Qt.SizeHorCursor
-        property real _startX: 0
-        property real _startGeoX: 0
-        property real _startGeoW: 0
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
-                return
-            }
-            _startX = mouse.x; _startGeoX = mainWindow.x; _startGeoW = mainWindow.width
-        }
-        onPositionChanged: function(mouse) {
-            var dx = mouse.x - _startX
-            var newW = Math.max(mainWindow.minimumWidth, _startGeoW - dx)
-            mainWindow.x = _startGeoX + (_startGeoW - newW)
-            mainWindow.width = newW
-        }
-    }
-
-    // ---- 右边 ----
-    MouseArea {
-        anchors.right: parent.right
-        anchors.top: parent.top; anchors.topMargin: resizeMargin
-        anchors.bottom: parent.bottom; anchors.bottomMargin: resizeMargin
-        width: resizeMargin
-        z: 2
-        cursorShape: Qt.SizeHorCursor
-        property real _startX: 0
-        property real _startGeoW: 0
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
-                return
-            }
-            _startX = mouse.x; _startGeoW = mainWindow.width
-        }
-        onPositionChanged: function(mouse) {
-            mainWindow.width = Math.max(mainWindow.minimumWidth, _startGeoW + (mouse.x - _startX))
-        }
-    }
-
-    // ---- 左上角 ----
-    MouseArea {
-        anchors.top: parent.top
-        anchors.left: parent.left
-        width: resizeMargin; height: resizeMargin
-        z: 2
-        cursorShape: Qt.SizeFDiagCursor
-        property real _startX: 0; property real _startY: 0
-        property real _startGeoX: 0; property real _startGeoY: 0
-        property real _startGeoW: 0; property real _startGeoH: 0
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
-                return
-            }
-            _startX = mouse.x; _startY = mouse.y
-            _startGeoX = mainWindow.x; _startGeoY = mainWindow.y
-            _startGeoW = mainWindow.width; _startGeoH = mainWindow.height
-        }
-        onPositionChanged: function(mouse) {
-            var dx = mouse.x - _startX; var dy = mouse.y - _startY
-            var newW = Math.max(mainWindow.minimumWidth, _startGeoW - dx)
-            var newH = Math.max(mainWindow.minimumHeight, _startGeoH - dy)
-            mainWindow.x = _startGeoX + (_startGeoW - newW)
-            mainWindow.y = _startGeoY + (_startGeoH - newH)
-            mainWindow.width = newW
-            mainWindow.height = newH
-        }
-    }
-
-    // ---- 右上角 ----
-    MouseArea {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        width: resizeMargin; height: resizeMargin
-        z: 2
-        cursorShape: Qt.SizeBDiagCursor
-        property real _startX: 0; property real _startY: 0
-        property real _startGeoY: 0; property real _startGeoW: 0; property real _startGeoH: 0
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
-                return
-            }
-            _startX = mouse.x; _startY = mouse.y
-            _startGeoY = mainWindow.y; _startGeoW = mainWindow.width; _startGeoH = mainWindow.height
-        }
-        onPositionChanged: function(mouse) {
-            var newW = Math.max(mainWindow.minimumWidth, _startGeoW + (mouse.x - _startX))
-            var newH = Math.max(mainWindow.minimumHeight, _startGeoH - (mouse.y - _startY))
-            mainWindow.y = _startGeoY + (_startGeoH - newH)
-            mainWindow.width = newW
-            mainWindow.height = newH
-        }
-    }
-
-    // ---- 左下角 ----
-    MouseArea {
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        width: resizeMargin; height: resizeMargin
-        z: 2
-        cursorShape: Qt.SizeBDiagCursor
-        property real _startX: 0; property real _startY: 0
-        property real _startGeoX: 0; property real _startGeoW: 0; property real _startGeoH: 0
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
-                return
-            }
-            _startX = mouse.x; _startY = mouse.y
-            _startGeoX = mainWindow.x; _startGeoW = mainWindow.width; _startGeoH = mainWindow.height
-        }
-        onPositionChanged: function(mouse) {
-            var newW = Math.max(mainWindow.minimumWidth, _startGeoW - (mouse.x - _startX))
-            var newH = Math.max(mainWindow.minimumHeight, _startGeoH + (mouse.y - _startY))
-            mainWindow.x = _startGeoX + (_startGeoW - newW)
-            mainWindow.width = newW
-            mainWindow.height = newH
-        }
-    }
-
-    // ---- 右下角 ----
-    MouseArea {
-        anchors.bottom: parent.bottom
-        anchors.right: parent.right
-        width: resizeMargin; height: resizeMargin
-        z: 2
-        cursorShape: Qt.SizeFDiagCursor
-        property real _startX: 0; property real _startY: 0
-        property real _startGeoW: 0; property real _startGeoH: 0
-        onPressed: function(mouse) {
-            if (isMaximized) {
-                mainWindow.restoreFromMaximized(mouse.screenX, mouse.screenY)
-                return
-            }
-            _startX = mouse.x; _startY = mouse.y
-            _startGeoW = mainWindow.width; _startGeoH = mainWindow.height
-        }
-        onPositionChanged: function(mouse) {
-            mainWindow.width = Math.max(mainWindow.minimumWidth, _startGeoW + (mouse.x - _startX))
-            mainWindow.height = Math.max(mainWindow.minimumHeight, _startGeoH + (mouse.y - _startY))
-        }
+        playerDetail.visible = false      // 关 ShaderEffectSource live
+        musicManager.stop()               // 停播放
+        musicManager.shutdown()           // 停所有定时器
     }
 
     // ============================================================
@@ -1081,11 +722,10 @@ Window {
                 }
             }
 
-            // ---- 右侧：播放进度（固定宽度） ----
+            // ---- 右侧：播放进度（自适应屏幕 1/2） ----
             RowLayout {
-                Layout.preferredWidth: 280
-                Layout.minimumWidth: 280
-                Layout.maximumWidth: 280
+                Layout.preferredWidth: Math.min(600, mainWindow.width * 0.5)
+                Layout.minimumWidth: 180
                 spacing: 8
 
                 Label {
@@ -1118,24 +758,6 @@ Window {
                     Layout.preferredWidth: 35
                 }
             }
-        }
-    }
-
-    // ============================================================
-    // 窗口最大化 / 还原切换
-    // ============================================================
-    function toggleMaximize() {
-        if (isMaximized) {
-            mainWindow.x = lastGeo.x
-            mainWindow.y = lastGeo.y
-            mainWindow.width = lastGeo.w
-            mainWindow.height = lastGeo.h
-            mainWindow.visibility = Window.Windowed
-            isMaximized = false
-        } else {
-            lastGeo = { x: mainWindow.x, y: mainWindow.y, w: mainWindow.width, h: mainWindow.height }
-            mainWindow.visibility = Window.Maximized
-            isMaximized = true
         }
     }
 

@@ -8,28 +8,37 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <dwmapi.h>
 #include <io.h>
 #include <fcntl.h>
+
+// DWM 属性常量（旧 SDK 可能未定义）
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
+#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
+#endif
+#ifndef DWMWA_BORDER_COLOR
+#define DWMWA_BORDER_COLOR 34
+#endif
+#ifndef DWMWA_CAPTION_COLOR
+#define DWMWA_CAPTION_COLOR 35
+#endif
+
+// 深度自定义原生标题栏：暗黑模式 + 边框/标题栏颜色与窗口背景 #1e1e2e 一致
+static void customizeTitleBar(HWND hwnd) {
+    BOOL darkMode = TRUE;
+    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
+
+    COLORREF bg = 0x002e1e1e;  // #1e1e2e (ABGR → COLORREF)
+    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,  &bg, sizeof(bg));
+    DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &bg, sizeof(bg));
+}
 #endif
 
 #include "version.h"
 #include "core/MusicManager.h"
 
-// 软件版本号: 大版本.中版本.小版本.预发布
-#define APP_VERSION_MAJOR   0   // 大版本号
-#define APP_VERSION_MINOR   3   // 中版本号
-#define APP_VERSION_PATCH   5   // 小版本号
-#define APP_VERSION_PRE     0   // 预发布号，0=正式版
-
-// 格式化: 0.0.1-pre.2 → v0.0.1-beta.2
-#define STRINGIFY(x) #x
-#define TOSTR(x) STRINGIFY(x)
-
-#if APP_VERSION_PRE > 0
-  #define APP_VERSION_DISPLAY "v" TOSTR(APP_VERSION_MAJOR) "." TOSTR(APP_VERSION_MINOR) "." TOSTR(APP_VERSION_PATCH) "-beta." TOSTR(APP_VERSION_PRE)
-#else
-  #define APP_VERSION_DISPLAY "v" TOSTR(APP_VERSION_MAJOR) "." TOSTR(APP_VERSION_MINOR) "." TOSTR(APP_VERSION_PATCH)
-#endif
+// APP_VERSION_DISPLAY 由 CMake target_compile_definitions 传入
+// BUILD_VERSION 由 cmake/GenerateVersion.ps1 生成（格式: ts-machineId-vX.Y.Z）
 
 int main(int argc, char *argv[])
 {
@@ -86,6 +95,19 @@ int main(int argc, char *argv[])
     QObject::connect(&engine, &QQmlApplicationEngine::quit, &app, &QGuiApplication::quit);
 
     engine.load(url);
+
+#ifdef Q_OS_WIN
+    // 系统原生标题栏深度自定义：窗口创建后设置 DWM 暗黑模式 + 边框颜色
+    if (!engine.rootObjects().isEmpty()) {
+        QQuickWindow *win = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        if (win) {
+            QObject::connect(win, &QQuickWindow::visibleChanged, [win](bool visible) {
+                if (visible)
+                    customizeTitleBar(HWND(win->winId()));
+            });
+        }
+    }
+#endif
 
     return app.exec();
 }
