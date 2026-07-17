@@ -9,6 +9,7 @@ Item {
 
     property bool opening: false
     property int _lastScroll: -1
+    property bool _justChanged: false
     property real originX: 0
     property real originY: root.height
 
@@ -52,7 +53,21 @@ Item {
             var idx = musicManager.lyricIndex
             if (idx < 0 || idx === root._lastScroll || lyricsView.count === 0) return
             root._lastScroll = idx
-            lyricsView.positionViewAtIndex(idx, ListView.Center)
+            // Phase 1: 先放大下一句到 40，暂不滚动
+            root._justChanged = true
+            lyricsView.interactive = false
+            scrollTimer.restart()
+        }
+    }
+
+    Timer {
+        id: scrollTimer
+        interval: 250
+        onTriggered: {
+            // Phase 2: 滚动到目标行，同时字体从 40 自然过渡到 58
+            root._justChanged = false
+            lyricsView.positionViewAtIndex(root._lastScroll, ListView.Center)
+            lyricsView.interactive = true
         }
     }
 
@@ -247,7 +262,7 @@ Item {
                 // 上下留白让当前行居中，只展示约 5 句
                 topMargin: parent.height * 0.38; bottomMargin: parent.height * 0.38
                 clip: true; cacheBuffer: 600; reuseItems: false
-                Behavior on contentY { NumberAnimation { duration: 250; easing.type: Easing.Linear } }
+                Behavior on contentY { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
 
                 delegate: Item {
                     id: lyricDelegate
@@ -284,7 +299,7 @@ Item {
                                     width: parent.width
                                     text: modelData.text || ""
                                     font.family: root.fontFamily
-                                    font.pixelSize: lyricDelegate.isCurrent ? 58 : 36
+                                    font.pixelSize: lyricDelegate.isCurrent ? (root._justChanged ? 40 : 58) : 36
                                     color: lyricDelegate.isPast ? "#3a3a3a"
                                          : (lyricDelegate.isCurrent ? "#555" : "#6a9ac0")
                                     horizontalAlignment: Text.AlignLeft
@@ -301,7 +316,7 @@ Item {
                                     height: mainGray.implicitHeight
                                     visible: lyricDelegate.highlight
                                     text: modelData.text || ""
-                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 58 : 36
+                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? (root._justChanged ? 40 : 58) : 36
                                     color: lyricDelegate.isPast ? "#FFD700" : "#00d4ff"
                                     horizontalAlignment: Text.AlignLeft
                                     wrapMode: Text.WordWrap
@@ -325,7 +340,7 @@ Item {
                                     width: parent.width
                                     text: modelData.translation || ""
                                     font.family: root.fontFamily
-                                    font.pixelSize: lyricDelegate.isCurrent ? 34 : 24
+                                    font.pixelSize: lyricDelegate.isCurrent ? (root._justChanged ? 28 : 34) : 24
                                     color: lyricDelegate.isPast ? "#2a2a2a"
                                          : (lyricDelegate.isCurrent ? "#333" : "#4a6a8a")
                                     horizontalAlignment: Text.AlignLeft
@@ -342,7 +357,7 @@ Item {
                                     height: transGray.implicitHeight
                                     visible: lyricDelegate.highlight && lyricDelegate.hasTrans
                                     text: modelData.translation || ""
-                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 34 : 24
+                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? (root._justChanged ? 28 : 34) : 24
                                     color: lyricDelegate.isPast ? "#b8960f" : "#FFD700"
                                     horizontalAlignment: Text.AlignLeft
                                     wrapMode: Text.WordWrap
@@ -410,14 +425,41 @@ Item {
                 font.family: root.fontFamily; font.pixelSize: 11; color: "#888"
             }
             Rectangle {
+                id: progressTrack
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.leftMargin: 40; anchors.rightMargin: 40
                 anchors.verticalCenter: parent.verticalCenter
                 height: 4; radius: 2; color: "#3a3a55"
+
                 Rectangle {
+                    id: progressFill
                     height: parent.height; radius: 2; color: "#00d4ff"
-                    width: parent.width * (musicManager.duration > 0 ? musicManager.position / musicManager.duration : 0)
+                    readonly property real autoRatio: musicManager.duration > 0 ? musicManager.position / musicManager.duration : 0
+                    width: parent.width * (seekMA.pressed ? seekMA._dragRatio : autoRatio)
                     Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                }
+
+                MouseArea {
+                    id: seekMA
+                    anchors.fill: parent
+                    anchors.topMargin: -8; anchors.bottomMargin: -8
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    preventStealing: true
+
+                    property real _dragRatio: 0
+                    property real _trackW: 0
+
+                    function seek(mx) {
+                        var w = seekMA.pressed ? _trackW : progressTrack.width
+                        _dragRatio = Math.max(0, Math.min(1, mx / w))
+                        if (musicManager.duration > 0)
+                            musicManager.seek(_dragRatio * musicManager.duration)
+                    }
+
+                    onPressed: function(m) { _trackW = progressTrack.width; seek(m.x) }
+                    onPositionChanged: function(m) { if (pressed) seek(m.x) }
+                    onClicked: function(m) { seek(m.x) }
                 }
             }
             Text {

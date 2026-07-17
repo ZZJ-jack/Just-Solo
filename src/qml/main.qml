@@ -31,6 +31,12 @@ Window {
 
     flags: Qt.Window
 
+    // ---- 禁用 F11 最大化 ----
+    Shortcut {
+        sequence: "F11"
+        onActivated: {}  // 吞掉，什么也不做
+    }
+
     // ---- 布局常量 ----
     readonly property int sidebarWidth: 230
     readonly property int playerBarHeight: 72
@@ -577,10 +583,6 @@ Window {
         border.color: "#353550"
         border.width: 1
 
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.AllButtons
-        }
 
         property double progressFraction: musicManager.duration > 0 ? musicManager.position / Math.max(1, musicManager.duration) : 0
         property int currentSeconds: Math.floor(musicManager.position / 1000)
@@ -722,10 +724,11 @@ Window {
                 }
             }
 
-            // ---- 右侧：播放进度（自适应屏幕 1/2） ----
+            // ---- 右侧：播放进度（固定窗口 1/3） ----
             RowLayout {
-                Layout.preferredWidth: Math.min(600, mainWindow.width * 0.5)
-                Layout.minimumWidth: 180
+                Layout.preferredWidth: mainWindow.width / 3
+                Layout.minimumWidth: mainWindow.width / 3
+                Layout.maximumWidth: mainWindow.width / 3
                 spacing: 8
 
                 Label {
@@ -739,12 +742,36 @@ Window {
                 }
 
                 Rectangle {
+                    id: barProgressTrack
                     Layout.fillWidth: true; Layout.preferredHeight: 4; radius: 2; color: "#3a3a55"
                     Rectangle {
-                        id: progressFill
-                        width: parent.width * Math.min(1, playerBar.progressFraction)
+                        id: barProgressFill
+                        readonly property real autoRatio: Math.min(1, playerBar.progressFraction)
+                        width: parent.width * (barSeekMA.pressed ? barSeekMA._dragRatio : autoRatio)
                         height: parent.height; radius: 2; color: "#00d4ff"
                         Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                    }
+                    MouseArea {
+                        id: barSeekMA
+                        anchors.fill: parent
+                        anchors.topMargin: -8; anchors.bottomMargin: -8
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        preventStealing: true
+
+                        property real _dragRatio: 0
+                        property real _trackW: 0
+
+                        function seek(mx) {
+                            var w = barSeekMA.pressed ? _trackW : barProgressTrack.width
+                            _dragRatio = Math.max(0, Math.min(1, mx / w))
+                            if (musicManager.duration > 0)
+                                musicManager.seek(_dragRatio * musicManager.duration)
+                        }
+
+                        onPressed: function(m) { _trackW = barProgressTrack.width; seek(m.x) }
+                        onPositionChanged: function(m) { if (pressed) seek(m.x) }
+                        onClicked: function(m) { seek(m.x) }
                     }
                 }
 
