@@ -4,7 +4,7 @@
 
 **作者**: ZZJ-JACK ([zzjjack.us.kg](https://zzjjack.us.kg))
 
-**仓库**: [GitCode](https://gitcode.com/ZZJ-JACK/Just-Solo) | [GitHub](https://github.com/ZZJ-jack/Just-Solo)
+**仓库**: [GitCode](https://gitcode.com/ZZJ-JACK/Just-Solo) | [Gitee](https://gitee.com/zzj-jack/just-solo) | [GitHub](https://github.com/ZZJ-jack/Just-Solo)
 
 ## 项目简介
 
@@ -544,7 +544,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
 - 移除设置页无效语言选择器
 - 修复关闭时异步 Loader 引擎销毁警告
 
-### v0.3.7 — 2026.7.17
+### v0.3.7（已发行） — 2026.7.17
 
 > UX 打磨：可拖动进度条、歌词两段式滚动动画、底部栏优化。
 
