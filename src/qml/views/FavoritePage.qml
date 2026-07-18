@@ -13,6 +13,7 @@ ColumnLayout {
     property int sidebarWidth: 230
     property int windowWidth: 1200
     property int rightClickedIndex: -1
+    property var rightClickedTrack: null
     property string fontFamily: ""
 
     // ---- 列宽 (2:2:2:2:1) ----
@@ -25,9 +26,18 @@ ColumnLayout {
     property real colAlbum:    Math.max(50, _totalW * 2 / 9)
     property real colDuration: Math.max(36, _totalW * 1 / 9)
     property string currentPath: {
-        var ci = musicManager.currentIndex
-        var pl = musicManager.playlist
-        return (ci >= 0 && ci < pl.length) ? (pl[ci].path || "") : ""
+        try {
+            var ms = musicManager
+            if (!ms) return ""
+            var ci = ms.currentIndex
+            if (ci < 0 || ci === undefined) return ""
+            var src = ms.playlistSource
+            var list = src === 1 ? ms.favorites : (src === 2 ? ms.history : ms.playlist)
+            if (!list || list.length === 0) return ""
+            var item = list[ci]
+            if (!item || item.path === undefined) return ""
+            return item.path || ""
+        } catch (e) { return "" }
     }
 
     // ---- 列标题 ----
@@ -70,7 +80,12 @@ ColumnLayout {
 
         delegate: SongRow {
             width: favoriteListView.width
-            isCurrent: (model.path || "") === favoriteLayout.currentPath && favoriteLayout.currentPath !== ""
+            isCurrent: {
+                try {
+                    var cp = favoriteLayout.currentPath
+                    return cp !== "" && model && (model.path || "") === cp
+                } catch (e) { return false }
+            }
             fontFamily: favoriteLayout.fontFamily
             colCover: favoriteLayout.colCover
             colTitle: favoriteLayout.colTitle
@@ -80,23 +95,21 @@ ColumnLayout {
             colPlay: favoriteLayout.colPlay
 
             onLeftClicked: {
-                var p = model.path || ""
-                var ci = musicManager.currentIndex
-                var pl = musicManager.playlist
-                if (ci >= 0 && ci < pl.length && (pl[ci].path || "") === p) {
-                    if (musicManager.isPlaying) musicManager.pause()
-                    else musicManager.play()
-                    return
-                }
-                for (var i = 0; i < pl.length; i++) {
-                    if ((pl[i].path || "") === p) {
-                        musicManager.playIndex(i)
-                        return
+                if (musicManager.playlistSource === 1) {
+                    if (musicManager.currentIndex === index) {
+                        if (musicManager.isPlaying) musicManager.pause()
+                        else musicManager.play()
+                    } else {
+                        musicManager.playIndex(index)
                     }
+                } else {
+                    musicManager.playlistSource = 1
+                    musicManager.playIndex(index)
                 }
             }
             onRightClicked: {
                 favoriteLayout.rightClickedIndex = index
+                favoriteLayout.rightClickedTrack = model
                 favContextMenu.popup()
             }
         }
@@ -105,7 +118,17 @@ ColumnLayout {
     // ---- 右键菜单 ----
     Menu {
         id: favContextMenu
-        background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 140 }
+        background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 160 }
+        MenuItem {
+            visible: musicManager.playlistSource !== 1
+            contentItem: Row {
+                spacing: 6; anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 8
+                Image { source: "qrc:/qt/qml/JustSolo/data/image/AddToPlayList.png"; width: 16; height: 16; anchors.verticalCenter: parent.verticalCenter }
+                Label { text: "添加到音乐列表"; font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"; anchors.verticalCenter: parent.verticalCenter }
+            }
+            onClicked: { if (favoriteLayout.rightClickedTrack) musicManager.addToPlaylist(favoriteLayout.rightClickedTrack) }
+            background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
+        }
         MenuItem {
             text: "取消收藏"
             onClicked: musicManager.removeFavorite(favoriteLayout.rightClickedIndex)

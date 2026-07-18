@@ -15,6 +15,7 @@ class MusicManager : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList playlist READ playlist NOTIFY playlistChanged)
+    Q_PROPERTY(QVariantList library READ library NOTIFY libraryChanged)
     Q_PROPERTY(QVariantList favorites READ favorites NOTIFY favoritesChanged)
     Q_PROPERTY(QVariantList history READ history NOTIFY historyChanged)
     Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentIndexChanged)
@@ -33,9 +34,31 @@ class MusicManager : public QObject
     Q_PROPERTY(int lyricIndex READ lyricIndex NOTIFY lyricIndexChanged)
     Q_PROPERTY(qreal detailOpacity READ detailOpacity WRITE setDetailOpacity NOTIFY detailOpacityChanged)
     Q_PROPERTY(int lyricOffset READ lyricOffset WRITE setLyricOffset NOTIFY lyricOffsetChanged)
+    Q_PROPERTY(int playMode READ playMode WRITE setPlayMode NOTIFY playModeChanged)
+    Q_PROPERTY(qreal menuOpacity READ menuOpacity WRITE setMenuOpacity NOTIFY menuOpacityChanged)
+    Q_PROPERTY(int playlistSource READ playlistSource WRITE setPlaylistSource NOTIFY playlistSourceChanged)
+    Q_PROPERTY(bool trackCrossSource READ trackCrossSource WRITE setTrackCrossSource NOTIFY trackCrossSourceChanged)
 
 public:
     explicit MusicManager(QObject *parent = nullptr);
+
+    // ---- 播放模式 ----
+    enum PlayMode {
+        Sequential  = 0,  // 顺序播放
+        ListLoop    = 1,  // 列表循环
+        SingleLoop  = 2,  // 单曲循环
+        Shuffle     = 3,  // 随机播放
+        StopAfter   = 4   // 关闭循环（播完当前停止）
+    };
+    Q_ENUM(PlayMode)
+
+    // ---- 播放列表来源 ----
+    enum PlaylistSource {
+        SourcePlaylist  = 0,  // 首页（全局播放列表）
+        SourceFavorites = 1,  // 收藏页
+        SourceHistory   = 2   // 历史页
+    };
+    Q_ENUM(PlaylistSource)
 
     Q_INVOKABLE void addFiles(const QStringList &paths);
     Q_INVOKABLE void addFolder(const QString &path);
@@ -51,6 +74,7 @@ public:
     Q_INVOKABLE void previous();
 
     QVariantList playlist() const { return m_playlist; }
+    QVariantList library() const { return m_library; }
     QVariantList favorites() const { return m_favorites; }
     QVariantList history() const { return m_history; }
     int currentIndex() const { return m_currentIndex; }
@@ -70,10 +94,29 @@ public:
     void setDetailOpacity(qreal v);
     int lyricOffset() const { return m_lyricOffset; }
     void setLyricOffset(int v);
+    qreal menuOpacity() const { return m_menuOpacity; }
+    void setMenuOpacity(qreal v);
+
+    // ---- 播放列表来源 ----
+    int playlistSource() const { return m_playlistSource; }
+    void setPlaylistSource(int source);
+    QVariantList &currentPlaylist();  // 根据来源返回对应列表
+
+    // ---- 跨来源跟踪 ----
+    bool trackCrossSource() const { return m_trackCrossSource; }
+    void setTrackCrossSource(bool v);
+
+    // ---- 播放列表操作 ----
+    Q_INVOKABLE void addToPlaylist(const QVariantMap &track);     // 追加单曲到播放列表
+    Q_INVOKABLE void copyToPlaylist(int source);                  // 将指定来源列表全部复制到播放列表
 
     Q_INVOKABLE qint64 position() const;
     Q_INVOKABLE qint64 duration() const;
     Q_INVOKABLE void seek(qint64 ms);
+
+    // ---- 播放模式 ----
+    int playMode() const { return m_playMode; }
+    Q_INVOKABLE void setPlayMode(int mode);
 
     // 原画质封面：从音频文件中提取原始封面并保存为 PNG，返回 file:// 路径
     Q_INVOKABLE QString loadOriginalCover();
@@ -98,6 +141,7 @@ public:
 
 signals:
     void playlistChanged();
+    void libraryChanged();
     void favoritesChanged();
     void historyChanged();
     void currentIndexChanged();
@@ -107,6 +151,10 @@ signals:
     void lyricIndexChanged();
     void detailOpacityChanged();
     void lyricOffsetChanged();
+    void playModeChanged();
+    void menuOpacityChanged();
+    void playlistSourceChanged();
+    void trackCrossSourceChanged();
     void positionChanged(qint64 ms);
     void durationChanged();
     void isLoadingChanged();
@@ -132,12 +180,17 @@ private:
     bool m_useCache = false;     // 开发者模式=false，非开发者模式=true
 
     QVariantList m_playlist;
+    QVariantList m_library;        // 音乐库（首页展示，持久化存储）
     QVariantList m_favorites;
     QVariantList m_history;
     QVariantList m_currentLyrics;
     int m_lyricIndex = -1;
     qreal m_detailOpacity = 0.90;  // 播放详情页背景透明度 (0.3-1.0)
     int m_lyricOffset = 130;       // 用户可调基础偏移 (ms)，最终 = base + 2.15×歌词长度
+    int m_playMode = 0;             // 播放模式 (Sequential=0)
+    qreal m_menuOpacity = 0.80;     // 模式菜单透明度 (0.3-1.0)
+    int m_playlistSource = 0;       // 活跃播放列表来源 (SourcePlaylist=0)
+    bool m_trackCrossSource = false; // 跨来源播放跟踪（默认关闭）
     void loadSettings();
     void saveSettings();
     int m_currentIndex = -1;

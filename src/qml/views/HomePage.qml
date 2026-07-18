@@ -6,15 +6,35 @@ import QtQuick.Dialogs
 // ============================================================
 // 首页 - 音乐列表视图（SongRow 共享组件）
 // ============================================================
-ColumnLayout {
-    id: musicListLayout
-    spacing: 0
-    clip: true
+Item {
+    anchors.fill: parent
+
+    ColumnLayout {
+        id: musicListLayout
+        spacing: 0
+        clip: true
 
     property int sidebarWidth: 230
     property int windowWidth: 1200
     property var rightClickedTrack: null
     property string fontFamily: ""
+
+    // 当前正在播放的歌曲路径（跨来源匹配）
+    property string playingPath: {
+        // 跨来源跟踪关闭 + 非首页来源 → 不显示任何播放中
+        if (!musicManager.trackCrossSource && musicManager.playlistSource !== 0) return ""
+        try {
+            var ci = musicManager.currentIndex
+            if (ci < 0) return ""
+            var src = musicManager.playlistSource
+            var list = src === 1 ? musicManager.favorites : (src === 2 ? musicManager.history : musicManager.playlist)
+            if (!list || list.length === 0) return ""
+            if (ci >= 0 && ci < list.length) return (list[ci].path || "")
+        } catch (e) {}
+        return ""
+    }
+
+    property int pendingIndex: -1   // 弹窗确认点击的歌曲索引
 
     // ---- 列宽 (2:2:2:2:1) ----
     property int colPlay: 36
@@ -29,7 +49,7 @@ ColumnLayout {
     // ---- 列标题 ----
     Rectangle {
         Layout.fillWidth: true; height: 32; color: "transparent"
-        visible: musicManager.playlist.length > 0
+        visible: musicManager.library.length > 0
         RowLayout {
             anchors.fill: parent; anchors.margins: 5; anchors.leftMargin: 8; spacing: 0
             Item { Layout.preferredWidth: musicListLayout.colCover; Layout.maximumWidth: 40 }
@@ -40,7 +60,7 @@ ColumnLayout {
             Item { Layout.preferredWidth: musicListLayout.colPlay }
         }
     }
-    Rectangle { Layout.fillWidth: true; height: 1; color: "#2a2a48"; visible: musicManager.playlist.length > 0 }
+    Rectangle { Layout.fillWidth: true; height: 1; color: "#2a2a48"; visible: musicManager.library.length > 0 }
 
     // ---- 歌曲列表 ----
     ListView {
@@ -48,7 +68,7 @@ ColumnLayout {
         Layout.fillWidth: true; Layout.fillHeight: true
         spacing: 8; clip: true
         boundsBehavior: Flickable.StopAtBounds
-        visible: musicManager.playlist.length > 0
+        visible: musicManager.library.length > 0
         cacheBuffer: height * 2; reuseItems: true
 
         ScrollBar.vertical: ScrollBar {
@@ -62,11 +82,11 @@ ColumnLayout {
             }
         }
 
-        model: musicManager.playlist
+        model: musicManager.library
 
         delegate: SongRow {
             width: musicListView.width
-            isCurrent: musicManager.currentIndex === index
+            isCurrent: model.path === musicListLayout.playingPath
             fontFamily: musicListLayout.fontFamily
             colCover: musicListLayout.colCover
             colTitle: musicListLayout.colTitle
@@ -74,13 +94,28 @@ ColumnLayout {
             colAlbum: musicListLayout.colAlbum
             colDuration: musicListLayout.colDuration
             colPlay: musicListLayout.colPlay
+            showSourceHint: musicManager.playlistSource !== 0
 
             onLeftClicked: {
-                if (musicManager.currentIndex === index) {
-                    if (musicManager.isPlaying) musicManager.pause()
-                    else musicManager.play()
+                if (musicManager.playlistSource === 0) {
+                    // 已在首页来源 → 同歌暂停/播放，不同歌切歌
+                    if (model.path === musicListLayout.playingPath) {
+                        if (musicManager.isPlaying) musicManager.pause()
+                        else musicManager.play()
+                    } else {
+                        musicManager.playIndex(index)
+                    }
                 } else {
-                    musicManager.playIndex(index)
+                    // 来源不是首页
+                    if (musicManager.trackCrossSource) {
+                        // 跨来源跟踪开启 → 直接切播
+                        musicManager.playlistSource = 0
+                        musicManager.playIndex(index)
+                    } else {
+                        // 跨来源跟踪关闭 → 弹窗确认
+                        musicListLayout.pendingIndex = index
+                        switchSourceDialog.open()
+                    }
                 }
             }
             onRightClicked: {
@@ -106,8 +141,30 @@ ColumnLayout {
     // ---- 空列表提示 ----
     Column {
         Layout.alignment: Qt.AlignCenter; spacing: 14
-        visible: musicManager.playlist.length === 0
+        visible: musicManager.library.length === 0
         Label { text: "还没有音乐"; font.family: fontFamily; font.pixelSize: 16; color: "#757575"; anchors.horizontalCenter: parent.horizontalCenter }
         Label { text: "点击上方「添加音乐」导入本地文件"; font.family: fontFamily; font.pixelSize: 13; color: "#666"; anchors.horizontalCenter: parent.horizontalCenter }
     }
+}
+
+// ---- 切换来源确认弹窗（覆盖层，不参与 ColumnLayout 布局） ----
+Item {
+    anchors.fill: parent
+    Dialog {
+        id: switchSourceDialog
+        title: "切换播放列表"
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        anchors.centerIn: parent
+        background: Rectangle { radius: 10; color: "#1e1e30"; border.color: "#3a3a55" }
+        Label {
+            text: "当前播放来源不是首页，\n点击确定将从头播放选定的歌曲。"
+            font.family: fontFamily; font.pixelSize: 13; color: "#ccc"
+            wrapMode: Text.WordWrap; width: 260; leftPadding: 4
+        }
+        onAccepted: {
+            musicManager.playlistSource = 0
+            musicManager.playIndex(musicListLayout.pendingIndex)
+        }
+    }
+}
 }

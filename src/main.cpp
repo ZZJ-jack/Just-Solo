@@ -5,6 +5,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QStringList>
+#include <QTimer>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -22,15 +23,46 @@
 #ifndef DWMWA_CAPTION_COLOR
 #define DWMWA_CAPTION_COLOR 35
 #endif
+#ifndef DWMWA_TEXT_COLOR
+#define DWMWA_TEXT_COLOR 36
+#endif
 
-// 深度自定义原生标题栏：暗黑模式 + 边框/标题栏颜色与窗口背景 #1e1e2e 一致
+// 检测是否为 Windows 11 (Build >= 22000)
+static bool isWindows11() {
+    // RtlGetVersion 获取真实版本号（不受应用程序兼容性清单影响）
+    typedef LONG (WINAPI *RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll) return false;
+    auto RtlGetVersion = (RtlGetVersionPtr)GetProcAddress(ntdll, "RtlGetVersion");
+    if (!RtlGetVersion) return false;
+
+    RTL_OSVERSIONINFOW vi = { sizeof(vi) };
+    if (RtlGetVersion(&vi) != 0) return false;
+    return vi.dwMajorVersion == 10 && vi.dwBuildNumber >= 22000;
+}
+
+// 获取系统版本描述字符串（"Windows 11" 或 "Windows 10"）
+static QString osVersionString() {
+    return isWindows11() ? QStringLiteral("Windows 11") : QStringLiteral("Windows 10");
+}
+
+// 深度自定义原生标题栏 — 强制暗黑模式，Win11 追加三色定制
 static void customizeTitleBar(HWND hwnd) {
     BOOL darkMode = TRUE;
+    // Win10 1809-2004 (属性 19) + Win10 2004+/Win11 (属性 20) 双保险
     DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
+    DwmSetWindowAttribute(hwnd, 19, &darkMode, sizeof(darkMode));  // 旧版常量
 
-    COLORREF bg = 0x002e1e1e;  // #1e1e2e (ABGR → COLORREF)
-    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,  &bg, sizeof(bg));
-    DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &bg, sizeof(bg));
+    // Win11+: 标题栏背景 #1e1e2e，文字 #cccccc，边框同背景（视觉无边框）
+    // COLORREF = 0x00BBGGRR → RGB(0x1e, 0x1e, 0x2e) = 0x002e1e1e
+    if (isWindows11()) {
+        COLORREF caption = RGB(30, 30, 46);   // #1e1e2e
+        COLORREF text    = RGB(204, 204, 204); // #cccccc
+        COLORREF border  = caption;            // 与背景同色
+        DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
+        DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR,    &text,    sizeof(text));
+        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,  &border,  sizeof(border));
+    }
 }
 #endif
 
@@ -75,6 +107,9 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("BUILD_VERSION", QString::fromWCharArray(BUILD_VERSION));
     engine.rootContext()->setContextProperty("APP_VERSION", QString(APP_VERSION_DISPLAY));
     engine.rootContext()->setContextProperty("DEVELOPER_MODE", args.contains("--develop"));
+#ifdef Q_OS_WIN
+    engine.rootContext()->setContextProperty("OS_VERSION", osVersionString());
+#endif
 
     // 注册音乐管理器（非开发者模式启用本地缓存）
     MusicManager *musicManager = new MusicManager(&app);
@@ -97,13 +132,12 @@ int main(int argc, char *argv[])
     engine.load(url);
 
 #ifdef Q_OS_WIN
-    // 系统原生标题栏深度自定义：窗口创建后设置 DWM 暗黑模式 + 边框颜色
+    // 系统原生标题栏深度自定义 — 延迟确保窗口句柄就绪
     if (!engine.rootObjects().isEmpty()) {
         QQuickWindow *win = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
         if (win) {
-            QObject::connect(win, &QQuickWindow::visibleChanged, [win](bool visible) {
-                if (visible)
-                    customizeTitleBar(HWND(win->winId()));
+            QTimer::singleShot(200, win, [win]() {
+                customizeTitleBar(HWND(win->winId()));
             });
         }
     }

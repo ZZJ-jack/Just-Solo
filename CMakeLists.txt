@@ -3,8 +3,8 @@ project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 
 # ---- 软件版本号 ----
 set(APP_VERSION_MAJOR 0)
-set(APP_VERSION_MINOR 3)
-set(APP_VERSION_PATCH 7)
+set(APP_VERSION_MINOR 4)
+set(APP_VERSION_PATCH 0)
 set(APP_VERSION_PRE   0)   # 0=正式版, >0=beta.N
 
 # 格式化显示版本: v0.3.5 或 v0.3.5-beta.2
@@ -61,14 +61,23 @@ qt_add_qml_module(JustSolo
         src/qml/views/HistoryPage.qml
         src/qml/views/SettingsPage.qml
         src/qml/views/PlayerDetailPage.qml
+        src/qml/views/PlaylistPage.qml
     RESOURCES
         data/image/logo.png
         data/image/logo2.png
+        data/image/logo.ico
         data/image/home.png
         data/image/mylike.png
         data/image/history.png
         data/image/play.png
         data/image/playing.png
+        data/image/mode_sequential.png
+        data/image/mode_loop.png
+        data/image/mode_single.png
+        data/image/mode_shuffle.png
+        data/image/mode_stop.png
+        data/image/PlayList.png
+        data/image/AddToPlayList.png
         data/font/HarmonyOS_Sans_SC_Regular.ttf
 )
 

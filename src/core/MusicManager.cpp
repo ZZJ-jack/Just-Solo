@@ -7,6 +7,7 @@
 #include <QCryptographicHash>
 #include <QImage>
 #include <QTimer>
+#include <QRandomGenerator>
 #include <QEventLoop>
 #include <QMediaMetaData>
 #include <algorithm>
@@ -344,6 +345,16 @@ MusicManager::MusicManager(QObject *parent)
             }
             emit durationChanged();
         }
+        else if (s == QMediaPlayer::EndOfMedia) {
+            // 根据播放模式决定下一步
+            if (m_playMode == SingleLoop) {
+                m_player->play();  // 单曲循环：从头播放
+            } else if (m_playMode == StopAfter) {
+                m_player->stop();  // 关闭循环：停止
+            } else {
+                next();  // 顺序/列表循环/随机：下一首
+            }
+        }
     });
     // 嵌入式歌词：等媒体元数据加载完成后尝试提取
     connect(m_player, &QMediaPlayer::metaDataChanged, this, &MusicManager::onMetaDataChanged);
@@ -390,6 +401,18 @@ void MusicManager::loadSettings() {
         m_lyricOffset = obj.value("lyricOffset").toInt(m_lyricOffset);
         emit lyricOffsetChanged();
     }
+    if (obj.contains("playMode")) {
+        m_playMode = obj.value("playMode").toInt(m_playMode);
+        emit playModeChanged();
+    }
+    if (obj.contains("menuOpacity")) {
+        m_menuOpacity = obj.value("menuOpacity").toDouble(m_menuOpacity);
+        emit menuOpacityChanged();
+    }
+    if (obj.contains("trackCrossSource")) {
+        m_trackCrossSource = obj.value("trackCrossSource").toBool(false);
+        emit trackCrossSourceChanged();
+    }
 }
 
 void MusicManager::saveSettings() {
@@ -397,6 +420,9 @@ void MusicManager::saveSettings() {
     QJsonObject obj;
     obj["detailOpacity"] = m_detailOpacity;
     obj["lyricOffset"] = m_lyricOffset;
+    obj["playMode"] = m_playMode;
+    obj["menuOpacity"] = m_menuOpacity;
+    obj["trackCrossSource"] = m_trackCrossSource;
     QJsonDocument doc(obj);
     QFile file(m_cacheDir + "/settings.json");
     if (file.open(QIODevice::WriteOnly)) {
@@ -418,6 +444,28 @@ void MusicManager::setLyricOffset(int v) {
     if (v == m_lyricOffset) return;
     m_lyricOffset = v;
     emit lyricOffsetChanged();
+    saveSettings();
+}
+
+void MusicManager::setMenuOpacity(qreal v) {
+    v = qBound(0.3, v, 1.0);
+    if (qFuzzyCompare(v, m_menuOpacity)) return;
+    m_menuOpacity = v;
+    emit menuOpacityChanged();
+    saveSettings();
+}
+
+void MusicManager::setTrackCrossSource(bool v) {
+    if (v == m_trackCrossSource) return;
+    m_trackCrossSource = v;
+    emit trackCrossSourceChanged();
+    saveSettings();
+}
+
+void MusicManager::setPlayMode(int mode) {
+    if (mode < 0 || mode > 4 || mode == m_playMode) return;
+    m_playMode = mode;
+    emit playModeChanged();
     saveSettings();
 }
 
@@ -462,7 +510,7 @@ static QVariantList readVariantListFromFile(const QString &filePath) {
 
 void MusicManager::saveCache() {
     if (!m_useCache || m_cacheDir.isEmpty()) return;
-    writeVariantListToFile(m_playlist, m_cacheDir + "/playlist_cache.json");
+    writeVariantListToFile(m_library, m_cacheDir + "/playlist_cache.json");
 }
 
 void MusicManager::loadCache() {
@@ -476,11 +524,19 @@ void MusicManager::loadCache() {
             removed = true;
             continue;
         }
-        m_playlist.append(map);
+        m_library.append(map);
     }
     if (removed) saveCache();
+    // 播放列表初始化为音乐库的副本
+    m_playlist = m_library;
+    // 播放列表未恢复时也同步（兜底）
+    if (m_playlist.isEmpty() && !m_library.isEmpty()) {
+        m_playlist = m_library;
+    }
     if (!m_playlist.isEmpty())
         emit playlistChanged();
+    if (!m_library.isEmpty())
+        emit libraryChanged();
 }
 
 // ---- 收藏缓存 ----
@@ -550,8 +606,8 @@ void MusicManager::processNextPending() {
 
         bool shouldAdd = true;
 
-        for (int i = 0; i < m_playlist.size(); i++) {
-            QVariantMap existing = m_playlist[i].toMap();
+        for (int i = 0; i < m_library.size(); i++) {
+            QVariantMap existing = m_library[i].toMap();
 
             if (existing["path"].toString() == filePath) {
                 shouldAdd = false;
@@ -562,7 +618,8 @@ void MusicManager::processNextPending() {
             if (existingKey == songKey) {
                 int existingQualityRank = qualityRank(existing["quality"].toString());
                 if (newQualityRank > existingQualityRank) {
-                    m_playlist[i] = track;
+                    m_library[i] = track;
+                    m_playlist[i] = track;  // 同步更新播放列表中的高音质版本
                     if (m_currentIndex == i) {
                         m_player->setSource(QUrl::fromLocalFile(track["path"].toString()));
                         if (m_player->playbackState() == QMediaPlayer::PlayingState)
@@ -577,6 +634,7 @@ void MusicManager::processNextPending() {
         }
 
         if (shouldAdd) {
+            m_library.append(track);
             m_playlist.append(track);
             playlistModified = true;
         }
@@ -588,6 +646,7 @@ void MusicManager::processNextPending() {
     // 批量发一次信号，减少 QML 绑定刷新次数
     if (playlistModified) {
         emit playlistChanged();
+        emit libraryChanged();
         saveCache();
     }
     emit importProgressChanged();
@@ -618,6 +677,15 @@ void MusicManager::scanFolder(const QString &path) {
 
 void MusicManager::removeTrack(int index) {
     if (index < 0 || index >= m_playlist.size()) return;
+    // 同时从音乐库中删除
+    QString rmPath = m_playlist[index].toMap()["path"].toString();
+    for (int i = 0; i < m_library.size(); i++) {
+        if (m_library[i].toMap()["path"].toString() == rmPath) {
+            m_library.removeAt(i);
+            emit libraryChanged();
+            break;
+        }
+    }
     m_playlist.removeAt(index);
     if (m_currentIndex == index) {
         m_currentIndex = -1;
@@ -633,26 +701,95 @@ void MusicManager::removeTrack(int index) {
 void MusicManager::clearPlaylist() {
     m_playlist.clear();
     m_currentIndex = -1;
+    m_playlistSource = 0;
+    m_currentCover.clear();            // 清空封面
+    m_currentAlbum.clear();            // 清空专辑
     m_player->stop();
     emit playlistChanged();
-    saveCache();
+    emit playlistSourceChanged();
     emit currentIndexChanged();
+    emit currentTrackChanged();         // 强制 QML 底部栏全清
+}
+
+QVariantList &MusicManager::currentPlaylist() {
+    switch (m_playlistSource) {
+        case 1: return m_favorites;
+        case 2: return m_history;
+        default: return m_playlist;
+    }
 }
 
 void MusicManager::playIndex(int index) {
-    if (index < 0 || index >= m_playlist.size()) return;
+    QVariantList &list = currentPlaylist();
+    if (index < 0 || index >= list.size()) return;
     m_currentIndex = index;
-    QVariantMap track = m_playlist[index].toMap();
+    QVariantMap track = list[index].toMap();
     QUrl url = QUrl::fromLocalFile(track["path"].toString());
+    // 同步更新封面/专辑，避免 sourceChanged 异步延迟导致底部栏空白
+    m_currentCover = track["cover"].toString();
+    m_currentAlbum = track["album"].toString();
     m_player->setSource(url);
     m_player->play();
     emit currentIndexChanged();
-    // 自动加入历史（最近播放）
-    addToHistory(track);
+    emit currentTrackChanged();
+    // 历史列表 addToHistory 会把当前曲目移到首位 → 修正 currentIndex
+    if (m_playlistSource == 2) {
+        addToHistory(track);
+        m_currentIndex = 0;
+        emit currentIndexChanged();
+    } else {
+        addToHistory(track);
+    }
+}
+
+void MusicManager::setPlaylistSource(int source) {
+    if (source < 0 || source > 2 || source == m_playlistSource) {
+        if (source == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {
+            m_playlist = m_library;
+            emit playlistChanged();
+        }
+        return;
+    }
+    if (source == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {
+        m_playlist = m_library;
+        emit playlistChanged();
+    }
+    m_playlistSource = source;
+    m_currentIndex = -1;
+    emit playlistSourceChanged();
+}
+
+void MusicManager::addToPlaylist(const QVariantMap &track) {
+    if (track.isEmpty() || track["path"].toString().isEmpty()) return;
+    // 去重检查
+    QString path = track["path"].toString();
+    for (const QVariant &item : m_playlist) {
+        if (item.toMap()["path"].toString() == path) return;  // 已存在
+    }
+    m_playlist.append(track);
+    saveCache();
+    emit playlistChanged();
+}
+
+void MusicManager::copyToPlaylist(int source) {
+    QVariantList sourceList;
+    switch (source) {
+        case 1: sourceList = m_favorites; break;
+        case 2: sourceList = m_history; break;
+        default: return;  // source=0 (already playlist) is a no-op
+    }
+    if (sourceList.isEmpty()) return;
+    m_playlist = sourceList;
+    m_playlistSource = 0;   // 切换为播放列表
+    m_currentIndex = -1;
+    saveCache();
+    emit playlistChanged();
+    emit playlistSourceChanged();
 }
 
 void MusicManager::play() {
-    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+    QVariantList &list = currentPlaylist();
+    if (m_currentIndex >= 0 && m_currentIndex < list.size()) {
         m_player->play();
     }
 }
@@ -674,20 +811,33 @@ void MusicManager::shutdown() {
 }
 
 void MusicManager::next() {
-    if (m_playlist.isEmpty()) return;
-    int nextIdx = (m_currentIndex + 1) % m_playlist.size();
+    QVariantList &list = currentPlaylist();
+    if (list.isEmpty()) return;
+    int nextIdx;
+    if (m_playMode == Shuffle) {
+        nextIdx = QRandomGenerator::global()->bounded(list.size());
+    } else if (m_playMode == Sequential && m_currentIndex + 1 >= list.size()) {
+        // 顺序播放到最后：停止
+        m_player->stop();
+        emit playbackStateChanged();
+        return;
+    } else {
+        nextIdx = (m_currentIndex + 1) % list.size();
+    }
     playIndex(nextIdx);
 }
 
 void MusicManager::previous() {
-    if (m_playlist.isEmpty()) return;
-    int prevIdx = m_currentIndex <= 0 ? m_playlist.size() - 1 : m_currentIndex - 1;
+    QVariantList &list = currentPlaylist();
+    if (list.isEmpty()) return;
+    int prevIdx = m_currentIndex <= 0 ? list.size() - 1 : m_currentIndex - 1;
     playIndex(prevIdx);
 }
 
 void MusicManager::updateCurrentTrack() {
-    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
-        QVariantMap track = m_playlist[m_currentIndex].toMap();
+    QVariantList &list = currentPlaylist();
+    if (m_currentIndex >= 0 && m_currentIndex < list.size()) {
+        QVariantMap track = list[m_currentIndex].toMap();
         m_currentCover = track["cover"].toString();
         m_currentAlbum = track["album"].toString();
         m_currentMediaPath = track["path"].toString();
@@ -983,18 +1133,24 @@ QVariantList MusicManager::parseEmbeddedLyrics(const QString &text) {
 }
 
 QString MusicManager::currentTitle() const {
-    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) return "";
-    return m_playlist[m_currentIndex].toMap()["name"].toString();
+    const QVariantList *list = (m_playlistSource == 1) ? &m_favorites
+                            : (m_playlistSource == 2) ? &m_history : &m_playlist;
+    if (m_currentIndex < 0 || m_currentIndex >= list->size()) return "";
+    return list->at(m_currentIndex).toMap()["name"].toString();
 }
 
 QString MusicManager::currentArtist() const {
-    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) return "";
-    return m_playlist[m_currentIndex].toMap()["artist"].toString();
+    const QVariantList *list = (m_playlistSource == 1) ? &m_favorites
+                            : (m_playlistSource == 2) ? &m_history : &m_playlist;
+    if (m_currentIndex < 0 || m_currentIndex >= list->size()) return "";
+    return list->at(m_currentIndex).toMap()["artist"].toString();
 }
 
 QString MusicManager::currentAlbum() const {
-    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) return "";
-    return m_playlist[m_currentIndex].toMap()["album"].toString();
+    const QVariantList *list = (m_playlistSource == 1) ? &m_favorites
+                            : (m_playlistSource == 2) ? &m_history : &m_playlist;
+    if (m_currentIndex < 0 || m_currentIndex >= list->size()) return "";
+    return list->at(m_currentIndex).toMap()["album"].toString();
 }
 
 qint64 MusicManager::position() const {
@@ -1025,6 +1181,9 @@ void MusicManager::toggleFavorite(const QVariantMap &track) {
     }
     // 不存在则添加
     m_favorites.prepend(track);
+    // prepend 插到首位 → 正在播放收藏时 currentIndex +1
+    if (m_playlistSource == 1 && m_currentIndex >= 0)
+        m_currentIndex++;
     saveFavorites();
     emit favoritesChanged();
 }

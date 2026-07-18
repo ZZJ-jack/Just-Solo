@@ -412,22 +412,98 @@ Item {
             }
         }
 
-        // 进度条
+        // 进度条（含模式按钮，右置固定宽度区块）
         Item {
-            anchors.left: controls.right; anchors.right: parent.right
-            anchors.leftMargin: 24; anchors.rightMargin: 24
+            id: progressArea
+            width: parent.width * 0.48
+            anchors.right: parent.right; anchors.rightMargin: 60
             anchors.verticalCenter: parent.verticalCenter
-            height: 20
+            height: 28
 
-            Text {
+            property var modeIcons: ["mode_sequential.png", "mode_loop.png", "mode_single.png", "mode_shuffle.png", "mode_stop.png"]
+            property var modeLabels: ["顺序播放", "列表循环", "单曲循环", "随机播放", "关闭循环"]
+
+            // ---- 模式按钮（悬浮自动展开菜单） ----
+            Item {
+                id: modeBtn
+                width: 28; height: 28
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+
+                Image {
+                    anchors.fill: parent
+                    source: "qrc:/qt/qml/JustSolo/data/image/" + progressArea.modeIcons[musicManager.playMode]
+                    fillMode: Image.PreserveAspectFit
+                    opacity: modeMA.containsMouse ? 1 : 0.6
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                }
+
+                MouseArea {
+                    id: modeMA
+                    anchors.fill: parent; anchors.margins: -4
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: { modeLeave.stop(); modeMenu.open() }
+                    onExited: modeLeave.restart()
+                }
+
+                Timer {
+                    id: modeLeave
+                    interval: 250
+                    onTriggered: modeMenu.close()
+                }
+
+                Popup {
+                    id: modeMenu
+                    x: modeBtn.width / 2 - width / 2
+                    y: -height - 8
+                    padding: 4
+                    background: Rectangle {
+                        radius: 8; color: "#2a2a48"
+                        opacity: (typeof musicManager !== "undefined" && musicManager) ? (musicManager.menuOpacity || 0.80) : 0.80
+                        border.color: "#444466"; border.width: 1
+                    }
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                    Row {
+                        spacing: 6
+                        Repeater {
+                            model: 5
+                            Image {
+                                source: "qrc:/qt/qml/JustSolo/data/image/" + progressArea.modeIcons[index]
+                                width: 30; height: 30; fillMode: Image.PreserveAspectFit
+                                opacity: itemMA.containsMouse || musicManager.playMode === index ? 1.0 : 0.5
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                MouseArea {
+                                    id: itemMA
+                                    anchors.fill: parent; anchors.margins: -4
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onEntered: modeLeave.stop()
+                                    onClicked: {
+                                        musicManager.playMode = index
+                                        modeMenu.close()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- 当前时间 ----
+            Text {
+                anchors.left: modeBtn.right; anchors.leftMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
                 text: root.fmtTime(musicManager.position)
                 font.family: root.fontFamily; font.pixelSize: 11; color: "#888"
             }
+
+            // ---- 进度条 ----
             Rectangle {
                 id: progressTrack
-                anchors.left: parent.left; anchors.right: parent.right
-                anchors.leftMargin: 40; anchors.rightMargin: 40
+                anchors.left: parent.left; anchors.leftMargin: 72
+                anchors.right: parent.right; anchors.rightMargin: 40
                 anchors.verticalCenter: parent.verticalCenter
                 height: 4; radius: 2; color: "#3a3a55"
 
@@ -462,6 +538,8 @@ Item {
                     onClicked: function(m) { seek(m.x) }
                 }
             }
+
+            // ---- 总时间 ----
             Text {
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                 text: root.fmtTime(musicManager.duration)

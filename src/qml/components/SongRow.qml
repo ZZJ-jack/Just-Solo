@@ -28,6 +28,7 @@ Rectangle {
     required property real   colAlbum
     required property real   colDuration
     required property real   colPlay
+    property bool showSourceHint: false  // 首页 source≠0 时显示提示
 
     signal leftClicked()
     signal rightClicked()
@@ -126,6 +127,13 @@ Rectangle {
                 source: "qrc:/qt/qml/JustSolo/data/image/playing.png"
                 width: 18; height: 18
                 visible: songRow.isCurrent && musicManager.isPlaying
+            }
+
+            ToolTip {
+                visible: songRow.showSourceHint && rowMouse.containsMouse
+                text: "播放列表来源不是首页\n请前往「播放列表」页管理"
+                delay: 600
+                font.family: songRow.fontFamily
             }
         }
     }

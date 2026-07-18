@@ -61,8 +61,6 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "playback"
-        Label { text: "播放设置"; font.family: fontFamily; font.pixelSize: 18; font.bold: true; color: "#f4f4f4" }
-        Item { Layout.preferredHeight: 20 }
 
         // 歌词延时
         Rectangle {
@@ -123,6 +121,36 @@ Rectangle {
             }
         }
 
+        Item { Layout.preferredHeight: 14 }
+
+        // 跨来源跟踪开关
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 110; radius: 8
+            color: "#2e2e4a"; border.color: "#3a3a55"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label { text: "其他列表播放时首页是否显示对应歌曲"; font.family: fontFamily; font.pixelSize: 14; color: "#e8e8e8" }
+                    Item { Layout.fillWidth: true }
+                    Switch {
+                        checked: musicManager.trackCrossSource || false
+                        onToggled: musicManager.trackCrossSource = checked
+                    }
+                }
+
+                Label {
+                    visible: !musicManager.trackCrossSource
+                    text: "关闭后，在其他列表播放时首页将不再高亮当前曲目。\n点击首页任意歌曲将从首页列表从头播放（含确认弹窗）。"
+                    font.family: fontFamily; font.pixelSize: 11; color: "#777"
+                    wrapMode: Text.WordWrap; Layout.fillWidth: true
+                }
+            }
+        }
+
         Label {
             text: "修改后实时生效，重启后保持设置"
             font.family: fontFamily; font.pixelSize: 12; color: "#666"
@@ -135,8 +163,6 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "appearance"
-        Label { text: "外观设置"; font.family: fontFamily; font.pixelSize: 18; font.bold: true; color: "#f4f4f4" }
-        Item { Layout.preferredHeight: 20 }
 
         // 播放详情页透明度
         Rectangle {
@@ -184,6 +210,58 @@ Rectangle {
             }
         }
 
+        // 模式菜单透明度
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 90; radius: 8
+            color: "#2e2e4a"; border.color: "#3a3a55"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "播放详情页循环模式菜单透明度"
+                        font.family: fontFamily; font.pixelSize: 14; color: "#e8e8e8"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: {
+                            var op = Number(musicManager.menuOpacity)
+                            return Math.round((op > 0 ? op : 0.8) * 100) + "%"
+                        }
+                        font.family: fontFamily; font.pixelSize: 14; color: "#00d4ff"
+                    }
+                }
+
+                Slider {
+                    Layout.fillWidth: true
+                    from: 0.3; to: 1.0; stepSize: 0.01
+                    value: {
+                        var op = Number(musicManager.menuOpacity)
+                        return op > 0 ? op : 0.8
+                    }
+                    onMoved: musicManager.menuOpacity = value
+
+                    background: Rectangle {
+                        x: 0; y: parent.height / 2 - 2
+                        width: parent.width; height: 4; radius: 2; color: "#3a3a55"
+                    }
+                    contentItem: Rectangle {
+                        width: parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from)
+                        height: 4; radius: 2; color: "#00d4ff"
+                        visible: parent.visible
+                    }
+                    handle: Rectangle {
+                        x: parent.leftPadding + parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from) - width / 2
+                        y: parent.height / 2 - height / 2
+                        width: 16; height: 16; radius: 8; color: "#00d4ff"
+                    }
+                }
+            }
+        }
+
         Label {
             text: "修改后立即生效，重启后保持设置"
             font.family: fontFamily; font.pixelSize: 12; color: "#666"
@@ -196,14 +274,14 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "about"
-        Label { text: "关于JustSolo"; font.family: fontFamily; font.pixelSize: 18; font.bold: true; color: "#f4f4f4" }
-        Item { Layout.preferredHeight: 16 }
+        Item { Layout.preferredHeight: 8 }
         Label { text: "Just Solo - 轻量级桌面音乐播放器"; font.family: fontFamily; font.pixelSize: 14; color: "#aaa" }
         Item { Layout.preferredHeight: 4 }
         Label { text: "作者: ZZJ-JACK"; font.family: fontFamily; font.pixelSize: 13; color: "#666" }
         Label { text: `<a href="https://zzjjack.us.kg">https://zzjjack.us.kg</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Item { Layout.preferredHeight: 8 }
         Label { text: "基于 Qt 6.8.3 + QML 构建"; font.family: fontFamily; font.pixelSize: 13; color: "#666" }
+        Label { text: "运行环境: " + (typeof OS_VERSION !== "undefined" ? OS_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#666" }
         Item { Layout.preferredHeight: 8 }
         Label { text: "构建版本: " + BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#666" }
         Item { Layout.preferredHeight: 12 }

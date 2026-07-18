@@ -189,6 +189,14 @@ Window {
                         onClicked: currentMenu = "home"
                     }
                     NavItem {
+                        iconSource: "qrc:/qt/qml/JustSolo/data/image/PlayList.png"
+                        label: "播放列表"
+                        iconW: 34; iconH: 34; iconSrcSize: 26
+                        active: currentMenu === "playlist"
+                        fontFamily: appFont.name
+                        onClicked: currentMenu = "playlist"
+                    }
+                    NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/mylike.png"
                         label: "收藏"
                         iconW: 34; iconH: 34; iconSrcSize: 32
@@ -353,10 +361,11 @@ Window {
                         width: 30; height: 30
                         Image {
                             anchors.centerIn: parent
-                            source: currentMenu === "home" ? "qrc:/qt/qml/JustSolo/data/image/home.png"
-                                   : (currentMenu === "favorite" ? "qrc:/qt/qml/JustSolo/data/image/mylike.png"
-                                   : (currentMenu === "history" ? "qrc:/qt/qml/JustSolo/data/image/history.png"
-                                   : ""))
+                    source: currentMenu === "home" ? "qrc:/qt/qml/JustSolo/data/image/home.png"
+                           : currentMenu === "playlist" ? "qrc:/qt/qml/JustSolo/data/image/PlayList.png"
+                           : currentMenu === "favorite" ? "qrc:/qt/qml/JustSolo/data/image/mylike.png"
+                           : currentMenu === "history" ? "qrc:/qt/qml/JustSolo/data/image/history.png"
+                           : ""
                             sourceSize.width: 28
                             sourceSize.height: 28
                             fillMode: Image.PreserveAspectFit
@@ -376,11 +385,12 @@ Window {
                     Label {
                         text: currentMenu === "" ? "欢迎使用 Just Solo"
                               : currentMenu === "home" ? "首页"
-                              : (currentMenu === "favorite" ? "收藏"
-                              : (currentMenu === "history" ? "历史"
+                              : currentMenu === "playlist" ? "播放列表"
+                              : currentMenu === "favorite" ? "收藏"
+                              : currentMenu === "history" ? "历史"
                               : (settingsSubMenu === "playback" ? "播放设置"
                               : (settingsSubMenu === "update" ? "软件更新"
-                              : (settingsSubMenu === "appearance" ? "外观设置" : "关于JustSolo")))))
+                              : (settingsSubMenu === "appearance" ? "外观设置" : "关于JustSolo")))
                         font.family: appFont.name
                         font.pixelSize: 24
                         font.bold: true
@@ -389,6 +399,42 @@ Window {
                     }
 
                     Item { Layout.fillWidth: true }
+
+                    // ---- 清除播放列表按钮（仅播放列表页） ----
+                    Rectangle {
+                        Layout.preferredHeight: 28; radius: 4
+                        Layout.preferredWidth: clearPlaylistText.contentWidth + 20
+                        color: clearPlaylistMA.containsMouse ? "#3a2a2a" : "transparent"
+                        visible: currentMenu === "playlist"
+                        Label {
+                            id: clearPlaylistText
+                            text: "清除播放列表"; font.family: appFont.name; font.pixelSize: 12; color: "#969696"
+                            anchors.centerIn: parent
+                        }
+                        MouseArea {
+                            id: clearPlaylistMA; anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: musicManager.clearPlaylist()
+                        }
+                    }
+
+                    // ---- 清除所有历史按钮（仅历史页） ----
+                    Rectangle {
+                        Layout.preferredHeight: 28; radius: 4
+                        Layout.preferredWidth: clearBtnText.contentWidth + 20
+                        color: clearBtnMA.containsMouse ? "#3a2a2a" : "transparent"
+                        visible: currentMenu === "history"
+                        Label {
+                            id: clearBtnText
+                            text: "清除所有历史"; font.family: appFont.name; font.pixelSize: 12; color: "#969696"
+                            anchors.centerIn: parent
+                        }
+                        MouseArea {
+                            id: clearBtnMA; anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: musicManager.clearHistory()
+                        }
+                    }
 
                     // ---- 添加音乐按钮（仅首页） ----
                     Rectangle {
@@ -432,11 +478,12 @@ Window {
                     id: pageLoader
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    asynchronous: true
+                    asynchronous: false
                     sourceComponent: {
                         switch (mainWindow.currentMenu) {
                             case "settings": return settingsPageComp
                             case "home": return homePageComp
+                            case "playlist": return playlistPageComp
                             case "favorite": return favoritePageComp
                             case "history": return historyPageComp
                             default: return null
@@ -491,6 +538,15 @@ Window {
     Component {
         id: homePageComp
         HomePage {
+            sidebarWidth: mainWindow.sidebarWidth
+            windowWidth: mainWindow.width
+            fontFamily: appFont.name
+        }
+    }
+
+    Component {
+        id: playlistPageComp
+        PlaylistPage {
             sidebarWidth: mainWindow.sidebarWidth
             windowWidth: mainWindow.width
             fontFamily: appFont.name
