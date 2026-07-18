@@ -8,6 +8,7 @@ import QtQuick.Dialogs
 // ============================================================
 Item {
     anchors.fill: parent
+    property string fontFamily: ""
 
     ColumnLayout {
         id: musicListLayout
