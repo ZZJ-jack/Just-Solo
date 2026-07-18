@@ -119,18 +119,6 @@ ColumnLayout {
         id: histContextMenu
         background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 140 }
         MenuItem {
-            visible: musicManager.playlistSource !== 2
-            enabled: visible
-            height: visible ? implicitHeight : 0
-            contentItem: Row {
-                spacing: 6; anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 8
-                Image { source: "qrc:/qt/qml/JustSolo/data/image/AddToPlayList.png"; width: 16; height: 16; anchors.verticalCenter: parent.verticalCenter }
-                Label { text: "添加到音乐列表"; font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"; anchors.verticalCenter: parent.verticalCenter }
-            }
-            onClicked: { if (historyLayout.rightClickedTrack) musicManager.addToPlaylist(historyLayout.rightClickedTrack) }
-            background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
-        }
-        MenuItem {
             text: "删除历史"
             onClicked: musicManager.removeHistoryItem(historyLayout.rightClickedIndex)
             contentItem: Label { text: "删除历史"; font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }

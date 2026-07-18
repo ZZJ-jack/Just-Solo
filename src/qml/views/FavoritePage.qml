@@ -118,17 +118,7 @@ ColumnLayout {
     // ---- 右键菜单 ----
     Menu {
         id: favContextMenu
-        background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 160 }
-        MenuItem {
-            visible: musicManager.playlistSource !== 1
-            contentItem: Row {
-                spacing: 6; anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 8
-                Image { source: "qrc:/qt/qml/JustSolo/data/image/AddToPlayList.png"; width: 16; height: 16; anchors.verticalCenter: parent.verticalCenter }
-                Label { text: "添加到音乐列表"; font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"; anchors.verticalCenter: parent.verticalCenter }
-            }
-            onClicked: { if (favoriteLayout.rightClickedTrack) musicManager.addToPlaylist(favoriteLayout.rightClickedTrack) }
-            background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
-        }
+        background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 140 }
         MenuItem {
             text: "取消收藏"
             onClicked: musicManager.removeFavorite(favoriteLayout.rightClickedIndex)

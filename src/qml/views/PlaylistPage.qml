@@ -119,6 +119,12 @@ ColumnLayout {
         id: playlistContextMenu
         background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 140 }
         MenuItem {
+            text: "从播放列表删除"
+            onClicked: { if (playlistLayout.rightClickedTrack) musicManager.removeFromPlaylist(playlistLayout.rightClickedTrack) }
+            contentItem: Label { text: "从播放列表删除"; font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+            background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
+        }
+        MenuItem {
             id: plMenuItem
             text: playlistLayout.rightClickedTrack ? (musicManager.isFavorite(playlistLayout.rightClickedTrack) ? "取消收藏" : "收藏") : "收藏"
             onClicked: { if (playlistLayout.rightClickedTrack) musicManager.toggleFavorite(playlistLayout.rightClickedTrack) }

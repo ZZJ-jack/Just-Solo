@@ -721,6 +721,12 @@ QVariantList &MusicManager::currentPlaylist() {
 
 void MusicManager::playIndex(int index) {
     QVariantList &list = currentPlaylist();
+    // 播放队列为空但音乐库有歌 → 自动恢复
+    if (m_playlistSource == 0 && list.isEmpty() && !m_library.isEmpty()) {
+        m_playlist = m_library;
+        list = m_playlist;  // 引用指向新列表
+        emit playlistChanged();
+    }
     if (index < 0 || index >= list.size()) return;
     m_currentIndex = index;
     QVariantMap track = list[index].toMap();
@@ -761,14 +767,36 @@ void MusicManager::setPlaylistSource(int source) {
 
 void MusicManager::addToPlaylist(const QVariantMap &track) {
     if (track.isEmpty() || track["path"].toString().isEmpty()) return;
-    // 去重检查
     QString path = track["path"].toString();
     for (const QVariant &item : m_playlist) {
-        if (item.toMap()["path"].toString() == path) return;  // 已存在
+        if (item.toMap()["path"].toString() == path) return;
     }
     m_playlist.append(track);
     saveCache();
     emit playlistChanged();
+}
+
+void MusicManager::removeFromPlaylist(const QVariantMap &track) {
+    QString path = track["path"].toString();
+    if (path.isEmpty()) return;
+    for (int i = 0; i < m_playlist.size(); i++) {
+        if (m_playlist[i].toMap()["path"].toString() == path) {
+            m_playlist.removeAt(i);
+            if (m_playlistSource == 0 && m_currentIndex == i) {
+                // 正在播放的曲目被删 → 全部清空
+                m_currentIndex = -1;
+                m_currentCover.clear();
+                m_currentAlbum.clear();
+                m_player->stop();
+                emit currentIndexChanged();
+                emit currentTrackChanged();
+            } else if (m_playlistSource == 0 && m_currentIndex > i) {
+                m_currentIndex--;
+            }
+            emit playlistChanged();
+            return;
+        }
+    }
 }
 
 void MusicManager::copyToPlaylist(int source) {

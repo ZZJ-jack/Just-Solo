@@ -108,6 +108,7 @@ public:
 
     // ---- 播放列表操作 ----
     Q_INVOKABLE void addToPlaylist(const QVariantMap &track);     // 追加单曲到播放列表
+    Q_INVOKABLE void removeFromPlaylist(const QVariantMap &track); // 按路径从播放队列删除
     Q_INVOKABLE void copyToPlaylist(int source);                  // 将指定来源列表全部复制到播放列表
 
     Q_INVOKABLE qint64 position() const;

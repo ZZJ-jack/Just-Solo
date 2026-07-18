@@ -563,7 +563,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
 **快捷键**
 - 禁用 F11 最大化
 
-### v0.4.0 — 2026.7.18
+### v0.4.0 （已发布） — 2026.7.18
 
 > 架构升级：多列表播放、播放模式、播放列表页、首页跨来源跟踪、DWM 深色标题栏。
 
@@ -577,7 +577,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
 - 新增「播放列表」侧边栏入口（首页下、收藏上）
 - 模型动态跟随 `playlistSource`，播放收藏/历史时自动切换内容
 - 「清除播放列表」按钮：清空队列、复位底部栏、下次自动从库恢复
-- 左键支持暂停/播放 toggle
+- 左键支持暂停/播放 toggle，右键支持从播放列表删除曲目
 
 **播放模式（5 种）**
 - 新增 `PlayMode` 枚举：顺序播放 / 列表循环 / 单曲循环 / 随机播放 / 关闭循环
