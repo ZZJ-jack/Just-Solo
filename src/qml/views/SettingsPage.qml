@@ -33,15 +33,15 @@ Rectangle {
                 anchors.fill: parent; anchors.margins: 20; spacing: 6
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "软件版本"; font.family: fontFamily; font.pixelSize: 14; color: "#aaa"; Layout.preferredWidth: 72 }
+                    Label { text: "软件版本"; font.family: fontFamily; font.pixelSize: 14; color: "#ccc"; Layout.preferredWidth: 72 }
                     Item { Layout.fillWidth: true }
                     Label { text: APP_VERSION; font.family: fontFamily; font.pixelSize: 14; font.bold: true; color: "#e8e8e8" }
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "构建版本"; font.family: fontFamily; font.pixelSize: 13; color: "#666"; Layout.preferredWidth: 72 }
+                    Label { text: "构建版本"; font.family: fontFamily; font.pixelSize: 13; color: "#999"; Layout.preferredWidth: 72 }
                     Item { Layout.fillWidth: true }
-                    Label { text: BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#aaa" }
+                    Label { text: BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#ccc" }
                 }
             }
         }
@@ -49,9 +49,9 @@ Rectangle {
         Rectangle {
             Layout.preferredWidth: 160; Layout.preferredHeight: 40
             radius: 8; color: "#2a2a3a"; opacity: 0.5
-            Label { anchors.centerIn: parent; text: "检查更新"; font.family: fontFamily; font.pixelSize: 14; color: "#666" }
+            Label { anchors.centerIn: parent; text: "检查更新"; font.family: fontFamily; font.pixelSize: 14; color: "#999" }
         }
-        Label { text: "请前往以下地址查看更新："; font.family: fontFamily; font.pixelSize: 13; color: "#aaa"; Layout.topMargin: 8 }
+        Label { text: "请前往以下地址查看更新："; font.family: fontFamily; font.pixelSize: 13; color: "#ccc"; Layout.topMargin: 8 }
         Label { text: `<a href="https://gitcode.com/ZZJ-JACK/Just-Solo">https://gitcode.com/ZZJ-JACK/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Label { text: `<a href="https://github.com/ZZJ-jack/Just-Solo">https://github.com/ZZJ-jack/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 2; onLinkActivated: Qt.openUrlExternally(link) }
         Item { Layout.fillHeight: true }
@@ -116,7 +116,7 @@ Rectangle {
                         if (off === 0) return "未调整"
                         return "已调整: " + (off > 0 ? "+" : "") + off + "ms"
                     }
-                    font.family: fontFamily; font.pixelSize: 12; color: "#555"
+                    font.family: fontFamily; font.pixelSize: 12; color: "#888"
                 }
             }
         }
@@ -130,22 +130,41 @@ Rectangle {
             color: "#2e2e4a"; border.color: "#3a3a55"
 
             ColumnLayout {
-                anchors.fill: parent; anchors.margins: 20; spacing: 10
+                anchors.fill: parent; anchors.leftMargin: 20; anchors.rightMargin: 20; anchors.topMargin: 12; anchors.bottomMargin: 20; spacing: 10
 
                 RowLayout {
                     Layout.fillWidth: true
                     Label { text: "其他列表播放时首页是否显示对应歌曲"; font.family: fontFamily; font.pixelSize: 14; color: "#e8e8e8" }
                     Item { Layout.fillWidth: true }
                     Switch {
+                        Layout.alignment: Qt.AlignVCenter
                         checked: musicManager.trackCrossSource || false
                         onToggled: musicManager.trackCrossSource = checked
+
+                        indicator: Rectangle {
+                            implicitWidth: 34
+                            implicitHeight: 20
+                            x: parent.leftPadding
+                            y: parent.topPadding + (parent.availableHeight - height) / 2
+                            radius: 10
+                            color: parent.checked ? "#00d4ff" : "#555"
+                            border.color: parent.checked ? "#00b4e0" : "#444"
+
+                            Rectangle {
+                                x: parent.checked ? parent.width - width - 3 : 3
+                                y: (parent.height - height) / 2
+                                width: 14; height: 14; radius: 7
+                                color: "#fff"
+                            }
+                        }
                     }
                 }
 
                 Label {
-                    visible: !musicManager.trackCrossSource
-                    text: "关闭后，在其他列表播放时首页将不再高亮当前曲目。\n点击首页任意歌曲将从首页列表从头播放（含确认弹窗）。"
-                    font.family: fontFamily; font.pixelSize: 11; color: "#777"
+                    text: musicManager.trackCrossSource
+                          ? "开启后，在其他列表播放时首页将同步显示当前歌曲。"
+                          : "关闭后，在其他列表播放时首页将不再高亮当前曲目。\n点击首页任意歌曲将从首页列表从头播放（含确认弹窗）。"
+                    font.family: fontFamily; font.pixelSize: 11; color: "#ccc"
                     wrapMode: Text.WordWrap; Layout.fillWidth: true
                 }
             }
@@ -153,7 +172,7 @@ Rectangle {
 
         Label {
             text: "修改后实时生效，重启后保持设置"
-            font.family: fontFamily; font.pixelSize: 12; color: "#666"
+            font.family: fontFamily; font.pixelSize: 12; color: "#999"
             Layout.topMargin: 8
         }
         Item { Layout.fillHeight: true }
@@ -210,6 +229,8 @@ Rectangle {
             }
         }
 
+        Item { Layout.preferredHeight: 14 }
+
         // 模式菜单透明度
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520
@@ -264,7 +285,7 @@ Rectangle {
 
         Label {
             text: "修改后立即生效，重启后保持设置"
-            font.family: fontFamily; font.pixelSize: 12; color: "#666"
+            font.family: fontFamily; font.pixelSize: 12; color: "#999"
             Layout.topMargin: 8
         }
         Item { Layout.fillHeight: true }
@@ -275,21 +296,21 @@ Rectangle {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "about"
         Item { Layout.preferredHeight: 8 }
-        Label { text: "Just Solo - 轻量级桌面音乐播放器"; font.family: fontFamily; font.pixelSize: 14; color: "#aaa" }
+        Label { text: "Just Solo - 轻量级桌面音乐播放器"; font.family: fontFamily; font.pixelSize: 14; color: "#ccc" }
         Item { Layout.preferredHeight: 4 }
-        Label { text: "作者: ZZJ-JACK"; font.family: fontFamily; font.pixelSize: 13; color: "#666" }
+        Label { text: "作者: ZZJ-JACK"; font.family: fontFamily; font.pixelSize: 13; color: "#999" }
         Label { text: `<a href="https://zzjjack.us.kg">https://zzjjack.us.kg</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Item { Layout.preferredHeight: 8 }
-        Label { text: "基于 Qt 6.8.3 + QML 构建"; font.family: fontFamily; font.pixelSize: 13; color: "#666" }
-        Label { text: "运行环境: " + (typeof OS_VERSION !== "undefined" ? OS_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#666" }
+        Label { text: "基于 Qt 6.8.3 + QML 构建"; font.family: fontFamily; font.pixelSize: 13; color: "#999" }
+        Label { text: "运行环境: " + (typeof OS_VERSION !== "undefined" ? OS_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#999" }
         Item { Layout.preferredHeight: 8 }
-        Label { text: "构建版本: " + BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#666" }
+        Label { text: "构建版本: " + BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#999" }
         Item { Layout.preferredHeight: 12 }
-        Label { text: "项目地址"; font.family: fontFamily; font.pixelSize: 13; color: "#aaa" }
+        Label { text: "项目地址"; font.family: fontFamily; font.pixelSize: 13; color: "#ccc" }
         Label { text: `<a href="https://gitcode.com/ZZJ-JACK/Just-Solo">https://gitcode.com/ZZJ-JACK/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Label { text: `<a href="https://github.com/ZZJ-jack/Just-Solo">https://github.com/ZZJ-jack/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 2; onLinkActivated: Qt.openUrlExternally(link) }
         Item { Layout.preferredHeight: 12 }
-        Label { text: "图标来源: 鸿蒙开发者"; font.family: fontFamily; font.pixelSize: 13; color: "#aaa" }
+        Label { text: "图标来源: 鸿蒙开发者"; font.family: fontFamily; font.pixelSize: 13; color: "#ccc" }
         Label { text: `<a href="https://developer.huawei.com/consumer/cn/">https://developer.huawei.com/consumer/cn</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Item { Layout.fillHeight: true }
     }

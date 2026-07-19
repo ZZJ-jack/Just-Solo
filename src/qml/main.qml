@@ -110,7 +110,7 @@ Window {
                                 text: APP_VERSION
                                 font.family: appFont.name
                                 font.pixelSize: 11
-                                color: "#555"
+                                color: "#999"
                             }
                         }
                     }
