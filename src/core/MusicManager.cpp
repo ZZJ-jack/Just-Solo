@@ -721,31 +721,22 @@ QVariantList &MusicManager::currentPlaylist() {
 
 void MusicManager::playIndex(int index) {
     QVariantList &list = currentPlaylist();
-    // 播放队列为空但音乐库有歌 → 自动恢复
     if (m_playlistSource == 0 && list.isEmpty() && !m_library.isEmpty()) {
         m_playlist = m_library;
-        list = m_playlist;  // 引用指向新列表
+        list = m_playlist;
         emit playlistChanged();
     }
     if (index < 0 || index >= list.size()) return;
     m_currentIndex = index;
     QVariantMap track = list[index].toMap();
     QUrl url = QUrl::fromLocalFile(track["path"].toString());
-    // 同步更新封面/专辑，避免 sourceChanged 异步延迟导致底部栏空白
     m_currentCover = track["cover"].toString();
     m_currentAlbum = track["album"].toString();
     m_player->setSource(url);
     m_player->play();
     emit currentIndexChanged();
     emit currentTrackChanged();
-    // 历史列表 addToHistory 会把当前曲目移到首位 → 修正 currentIndex
-    if (m_playlistSource == 2) {
-        addToHistory(track);
-        m_currentIndex = 0;
-        emit currentIndexChanged();
-    } else {
-        addToHistory(track);
-    }
+    addToHistory(track);
 }
 
 void MusicManager::setPlaylistSource(int source) {
@@ -845,7 +836,6 @@ void MusicManager::next() {
     if (m_playMode == Shuffle) {
         nextIdx = QRandomGenerator::global()->bounded(list.size());
     } else if (m_playMode == Sequential && m_currentIndex + 1 >= list.size()) {
-        // 顺序播放到最后：停止
         m_player->stop();
         emit playbackStateChanged();
         return;
@@ -1237,15 +1227,12 @@ bool MusicManager::isFavorite(const QVariantMap &track) {
 // ============================================================
 
 void MusicManager::addToHistory(const QVariantMap &track) {
-    // 去重：同一文件移到最前面
     QString path = track["path"].toString();
+    // 已存在 → 不重排，保持现有顺序
     for (int i = 0; i < m_history.size(); i++) {
-        if (m_history[i].toMap()["path"].toString() == path) {
-            m_history.removeAt(i);
-            break;
-        }
+        if (m_history[i].toMap()["path"].toString() == path) return;
     }
-    // 限制最大 500 条
+    // 新增 → 插到首位
     while (m_history.size() >= 500)
         m_history.removeLast();
     m_history.prepend(track);
