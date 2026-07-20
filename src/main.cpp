@@ -100,14 +100,15 @@ int main(int argc, char *argv[])
     }
 #endif
 
+#ifdef Q_OS_WIN
+    // SetCurrentProcessExplicitAppUserModelID 必须在创建任何窗口/UI 之前调用
+    // 否则 SMTC 无法正确解析 DisplayName，始终显示"未知应用"
+    SetCurrentProcessExplicitAppUserModelID(L"JustSolo.JustSolo");
+#endif
+
     QGuiApplication app(argc, argv);
     app.setApplicationName("Just Solo");
     app.setApplicationDisplayName("Just Solo");
-
-#ifdef Q_OS_WIN
-    // 设置 AppUserModelID — Windows SMTC 用这个显示应用名，否则显示"未知应用"
-    SetCurrentProcessExplicitAppUserModelID(L"JustSolo.JustSolo");
-#endif
 
     // 设置应用程序图标（任务管理器、窗口图标）
     app.setWindowIcon(QIcon(":/qt/qml/JustSolo/data/image/logo.png"));

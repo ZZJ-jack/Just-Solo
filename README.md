@@ -167,9 +167,6 @@ cmake --build build --config Release
 ```powershell
 # 一键编译 + windeployqt → release/
 .\package.ps1
-
-# 打包为 zip
-Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 ```
 
 ---
@@ -570,6 +567,20 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 **清理**
 - 删除废弃的性能分析报告文件
+
+### v0.4.2 — 2026.7.20
+
+> v0.4.2，SMTC 完善：新增 Timeline 属性支持，修复 NSD 灵动岛歌词同步问题。
+
+**SMTC 增强**
+- 新增 SMTC Timeline 属性推送（Position / EndTime），每 500ms 更新播放进度
+- 切歌时自动初始化 duration，播放/暂停时精确更新 position
+- 修复 `SetCurrentProcessExplicitAppUserModelID` 调用时机，移至 `QGuiApplication` 之前
+- 移除冗余注册表写入（由 InnoSetup 管理）
+
+**兼容性**
+- NSD 灵动岛工具歌词同步恢复正常（Timeline 提供播放位置信息）
+- 通用媒体模式下歌词展示体验对齐 Electron 播放器
 
 ---
 

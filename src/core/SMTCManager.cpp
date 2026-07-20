@@ -14,6 +14,7 @@
 #include <wrl.h>
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
+#include <windows.media.h>          // SMTC 生产者端 ABI (ISystemMediaTransportControls, TimelineProperties)
 #include <windows.media.control.h>
 #include <windows.storage.h>
 #include <windows.storage.streams.h>
@@ -119,6 +120,11 @@ SMTCManager::SMTCManager(MusicManager *manager, HWND hwnd, QObject *parent)
             this, &SMTCManager::onPlaybackStateChanged);
     connect(m_musicManager, &MusicManager::currentTrackChanged,
             this, &SMTCManager::onCurrentTrackChanged);
+
+    // Timeline 定时器：每 500ms 更新 Position，让 NSD 等工具能同步歌词
+    m_timelineTimer = new QTimer(this);
+    m_timelineTimer->setInterval(500);
+    connect(m_timelineTimer, &QTimer::timeout, this, &SMTCManager::updateTimelineTick);
 
     // 初始化 SMTC
     HRESULT hr = initialize(hwnd);
@@ -310,8 +316,21 @@ HRESULT SMTCManager::updateMetadata(const QString &title,
 // ============================================================
 void SMTCManager::onPlaybackStateChanged()
 {
-    if (m_musicManager) {
-        updatePlaybackStatus(m_musicManager->isPlaying());
+    if (!m_musicManager || !m_impl->initialized) return;
+
+    bool playing = m_musicManager->isPlaying();
+    updatePlaybackStatus(playing);
+
+    // 播放时启动定时器持续更新 Position；暂停/停止时关掉
+    if (playing) {
+        if (!m_timelineTimer->isActive())
+            m_timelineTimer->start();
+        // 立即推送一次当前进度
+        updateTimelineTick();
+    } else {
+        m_timelineTimer->stop();
+        // 暂停时也更新一次 position，让外部读取到准确进度
+        updateTimeline(m_musicManager->position(), m_cachedDuration);
     }
 }
 
@@ -327,6 +346,82 @@ void SMTCManager::onCurrentTrackChanged()
              << title << "-" << artist;
 
     updateMetadata(title, artist, cover);
+
+    // 新歌曲：记录总时长，初始化 timeline
+    m_cachedDuration = m_musicManager->duration();
+    updateTimeline(0, m_cachedDuration);
+
+    // 在播放中切歌，确保定时器开着
+    if (m_musicManager->isPlaying() && !m_timelineTimer->isActive())
+        m_timelineTimer->start();
+}
+
+// ============================================================
+//  Timeline 定时器回调
+// ============================================================
+void SMTCManager::updateTimelineTick()
+{
+    if (!m_musicManager || !m_impl->initialized) return;
+
+    qint64 pos = m_musicManager->position();
+    // 缓存 duration（只在 QMediaPlayer 初始化后有效）
+    if (m_cachedDuration <= 0) {
+        m_cachedDuration = m_musicManager->duration();
+    }
+    updateTimeline(pos, m_cachedDuration);
+}
+
+// ============================================================
+//  updateTimeline — 推送 Position / EndTime 到 SMTC
+// ============================================================
+HRESULT SMTCManager::updateTimeline(qint64 positionMs, qint64 durationMs)
+{
+    if (!m_impl->controls) return E_POINTER;
+
+    // UpdateTimelineProperties / put_PlaybackRate 在 ISystemMediaTransportControls2 上
+    ComPtr<ISystemMediaTransportControls2> controls2;
+    HRESULT hr = m_impl->controls.As(&controls2);
+    if (FAILED(hr)) {
+        qDebug() << "[SMTC] QI ISystemMediaTransportControls2 失败:" << Qt::hex << (unsigned long)hr;
+        return hr;
+    }
+
+    // 创建 SystemMediaTransportControlsTimelineProperties 对象
+    ComPtr<IInspectable> inspectable;
+    hr = RoActivateInstance(
+        HStringReference(RuntimeClass_Windows_Media_SystemMediaTransportControlsTimelineProperties).Get(),
+        &inspectable);
+    if (FAILED(hr)) {
+        qDebug() << "[SMTC] RoActivateInstance(TimelineProperties) 失败:" << Qt::hex << (unsigned long)hr;
+        return hr;
+    }
+
+    ComPtr<ISystemMediaTransportControlsTimelineProperties> timelineProps;
+    hr = inspectable.As(&timelineProps);
+    if (FAILED(hr)) {
+        qDebug() << "[SMTC] As(TimelineProperties) 失败:" << Qt::hex << (unsigned long)hr;
+        return hr;
+    }
+
+    // TimeSpan 单位是 100ns，1ms = 10000 个 100ns
+    ABI::Windows::Foundation::TimeSpan posSpan = { positionMs * 10000LL };
+    ABI::Windows::Foundation::TimeSpan endSpan = { durationMs * 10000LL };
+    ABI::Windows::Foundation::TimeSpan zeroSpan = { 0 };
+
+    timelineProps->put_Position(posSpan);
+    timelineProps->put_EndTime(endSpan);
+    timelineProps->put_StartTime(zeroSpan);
+    timelineProps->put_MinSeekTime(zeroSpan);
+    timelineProps->put_MaxSeekTime(endSpan);
+
+    hr = controls2->UpdateTimelineProperties(timelineProps.Get());
+    if (FAILED(hr))
+        qDebug() << "[SMTC] UpdateTimelineProperties 失败:" << Qt::hex << (unsigned long)hr;
+
+    // 同步设置播放速度 1.0x
+    controls2->put_PlaybackRate(1.0);
+
+    return hr;
 }
 
 #endif // Q_OS_WIN
