@@ -10,7 +10,7 @@
 
 Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++ 高性能核心 + QML 现代界面，无 Electron 依赖，内存占用低，冷启动迅速。
 
-同时，Just Solo 已原生支持 Windows SMTC 系统媒体控件，也可配合 [NSD 灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen大佬](https://github.com/GEORGEWWWU) 开发）显示音乐信息与控制播放。
+同时，Just Solo 已原生支持 Windows SMTC 系统媒体控件，可配合 [NSD 灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen大佬](https://github.com/GEORGEWWWU) 开发）显示音乐信息与控制播放（暂请将目标音乐平台设置成通用音频）。
 
 **性能**
 - 平均内存占用 < 150MB（vs Electron 的 500MB+）
@@ -214,7 +214,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 ### v0.0.1-beta.1 - 2026.7.12
 
-> 项目初始化，搭建 Qt 6 + QML 无边框窗口框架与侧边栏导航。
+> v0.0.1-beta.1，项目初始化，搭建 Qt 6 + QML 无边框窗口框架与侧边栏导航。
 
 **新增**
 - 无边框自定义窗口（最小化 / 最大化 / 关闭），保留 Alt+Tab 系统行为
@@ -232,7 +232,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 ### v0.0.1-beta.2 - 2026.7.13
 
-> 新增版本号系统与设置页面，优化侧边栏与窗口体验。
+> v0.0.1-beta.2，新增版本号系统与设置页面，优化侧边栏与窗口体验。
 
 **新增**
 - 软件版本号系统（`0.0.1-beta.2`）与构建时间戳双版本显示
@@ -251,7 +251,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 ### v0.0.2-beta.1（已发行） - 2026.7.14
 
-> 首个已发行预览版：C++ 音乐管理器、QMediaPlayer 元数据解析、播放控制、进度条、多文件导入与完整 UI 交互。
+> v0.0.2-beta.1，首个已发行预览版：C++ 音乐管理器、QMediaPlayer 元数据解析、播放控制、进度条、多文件导入与完整 UI 交互。
 
 **新增**
 - C++ MusicManager 模块：播放 / 暂停 / 上一首 / 下一首 / 播放列表管理
@@ -286,7 +286,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 ### v0.0.2-beta.2 - 2026.7.15
 
-> 自适应布局重构、歌曲去重并补充全量注释。
+> v0.0.2-beta.2，自适应布局重构、歌曲去重并补充全量注释。
 
 **新增**
 - 添加歌曲自动去重：
@@ -310,7 +310,8 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 ### v0.3.0-beta.1（已作为首个正式版本发行） - 2026.7.15
 
-> 大版本重构！代码架构重构为多文件模块化，新增收藏系统、播放历史记录及全量数据本地持久化。本版本作为首个正式版本发行，包含所有主要功能（暂缺播放详情页）。
+> 代码架构重构为多文件模块化，新增收藏、播放历史及全量数据本地存储。
+> 本版本作为首个正式版本发行，包含所有主要功能（暂缺播放详情页）。
 
 **新增**
 
@@ -379,7 +380,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 ### v0.3.5（已发行）— 2026.7.16
 
-> 首个真正意义上的正式版！本版本全新引入播放详情页！现代化ui、设置页扩展、导入加速及全面优化。
+> v0.3.5，首个真正意义上的正式版！本版本全新引入播放详情页！现代化ui、设置页扩展、导入加速及全面优化。
 
 **新增**
 
@@ -451,7 +452,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 ### v0.3.6 — 2026.7.17
 
-> UI 重构：原生标题栏、共享组件、歌词三色、列宽优化。
+> v0.3.6，UI 重构：原生标题栏、共享组件、歌词三色、列宽优化。
 
 **窗口**
 - 系统原生标题栏替代自定义无边框（删除 ~350 行手动实现代码）
@@ -478,7 +479,7 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 
 ### v0.3.7（已发行） — 2026.7.17
 
-> UX 打磨：可拖动进度条、歌词两段式滚动动画、底部栏优化。
+> v0.3.7，UI 打磨：可拖动进度条、歌词两段式滚动动画、底部栏优化。
 
 **进度条**
 - 播放详情页和全局底部栏进度条支持**点击拖动 seek**，随鼠标实时响应
@@ -495,9 +496,9 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 **快捷键**
 - 禁用 F11 最大化
 
-### v0.4.0 （已发布） — 2026.7.18
+### v0.4.0 （已发行） — 2026.7.18
 
-> 架构升级：多列表播放、播放模式、播放列表页、首页跨来源跟踪、DWM 深色标题栏。
+> v0.4.0，架构调整、升级：多列表播放、播放模式、播放列表页、首页跨来源跟踪、DWM 深色标题栏。
 
 **多列表播放架构**
 - 音乐库（`library`）与播放队列（`playlist`）分离，首页展示库不变，播放列表页展示可变队列
@@ -544,9 +545,9 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 - 历史 `addToHistory`/收藏 `prepend` 导致 `currentIndex` 错位
 - 首页歌曲列表高度不一致
 
-### v0.4.1 — 2026.7.20
+### v0.4.1 （已发行） — 2026.7.20
 
-> Windows 系统媒体控件 (SMTC)、播放列表右键删除、UI 视觉优化。
+> v0.4.1，原生支持Windows 系统媒体控件 (SMTC)、播放列表右键删除、UI 优化、操作逻辑优化、修复了v0.4.0发行以后的已知bug。
 
 **系统集成**
 - 新增 Windows 系统媒体传输控件 (SMTC) 支持
@@ -595,4 +596,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
