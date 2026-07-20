@@ -10,6 +10,9 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <dwmapi.h>
+
+// SetCurrentProcessExplicitAppUserModelID 在新 SDK 中声明位置不稳定，手动声明
+extern "C" HRESULT WINAPI SetCurrentProcessExplicitAppUserModelID(PCWSTR AppID);
 #include <io.h>
 #include <fcntl.h>
 
@@ -68,6 +71,7 @@ static void customizeTitleBar(HWND hwnd) {
 
 #include "version.h"
 #include "core/MusicManager.h"
+#include "core/SMTCManager.h"
 
 // APP_VERSION_DISPLAY 由 CMake target_compile_definitions 传入
 // BUILD_VERSION 由 cmake/GenerateVersion.ps1 生成（格式: ts-machineId-vX.Y.Z）
@@ -83,6 +87,9 @@ int main(int argc, char *argv[])
     // --develop 参数：分配控制台用于调试日志
     if (args.contains("--develop")) {
         if (AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole()) {
+            // 设置控制台为 UTF-8，避免 qDebug 中文乱码
+            SetConsoleOutputCP(CP_UTF8);
+            SetConsoleCP(CP_UTF8);
             FILE *dummy;
             freopen_s(&dummy, "CONOUT$", "w", stdout);
             freopen_s(&dummy, "CONOUT$", "w", stderr);
@@ -96,6 +103,11 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     app.setApplicationName("Just Solo");
     app.setApplicationDisplayName("Just Solo");
+
+#ifdef Q_OS_WIN
+    // 设置 AppUserModelID — Windows SMTC 用这个显示应用名，否则显示"未知应用"
+    SetCurrentProcessExplicitAppUserModelID(L"JustSolo.JustSolo");
+#endif
 
     // 设置应用程序图标（任务管理器、窗口图标）
     app.setWindowIcon(QIcon(":/qt/qml/JustSolo/data/image/logo.png"));
@@ -132,12 +144,16 @@ int main(int argc, char *argv[])
     engine.load(url);
 
 #ifdef Q_OS_WIN
-    // 系统原生标题栏深度自定义 — 延迟确保窗口句柄就绪
+    // 系统原生标题栏深度自定义 + SMTC 初始化 — 延迟确保窗口句柄就绪
     if (!engine.rootObjects().isEmpty()) {
         QQuickWindow *win = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
         if (win) {
-            QTimer::singleShot(200, win, [win]() {
-                customizeTitleBar(HWND(win->winId()));
+            QTimer::singleShot(200, win, [win, musicManager]() {
+                HWND hwnd = HWND(win->winId());
+                customizeTitleBar(hwnd);
+
+                // 初始化 Windows 系统媒体控件 (SMTC)
+                new SMTCManager(musicManager, hwnd, musicManager);
             });
         }
     }

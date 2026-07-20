@@ -10,6 +10,8 @@
 
 Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++ 高性能核心 + QML 现代界面，无 Electron 依赖，内存占用低，冷启动迅速。
 
+同时，我们适配了一款[windows灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)，由[Ryenryen大佬](https://github.com/GEORGEWWWU)开发，支持在该灵动岛上使用SMTC来实现显示、控制音乐播放的功能（该软件的目标媒体平台暂请切换至通用音频）。
+
 **性能**
 - 平均内存占用 < 150MB（vs Electron 的 500MB+）
 - 冷启动 < 0.5s
@@ -611,6 +613,32 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
 - 收藏页播放后切换播放列表页闪退
 - 历史 `addToHistory`/收藏 `prepend` 导致 `currentIndex` 错位
 - 首页歌曲列表高度不一致
+
+### v0.4.1 — 2026.7.20
+
+> Windows 系统媒体控件 (SMTC)、播放列表右键删除、UI 视觉优化。
+
+**系统集成**
+- 新增 Windows 系统媒体传输控件 (SMTC) 支持
+- 任务栏音量弹窗、锁屏界面、蓝牙设备显示歌名/歌手/封面
+- 播放/暂停/上一首/下一首系统按键支持
+- 设置 AppUserModelID (JustSolo.JustSolo)
+- 控制台 UTF-8 编码（--develop 模式）
+
+**播放列表**
+- 右键菜单新增「从播放列表删除」
+- 首页播放时自动从音乐库恢复空播放列表
+- 简化 playIndex / addToHistory 逻辑
+
+**UI 优化**
+- 首页布局重构：Item → ColumnLayout，彻底解决溢出
+- 跨来源弹窗改用 Overlay 层，不再挤占布局
+- 跨来源跟踪开关自定义样式（青色滑块）
+- 全局文本颜色层次调整（#555 → #999 等）
+- 收藏/历史页移除冗余"添加到音乐列表"菜单项
+
+**清理**
+- 删除废弃的性能分析报告文件
 
 ---
 

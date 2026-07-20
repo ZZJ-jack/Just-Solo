@@ -4,7 +4,7 @@ project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 # ---- 软件版本号 ----
 set(APP_VERSION_MAJOR 0)
 set(APP_VERSION_MINOR 4)
-set(APP_VERSION_PATCH 0)
+set(APP_VERSION_PATCH 1)
 set(APP_VERSION_PRE   0)   # 0=正式版, >0=beta.N
 
 # 格式化显示版本: v0.3.5 或 v0.3.5-beta.2
@@ -44,6 +44,7 @@ qt_add_executable(JustSolo WIN32
     src/main.cpp
     src/core/MusicManager.cpp
     src/core/MetadataReader.cpp
+    src/core/SMTCManager.cpp
     resources/app.rc
 )
 
@@ -91,9 +92,9 @@ target_link_libraries(JustSolo PRIVATE
     Qt6::Network
 )
 
-# Windows: 链接 DWM API，用于自定义标题栏颜色/边框
+# Windows: DWM API + runtimeobject (SMTC) + shell32 (AUMID)
 if(WIN32)
-    target_link_libraries(JustSolo PRIVATE dwmapi)
+    target_link_libraries(JustSolo PRIVATE dwmapi runtimeobject shlwapi shcore shell32)
 endif()
 
 # 输出目录
