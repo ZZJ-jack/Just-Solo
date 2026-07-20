@@ -10,14 +10,13 @@
 
 Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++ 高性能核心 + QML 现代界面，无 Electron 依赖，内存占用低，冷启动迅速。
 
-同时，我们适配了一款[windows灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)，由[Ryenryen大佬](https://github.com/GEORGEWWWU)开发，支持在该灵动岛上使用SMTC来实现显示、控制音乐播放的功能（该软件的目标媒体平台暂请切换至通用音频）。
+同时，Just Solo 已原生支持 Windows SMTC 系统媒体控件，也可配合 [NSD 灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen大佬](https://github.com/GEORGEWWWU) 开发）显示音乐信息与控制播放。
 
 **性能**
 - 平均内存占用 < 150MB（vs Electron 的 500MB+）
 - 冷启动 < 0.5s
 - 原生 GPU 渲染，60fps 流畅动画
 - `MetadataReader` 二进制解析（~1ms/文件），批处理 8 文件/轮
-- 动态内存调度系统，根据系统内存情况自动调整内存分配
 
 **外观**
 - 完全自主的无边框窗口与自定义控件
@@ -29,27 +28,26 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 - exe 图标内嵌（`app.rc` + `logo.ico`）
 
 **核心功能**
-- 侧边栏导航（首页 / 收藏 / 历史）
-- 设置页面（外观设置 / 播放设置 / 软件更新 / 关于 JustSolo）
+- 侧边栏导航（首页 / 播放列表 / 收藏 / 历史）
+- 播放控制（播放 / 暂停 / 上一首 / 下一首）+ 进度条
+- 5 种播放模式（顺序 / 列表循环 / 单曲循环 / 随机 / 关闭循环）
+- Windows 系统媒体控件 SMTC（任务栏音量弹窗 / 锁屏 / 蓝牙设备）
 - 导入本地音乐，不移动文件、留在原目录
 - 音乐列表展示（封面 / 标题 / 歌手 / 专辑 / 时长 五列对齐）
-- 播放控制（播放 / 暂停 / 上一首 / 下一首）+ 进度条
 - 底部播放栏：封面 + 歌名/歌手 + 控制按钮 + 进度条
 - 添加文件自动去重（路径跳过 / 同歌保留高音质）
 - 音频直通输出，零衰减
 - 音乐收藏：收藏/取消收藏，持久化到 `favorites_cache.json`
-- 播放历史：自动记录，去重置顶上限 500 条，持久化恢复
+- 播放历史：自动记录，去重上限 500 条，持久化恢复
 - 最大化窗口拖拽还原：任意位置点击均能准确定位到鼠标
 
-**播放详情页**（v0.3.5 全新引入，v0.3.6 整段高亮，v0.3.7 拖动 seek + 两段式滚动）
+**播放详情页**
 - 点击封面全屏打开，毛玻璃背景（`ShaderEffectSource` + `MultiEffect`）
-- 整段高亮歌词：主歌词青色 / 翻译金色，三色方案（已播=黄、当前=青、未播=蓝）
-- 两段式歌词滚动：下一句先放大至 40px 预显示，再滚动到位
-- 双语字幕：`.lrc` 外部文件 + FLAC 嵌入 `LYRICS` 双路支持，同时间戳自动合并
-- 歌名超长横向 marquee 滚动
-- 歌词 WordWrap 自动换行，多行逐行展开，行间平滑滚动
-- 底部进度条可点击拖动 seek
-- 透明度可调持久化
+- 三色逐字高亮歌词：已播=黄、当前=青大号、未播=蓝
+- 两段式滚动：下一句先放大预显示，再滚动到位
+- 双语字幕：`.lrc` 外部文件 + FLAC 嵌入双路支持，同时间戳自动合并
+- 歌名超长横向 marquee 滚动，歌词 WordWrap 自动换行
+- 底部进度条可拖动 seek，透明度可调持久化
 
 **工程**
 - 基于 Qt 6.8.3 + QML，原生 C++ 高性能
@@ -81,10 +79,12 @@ Just-Solo/
 ├── src/
 │   ├── main.cpp                # 程序入口
 │   ├── core/
-│   │   ├── MusicManager.h      # C++ 音乐管理器（播放/暂停/切歌/列表/收藏/历史/设置）
+│   │   ├── MusicManager.h      # C++ 音乐管理器（播放/暂停/切歌/列表/收藏/历史/设置/播放模式）
 │   │   ├── MusicManager.cpp
 │   │   ├── MetadataReader.h    # 元数据快速解析（MP3/FLAC/M4A 封面/时长/标签）
-│   │   └── MetadataReader.cpp
+│   │   ├── MetadataReader.cpp
+│   │   ├── SMTCManager.h       # Windows 系统媒体控件（SMTC）管理器
+│   │   └── SMTCManager.cpp
 │   ├── common/                 # 公共工具（预留）
 │   ├── services/               # 业务服务层（预留）
 │   └── qml/
@@ -169,7 +169,7 @@ cmake --build build --config Release
 .\package.ps1
 
 # 打包为 zip
-Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
+Compress-Archive -Path release\* -DestinationPath JustSolo_v0.4.1.zip -Force
 ```
 
 ---
@@ -177,12 +177,13 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
 ## 当前功能
 
 - 无边框自定义窗口（最小化 / 最大化 / 关闭，悬停 ToolTip）
-- 侧边栏导航（首页 / 收藏 / 播放历史）
+- 侧边栏导航（首页 / 播放列表 / 收藏 / 播放历史）
 - 设置页面（外观设置 / 播放设置 / 软件更新 / 关于 JustSolo）
-  - 外观设置：播放详情页透明度滑块
-  - 播放设置：歌词预读偏移滑块（±5ms 步长，持久化）
-  - 关于页：作者信息 / 项目地址 / 图标来源
+  - 外观设置：播放详情页透明度滑块、模式菜单透明度滑块
+  - 播放设置：歌词预读偏移滑块（±5ms 步长，持久化）、跨来源跟踪开关
+  - 关于页：作者信息 / 项目地址 / 运行环境 / 图标来源
   - 软件更新页：GitCode / GitHub 仓库链接
+- Windows 系统媒体控件 (SMTC)：任务栏音量弹窗 / 锁屏 / 蓝牙显示歌名歌手封面
 - 导入本地音乐（单选 / 多选），`MetadataReader` 加速解析，**自动去重**
   - 同一文件路径跳过
   - 不同文件同一首歌保留音质更高版本
@@ -190,21 +191,19 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
 - 音乐列表五列对齐，**列宽随窗口自适应**：封面 / 标题 / 歌手 / 专辑 / 时长
 - 标题行显示音质标签（极低 / 标准 / 高品质 / 无损 / 高解析 / 母带 / 空间音频）
 - 播放控制（播放 / 暂停 / 上一首 / 下一首）
+- 5 种播放模式（顺序 / 列表循环 / 单曲循环 / 随机 / 关闭循环）
 - 播放进度条（支持点击拖动 seek）+ 当前时间 / 总时长
 - 底部播放栏：封面 + 歌名/歌手自适应填充 + 控制按钮 + 进度条（固定窗口 1/3）
 - **播放详情页**：点击封面打开，毛玻璃背景 + 封面/歌名/歌手/专辑 + 逐字高亮歌词
-  - 歌名超长横向 marquee 滚动
-  - 逐字进度绑定 `musicManager.position` 每帧更新，`lyricOffset` 可调节奏
-  - 主歌词蓝色高光 + 翻译金色高光，已播行全显示
-  - 歌词 WordWrap 自动换行，约 5 句居中，行间平滑滚动
+  - 三色方案：已播=黄 / 当前=青（58px）/ 未播=蓝
+  - 两段式滚动：下一句先放大预显示，再滚动到位
+  - 歌词 WordWrap 自动换行，行间平滑滚动
   - 透明度可调持久化
-- **双语字幕**：`.lrc` 外部文件 + FLAC 嵌入 `LYRICS` 双路支持
-  - 同毫秒双行合并，1-3 位 CS 全容错
+- **双语字幕**：`.lrc` 外部文件 + FLAC 嵌入 `LYRICS` 双路支持，同时间戳自动合并
 - 音频直通输出
 - 开发者模式 `--develop`
 - 灰色 / 青色暗色主题
 - HarmonyOS Sans 内置字体
-- CMake 构建系统 + windeployqt 部署
 - exe 图标内嵌（`app.rc` + `logo.ico`）
 - 进程完全退出（`shutdown()` + `QCoreApplication::exit(0)`）
 - 最大化拖拽还原精准跟随鼠标
@@ -312,75 +311,6 @@ Compress-Archive -Path release\* -DestinationPath JustSolo_v0.3.5.zip -Force
 ### v0.3.0-beta.1（已作为首个正式版本发行） - 2026.7.15
 
 > 大版本重构！代码架构重构为多文件模块化，新增收藏系统、播放历史记录及全量数据本地持久化。本版本作为首个正式版本发行，包含所有主要功能（暂缺播放详情页）。
-
-**新增**
-
-**代码重构**
-- 所有页面视图从 `main.qml` 内联组件拆分为独立 QML 文件：`src/qml/views/{HomePage,FavoritePage,HistoryPage,SettingsPage}.qml`
-- `NavItem` / `SubNavItem` 组件拆分为独立文件：`src/qml/components/{NavItem,SubNavItem}.qml`
-- 清理 `.gitkeep` 占位文件
-
-**音乐收藏系统**
-- `MusicManager` 新增 `favorites` 属性 + `favoritesChanged` 信号
-- `toggleFavorite(track)`: 有则删除、无则新增，写入 `favorites_cache.json`
-- `removeFavorite(index)`: 按索引删除
-- `isFavorite(track)`: 检查是否已收藏，供 UI 判断图标状态
-
-**播放历史系统**
-- `MusicManager` 新增 `history` 属性 + `historyChanged` 信号
-- `addToHistory(track)`: 播放时自动调用，同文件去重置顶，上限 500 条
-- `clearHistory()` / `removeHistoryItem(index)`: 清空/单项删除
-- 历史页右上角「清空全部历史」按钮（列表外部独立定位）
-- 持久化到 `history_cache.json`，启动自动恢复
-
-**数据持久化**
-- 新增通用 JSON 读写工具函数 `writeVariantListToFile` / `readVariantListFromFile`
-- 播放列表缓存 `playlist_cache.json`，添加/删除/清空歌曲时自动保存
-- 启动时自动加载缓存，自动跳过已删除/移动的文件
-- 路径：`%APPDATA%/Just Solo/`（Windows），`~/.local/share/Just Solo/`（Linux/macOS）
-- `--develop` 模式每次启动先删除缓存目录，从零开始
-
-**导入体验**
-- `MusicManager` 新增 `importProgress` / `importProcessed` / `importTotal` 属性
-- 导入时显示 Loader 覆盖层：文件名 + 处理进度（N/M）+ 带渐变动画的进度条
-- 百分比实时更新，导入完成后 Loader 自动失活销毁释放内存
-- 支持增量添加（追加文件时 total 自动累加）
-
-**封面存储策略**
-- 原画质 JPEG 从 `QStandardPaths::CacheLocation`（可被系统清理）迁移到 `AppDataLocation`（持久保留）
-- `cacheDir()` 重命名为 `coverDir()`，体现持久化语义
-
-**变更**
-- 版本号：v0.0.2-beta.2 → v0.3.0-beta.1
-- `CMakeLists.txt`: 移除内联编译依赖，所有 QML 文件加入 `.qrc`
-- `main.qml`: 从 ~1000+ 行精简至 ~840 行，NavItem/SubNavItem 组件定义移除
-- 播放按钮改用 opacity 淡入淡出动画替代 visible 切换
-- 播放按钮中心 Rectangle 添加 hover 颜色动画
-- 进度条圆角宽度变化添加 300ms EaseOutCubic 动画
-- `toggleMaximize()` 还原窗口时保留 X 坐标（之前强制设 lastGeo.x）
-- `play.png` 图标重新导出（1422→2381 字节）
-
-**优化**
-- 封面内存大幅降低：列表 delegate 中 `sourceSize: 30×30`（~0.9KB/张），播放栏 `40×40`（~1.6KB/张），不再按原始分辨率解码 GPU 纹理
-- 行高从 60px 降至 50px，内边距同步缩小，同屏可展示更多歌曲
-- 全部文字颜色微调提亮：标题 `#ccc→#d4d4d4`，歌手/时长 `#888→#969696`，专辑 `#777→#888`，空状态文字 `#666→#757575`
-- 列表行内容上下居中，封面与左边缘保留 8px 间距
-- 导入完成后 `Loader` 自动失活销毁覆盖层，释放相关内存
-
-**修复**
-- 封面图片未按 `Rectangle` 容器尺寸裁剪 → 添加 `anchors.fill: parent`
-- delegate 销毁时 `memReleaseTimer.restart()` 空指针崩溃 → 添加 null 检查
-- 最大化窗口从右侧拖拽还原时窗口不跟随鼠标 → 改为按比例计算定位
-- 滚动条滑块尺寸为 0 不可见 → `contentItem` 从嵌套结构改为直接 `Rectangle`
-- RowLayout 未 `anchors.fill: parent` 导致内容贴边、垂直不居中
-
-**变更**
-- 版本号升至 v0.3.0-beta.1，作为首个正式版本发行
-- 当前功能列表新增封面缓存策略、历史持久化、窗口拖拽说明
-
-### v0.3.0-beta.1（已作为首个正式版本发行） - 2026.7.15
-
-> 大版本重构！代码架构重构为多文件模块化，新增收藏系统、播放历史记录及全量数据本地持久化，作为首个正式版本发行。
 
 **新增**
 
