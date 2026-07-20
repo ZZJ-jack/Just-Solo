@@ -493,7 +493,7 @@ cmake --build build --config Release
 **快捷键**
 - 禁用 F11 最大化
 
-### v0.4.0 （已发行） — 2026.7.18
+### v0.4.0（已发行） — 2026.7.18
 
 > v0.4.0，架构调整、升级：多列表播放、播放模式、播放列表页、首页跨来源跟踪、DWM 深色标题栏。
 
@@ -542,7 +542,7 @@ cmake --build build --config Release
 - 历史 `addToHistory`/收藏 `prepend` 导致 `currentIndex` 错位
 - 首页歌曲列表高度不一致
 
-### v0.4.1 （已发行） — 2026.7.20
+### v0.4.1（已发行） — 2026.7.20
 
 > v0.4.1，原生支持Windows 系统媒体控件 (SMTC)、播放列表右键删除、UI 优化、操作逻辑优化、修复了v0.4.0发行以后的已知bug。
 
@@ -568,7 +568,7 @@ cmake --build build --config Release
 **清理**
 - 删除废弃的性能分析报告文件
 
-### v0.4.2 — 2026.7.20
+### v0.4.2（已发行） — 2026.7.20
 
 > v0.4.2，SMTC 完善：新增 Timeline 属性支持，修复 NSD 灵动岛歌词同步问题。
 
@@ -579,8 +579,8 @@ cmake --build build --config Release
 - 移除冗余注册表写入（由 InnoSetup 管理）
 
 **兼容性**
-- NSD 灵动岛工具歌词同步恢复正常（Timeline 提供播放位置信息）
-- 通用媒体模式下歌词展示体验对齐 Electron 播放器
+- NSD灵动岛工具歌词同步恢复正常（Timeline 提供播放位置信息）
+- NSD灵动岛工具在通用媒体模式下歌词展示体验对齐 Electron 播放器
 
 ---
 
