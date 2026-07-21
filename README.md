@@ -1,10 +1,27 @@
 # Just Solo
 
+<div align="center">
+
+<img src="./data/image/logo.png" alt="Just Solo" width="150" />
+
+**Just Solo** —— 轻量 · 纯粹
+
+[![Qt](https://img.shields.io/badge/Qt-6.8.3-brightgreen?logo=qt)](https://www.qt.io)
+[![C++](https://img.shields.io/badge/C++-17-blue?logo=cplusplus)](https://isocpp.org)
+[![QML](https://img.shields.io/badge/QML-6.8-orange?logo=qt)](https://doc.qt.io/qt-6/qmlapplications.html)
+[![CMake](https://img.shields.io/badge/CMake-3.20+-064F8C?logo=cmake)](https://cmake.org)
+[![License](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://www.microsoft.com/windows)
+
+</div>
+
 **轻量级桌面音乐播放器** —— 基于 Qt 6.8.3 + QML 构建。
 
 **作者**: ZZJ-JACK ([zzjjack.us.kg](https://zzjjack.us.kg))
 
 **仓库**: [GitCode](https://gitcode.com/ZZJ-JACK/Just-Solo) | [Gitee](https://gitee.com/zzj-jack/just-solo) | [GitHub](https://github.com/ZZJ-jack/Just-Solo)
+
+### 下载即用：前往 Releases 下载最新 .exe 安装包，双击即可使用。
 
 ## 项目简介
 
