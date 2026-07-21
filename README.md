@@ -16,13 +16,13 @@
 
 <img src="./data/image/photo-1.png" alt="Photo 1"/>
 
-<font size="1">PS：本示范图片仅用于展示功能，歌曲版权所属原作者</font>
+<font size="1">PS：本示范图片仅用于展示功能，歌曲版权属于原作者</font>
 
-**轻量级桌面音乐播放器** —— 基于 Qt 6.8.3 + QML 构建。
+## **轻量级桌面音乐播放器** —— 基于 Qt 6.8.3 + QML 构建。
 
-**作者**: ZZJ-JACK ([zzjjack.us.kg](https://zzjjack.us.kg))
+### **作者**: ZZJ-JACK ([zzjjack.us.kg](https://zzjjack.us.kg))
 
-**仓库**: [GitCode](https://gitcode.com/ZZJ-JACK/Just-Solo) | [Gitee](https://gitee.com/zzj-jack/just-solo) | [GitHub](https://github.com/ZZJ-jack/Just-Solo)
+### **仓库**: [GitCode](https://gitcode.com/ZZJ-JACK/Just-Solo) | [Gitee](https://gitee.com/zzj-jack/just-solo) | [GitHub](https://github.com/ZZJ-jack/Just-Solo)
 
 ### 下载即用：前往 Releases 下载最新 .exe 安装包，双击即可使用。
 
