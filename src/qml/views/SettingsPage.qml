@@ -14,6 +14,22 @@ Rectangle {
     property string settingsSubMenu: "appearance"
     property string fontFamily: ""
 
+    // ---- 快捷键捕获（顶层统一处理，绕过 Repeater 焦点域） ----
+    property int capturingHkId: -1  // -1 = 不在捕获状态
+    focus: false
+
+    Keys.onPressed: function(event) {
+        if (capturingHkId < 0) return
+        // 纯修饰键忽略
+        if (event.key === Qt.Key_Control || event.key === Qt.Key_Alt ||
+            event.key === Qt.Key_Shift || event.key === Qt.Key_Meta)
+            return
+        hotkeyManager.setHotkey(capturingHkId, event.key, event.modifiers)
+        capturingHkId = -1
+        focus = false
+        event.accepted = true
+    }
+
     // ---- 软件更新 ----
     ColumnLayout {
         anchors.fill: parent; spacing: 0
@@ -165,6 +181,179 @@ Rectangle {
                           ? "开启后，在其他列表播放时首页将同步显示当前歌曲。"
                           : "关闭后，在其他列表播放时首页将不再高亮当前曲目。\n点击首页任意歌曲将从首页列表从头播放（含确认弹窗）。"
                     font.family: fontFamily; font.pixelSize: 11; color: "#ccc"
+                    wrapMode: Text.WordWrap; Layout.fillWidth: true
+                }
+            }
+        }
+    }
+
+    // ---- 快捷键设置 ----
+    ColumnLayout {
+        anchors.fill: parent; spacing: 0
+        visible: settingsSubMenu === "hotkeys"
+
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 280
+            radius: 8
+            color: "#2e2e4a"; border.color: "#3a3a55"
+
+            ColumnLayout {
+                id: hotkeyCol
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                Label {
+                    text: "全局快捷键"
+                    font.family: fontFamily; font.pixelSize: 14; font.bold: true; color: "#f0f0f0"
+                }
+
+                // 三行快捷键
+                Column {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    Repeater {
+                        model: [
+                            { label: "播放 / 暂停", id: 0 },
+                            { label: "下一首",       id: 1 },
+                            { label: "上一首",       id: 2 }
+                        ]
+
+                        delegate: Rectangle {
+                            id: hotkeyRow
+                            width: parent.width
+                            height: 38
+                            color: "transparent"
+
+                            property int hkId: modelData.id
+                            property bool capturing: settingsRoot.capturingHkId === hkId
+
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 8
+
+                                Label {
+                                    text: modelData.label
+                                    font.family: fontFamily; font.pixelSize: 14; color: "#ccc"
+                                    Layout.preferredWidth: 100
+                                }
+
+                                // 显示/捕获区域
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 30
+                                    radius: 6
+                                    color: hotkeyRow.capturing ? "#3a3a5a" : (hkMA.containsMouse ? "#333350" : "#2a2a48")
+                                    border.color: hotkeyRow.capturing ? "#00d4ff" : "#3a3a55"
+                                    border.width: hotkeyRow.capturing ? 2 : 1
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: hotkeyRow.capturing ? "按下快捷键..." : hotkeyRow.buildDisplayText()
+                                        font.family: fontFamily; font.pixelSize: 13
+                                        color: hotkeyRow.capturing ? "#00d4ff" : "#ddd"
+                                    }
+
+                                    MouseArea {
+                                        id: hkMA
+                                        anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (hotkeyRow.capturing) {
+                                                settingsRoot.capturingHkId = -1
+                                                settingsRoot.focus = false
+                                            } else {
+                                                settingsRoot.capturingHkId = hkId
+                                                settingsRoot.focus = true
+                                                settingsRoot.forceActiveFocus()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 重置按钮
+                                Rectangle {
+                                    Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 4
+                                    color: resetMA.containsMouse ? "#4a3a3a" : "transparent"
+                                    visible: !hotkeyRow.capturing
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "↺"
+                                        font.family: fontFamily; font.pixelSize: 16; color: "#888"
+                                    }
+                                    MouseArea {
+                                        id: resetMA
+                                        anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: hotkeyRow.resetDefault()
+                                    }
+                                }
+                            }
+
+                            function keyName(k) {
+                                if (k >= Qt.Key_A && k <= Qt.Key_Z) return String.fromCharCode(k)
+                                if (k >= Qt.Key_F1 && k <= Qt.Key_F24) return "F" + (k - Qt.Key_F1 + 1)
+                                var map = {
+                                    [Qt.Key_Space]: "Space",
+                                    [Qt.Key_Left]: "←",
+                                    [Qt.Key_Right]: "→",
+                                    [Qt.Key_Up]: "↑",
+                                    [Qt.Key_Down]: "↓",
+                                    [Qt.Key_Escape]: "Esc",
+                                    [Qt.Key_Return]: "Enter",
+                                    [Qt.Key_Tab]: "Tab",
+                                    [Qt.Key_Delete]: "Del",
+                                    [Qt.Key_Insert]: "Ins",
+                                    [Qt.Key_Home]: "Home",
+                                    [Qt.Key_End]: "End",
+                                    [Qt.Key_PageUp]: "PgUp",
+                                    [Qt.Key_PageDown]: "PgDn",
+                                    [Qt.Key_Backspace]: "Back",
+                                    [Qt.Key_MediaPlay]: "MediaPlay",
+                                    [Qt.Key_MediaNext]: "MediaNext",
+                                    [Qt.Key_MediaPrevious]: "MediaPrev",
+                                    [Qt.Key_Comma]: ",",
+                                    [Qt.Key_Period]: ".",
+                                    [Qt.Key_Minus]: "-",
+                                    [Qt.Key_Plus]: "+",
+                                    [Qt.Key_Semicolon]: ";",
+                                    [Qt.Key_Slash]: "/"
+                                }
+                                return map[k] || ""
+                            }
+
+                            function buildDisplayText() {
+                                var k = hotkeyManager.hotkeyKey(hkId)
+                                var m = hotkeyManager.hotkeyMods(hkId)
+                                if (!k) return "点击设置"
+                                var parts = []
+                                if (m & Qt.ControlModifier) parts.push("Ctrl")
+                                if (m & Qt.AltModifier) parts.push("Alt")
+                                if (m & Qt.ShiftModifier) parts.push("Shift")
+                                if (m & Qt.MetaModifier) parts.push("Win")
+                                var n = keyName(k)
+                                if (n) parts.push(n)
+                                return parts.join(" + ")
+                            }
+
+                            function resetDefault() {
+                                var mods = Qt.ControlModifier | Qt.AltModifier
+                                var defaults = [
+                                    { key: Qt.Key_Space, mods: mods },
+                                    { key: Qt.Key_Right, mods: mods },
+                                    { key: Qt.Key_Left,  mods: mods }
+                                ]
+                                var d = defaults[hkId]
+                                hotkeyManager.setHotkey(hkId, d.key, d.mods)
+                            }
+                        }
+                    }
+                }
+
+                Label {
+                    text: "修改后实时生效。建议设置带修饰键的组合（如 Ctrl+Alt+P）避免与其他软件冲突。"
+                    font.family: fontFamily; font.pixelSize: 11; color: "#999"
                     wrapMode: Text.WordWrap; Layout.fillWidth: true
                 }
             }

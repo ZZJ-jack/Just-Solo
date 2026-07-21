@@ -593,7 +593,7 @@ void MusicManager::processNextPending() {
     }
 
     // 批处理：每轮处理最多 BATCH_SIZE 个快路径文件，减少事件循环轮次
-    static const int BATCH_SIZE = 8;
+    static const int BATCH_SIZE = 10;
     int processed = 0;
     bool playlistModified = false;
 
@@ -849,10 +849,6 @@ void MusicManager::next() {
     int nextIdx;
     if (m_playMode == Shuffle) {
         nextIdx = QRandomGenerator::global()->bounded(list.size());
-    } else if (m_playMode == Sequential && m_currentIndex + 1 >= list.size()) {
-        m_player->stop();
-        emit playbackStateChanged();
-        return;
     } else {
         nextIdx = (m_currentIndex + 1) % list.size();
     }

@@ -277,6 +277,12 @@ Window {
                         onClicked: settingsSubMenu = "playback"
                     }
                     SubNavItem {
+                        label: "快捷键设置"
+                        active: settingsSubMenu === "hotkeys"
+                        fontFamily: appFont.name
+                        onClicked: settingsSubMenu = "hotkeys"
+                    }
+                    SubNavItem {
                         label: "软件更新"
                         active: settingsSubMenu === "update"
                         fontFamily: appFont.name
@@ -592,8 +598,9 @@ Window {
                               : currentMenu === "favorite" ? "收藏"
                               : currentMenu === "history" ? "历史"
                               : (settingsSubMenu === "playback" ? "播放设置"
+                              : (settingsSubMenu === "hotkeys" ? "快捷键设置"
                               : (settingsSubMenu === "update" ? "软件更新"
-                              : (settingsSubMenu === "appearance" ? "外观设置" : "关于JustSolo")))
+                              : (settingsSubMenu === "appearance" ? "外观设置" : "关于JustSolo"))))
                         font.family: appFont.name
                         font.pixelSize: 24
                         font.bold: true

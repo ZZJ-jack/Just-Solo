@@ -6,6 +6,7 @@
 #include <QQuickWindow>
 #include <QStringList>
 #include <QTimer>
+#include <QStandardPaths>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -72,6 +73,7 @@ static void customizeTitleBar(HWND hwnd) {
 #include "version.h"
 #include "core/MusicManager.h"
 #include "core/SMTCManager.h"
+#include "core/HotkeyManager.h"
 
 // APP_VERSION_DISPLAY 由 CMake target_compile_definitions 传入
 // BUILD_VERSION 由 cmake/GenerateVersion.ps1 生成（格式: ts-machineId-vX.Y.Z）
@@ -128,6 +130,18 @@ int main(int argc, char *argv[])
     MusicManager *musicManager = new MusicManager(&app);
     musicManager->setUseCache(!args.contains("--develop"));
     engine.rootContext()->setContextProperty("musicManager", musicManager);
+
+    // 全局快捷键
+    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    HotkeyManager *hotkeyManager = new HotkeyManager(cacheDir, &app);
+    QObject::connect(hotkeyManager, &HotkeyManager::playPauseTriggered, musicManager, [musicManager]() {
+        if (musicManager->currentIndex() < 0) return;
+        if (musicManager->isPlaying()) musicManager->pause();
+        else musicManager->play();
+    });
+    QObject::connect(hotkeyManager, &HotkeyManager::nextTriggered, musicManager, &MusicManager::next);
+    QObject::connect(hotkeyManager, &HotkeyManager::previousTriggered, musicManager, &MusicManager::previous);
+    engine.rootContext()->setContextProperty("hotkeyManager", hotkeyManager);
 
     // 从 QML 模块加载主界面
     const QUrl url(QStringLiteral("qrc:/qt/qml/JustSolo/src/qml/main.qml"));
