@@ -65,10 +65,21 @@ Window {
             var t = lib[i]
             var name = (t.name || "").toLowerCase()
             var artist = (t.artist || "").toLowerCase()
-            if (name.indexOf(searchText) >= 0 || artist.indexOf(searchText) >= 0)
-                res.push({ index: i, name: t.name || "未知", artist: t.artist || "未知", cover: t.cover || "" })
+            var album = (t.album || "").toLowerCase()
+            if (name.indexOf(searchText) >= 0 || artist.indexOf(searchText) >= 0 || album.indexOf(searchText) >= 0)
+                res.push({ index: i, name: t.name || "未知", artist: t.artist || "未知", album: t.album || "" })
         }
         searchResults = res
+    }
+
+    function onSearchResultClicked(libraryIndex) {
+        // 切到首页
+        currentMenu = "home"
+        // 播放并滚动定位
+        musicManager.playFromLibrary(libraryIndex)
+        searchScrollIndex = libraryIndex
+        searchInput.focus = false
+        searchPopup.close()
     }
 
     // ============================================================
@@ -323,11 +334,11 @@ Window {
                 anchors.rightMargin: 30
                 spacing: 0
 
-                // -------- 搜索框行（仅首页/收藏/历史可见） --------
+                // -------- 搜索框行（全部页面可见） --------
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 16
-                    visible: currentMenu !== "settings"
+                    visible: true
 
                     Rectangle {
                         Layout.preferredWidth: Math.min(mainWindow.width * 0.35, 420)
@@ -360,25 +371,29 @@ Window {
                                 clip: true
                                 verticalAlignment: TextInput.AlignVCenter
                                 onTextChanged: mainWindow.updateSearch(text)
+                                onActiveFocusChanged: {
+                                    if (activeFocus && text.trim().length > 0)
+                                        searchPopup.open()
+                                }
 
                                 Text {
                                     text: "搜索本地音乐..."
                                     font.family: appFont.name
                                     font.pixelSize: 15
                                     color: "#555"
-                                    visible: !parent.text
+                                    visible: !parent.text && !parent.inputMethodComposing
                                 }
                             }
 
                             // ---- 搜索下拉结果 ----
                             Popup {
                                 id: searchPopup
-                                x: 0
+                                x: (parent.width - width) / 2
                                 y: parent.height + 4
-                                width: parent.width
+                                width: Math.max(parent.width + 120, 420)
                                 padding: 0
                                 closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                                visible: currentMenu === "home" && searchInput.text.trim().length > 0
+                                visible: searchInput.text.trim().length > 0
 
                                 background: Rectangle {
                                     color: "#222236"
@@ -413,16 +428,84 @@ Window {
                                                 anchors.leftMargin: 14; anchors.rightMargin: 14
                                                 spacing: 8
 
-                                                Label {
-                                                    text: modelData.name
-                                                    font.family: appFont.name; font.pixelSize: 14; color: "#cccccc"
-                                                    Layout.fillWidth: true; elide: Text.ElideRight
+                                                // ---- 歌名：超长滚动 ----
+                                                Item {
+                                                    Layout.fillWidth: true; Layout.fillHeight: true; clip: true
+
+                                                    Text {
+                                                        id: nameText
+                                                        text: modelData.name
+                                                        font.family: appFont.name; font.pixelSize: 14; color: "#cccccc"
+                                                        y: (parent.height - height) / 2
+                                                        x: 0
+
+                                                        SequentialAnimation on x {
+                                                            running: nameText.contentWidth > 0 && nameText.parent && nameText.parent.width > 0 && nameText.contentWidth > nameText.parent.width
+                                                            loops: Animation.Infinite
+                                                            NumberAnimation {
+                                                                from: nameText.parent ? nameText.parent.width : 0
+                                                                to: -nameText.contentWidth
+                                                                duration: Math.max(8000, ((nameText.parent ? nameText.parent.width : 0) + nameText.contentWidth) * 15)
+                                                                easing.type: Easing.Linear
+                                                            }
+                                                            PropertyAnimation { property: "x"; to: nameText.parent ? nameText.parent.width : 0; duration: 0 }
+                                                        }
+                                                    }
                                                 }
-                                                Label {
-                                                    text: modelData.artist
-                                                    font.family: appFont.name; font.pixelSize: 12; color: "#888"
-                                                    Layout.preferredWidth: Math.max(60, parent.width * 0.3)
-                                                    elide: Text.ElideRight; horizontalAlignment: Text.AlignRight
+
+                                                // ---- 歌手：超长滚动 ----
+                                                Item {
+                                                    Layout.preferredWidth: Math.max(90, parent.width * 0.26)
+                                                    Layout.fillHeight: true; clip: true
+
+                                                    Text {
+                                                        id: artistText
+                                                        text: modelData.artist
+                                                        font.family: appFont.name; font.pixelSize: 13; color: "#888"
+                                                        y: (parent.height - height) / 2
+                                                        x: 0
+                                                        horizontalAlignment: Text.AlignRight
+
+                                                        SequentialAnimation on x {
+                                                            running: artistText.contentWidth > 0 && artistText.parent && artistText.parent.width > 0 && artistText.contentWidth > artistText.parent.width
+                                                            loops: Animation.Infinite
+                                                            NumberAnimation {
+                                                                from: artistText.parent ? artistText.parent.width : 0
+                                                                to: -artistText.contentWidth
+                                                                duration: Math.max(6000, ((artistText.parent ? artistText.parent.width : 0) + artistText.contentWidth) * 12)
+                                                                easing.type: Easing.Linear
+                                                            }
+                                                            PropertyAnimation { property: "x"; to: artistText.parent ? artistText.parent.width : 0; duration: 0 }
+                                                        }
+                                                    }
+                                                }
+
+                                                // ---- 专辑：超长滚动 ----
+                                                Item {
+                                                    Layout.preferredWidth: Math.max(90, parent.width * 0.26)
+                                                    Layout.fillHeight: true; clip: true
+                                                    visible: modelData.album !== ""
+
+                                                    Text {
+                                                        id: albumText
+                                                        text: modelData.album
+                                                        font.family: appFont.name; font.pixelSize: 13; color: "#666"
+                                                        y: (parent.height - height) / 2
+                                                        x: 0
+                                                        horizontalAlignment: Text.AlignRight
+
+                                                        SequentialAnimation on x {
+                                                            running: albumText.contentWidth > 0 && albumText.parent && albumText.parent.width > 0 && albumText.contentWidth > albumText.parent.width
+                                                            loops: Animation.Infinite
+                                                            NumberAnimation {
+                                                                from: albumText.parent ? albumText.parent.width : 0
+                                                                to: -albumText.contentWidth
+                                                                duration: Math.max(6000, ((albumText.parent ? albumText.parent.width : 0) + albumText.contentWidth) * 12)
+                                                                easing.type: Easing.Linear
+                                                            }
+                                                            PropertyAnimation { property: "x"; to: albumText.parent ? albumText.parent.width : 0; duration: 0 }
+                                                        }
+                                                    }
                                                 }
                                             }
 
@@ -430,12 +513,7 @@ Window {
                                                 id: searchHover
                                                 anchors.fill: parent; hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    musicManager.playFromLibrary(modelData.index)
-                                                    mainWindow.searchScrollIndex = modelData.index
-                                                    searchInput.focus = false
-                                                    searchPopup.close()
-                                                }
+                                                onClicked: mainWindow.onSearchResultClicked(modelData.index)
                                             }
                                         }
                                     }
