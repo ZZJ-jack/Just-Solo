@@ -48,6 +48,29 @@ Window {
     // ---- 播放详情页控制 ----
     property bool showPlayerDetail: false
 
+    // ---- 搜索 ----
+    property string searchText: ""
+    property var searchResults: []
+    property int searchScrollIndex: -1
+
+    function updateSearch(text) {
+        searchText = text.toLowerCase().trim()
+        if (!searchText) {
+            searchResults = []
+            return
+        }
+        var lib = musicManager.library
+        var res = []
+        for (var i = 0; i < lib.length; i++) {
+            var t = lib[i]
+            var name = (t.name || "").toLowerCase()
+            var artist = (t.artist || "").toLowerCase()
+            if (name.indexOf(searchText) >= 0 || artist.indexOf(searchText) >= 0)
+                res.push({ index: i, name: t.name || "未知", artist: t.artist || "未知", cover: t.cover || "" })
+        }
+        searchResults = res
+    }
+
     // ============================================================
     // 字体加载
     // ============================================================
@@ -329,12 +352,14 @@ Window {
                             }
 
                             TextInput {
+                                id: searchInput
                                 Layout.fillWidth: true
                                 color: "#cccccc"
                                 font.family: appFont.name
                                 font.pixelSize: 15
                                 clip: true
                                 verticalAlignment: TextInput.AlignVCenter
+                                onTextChanged: mainWindow.updateSearch(text)
 
                                 Text {
                                     text: "搜索本地音乐..."
@@ -342,6 +367,92 @@ Window {
                                     font.pixelSize: 15
                                     color: "#555"
                                     visible: !parent.text
+                                }
+                            }
+
+                            // ---- 搜索下拉结果 ----
+                            Popup {
+                                id: searchPopup
+                                x: 0
+                                y: parent.height + 4
+                                width: parent.width
+                                padding: 0
+                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                                visible: currentMenu === "home" && searchInput.text.trim().length > 0
+
+                                background: Rectangle {
+                                    color: "#222236"
+                                    border.color: "#444466"
+                                    border.width: 1
+                                    radius: 8
+                                }
+
+                                contentItem: Column {
+                                    id: searchResultCol
+                                    spacing: 0
+                                    clip: true
+
+                                    // ---- 有结果 ----
+                                    Repeater {
+                                        model: mainWindow.searchResults
+
+                                        delegate: Rectangle {
+                                            width: searchResultCol.width
+                                            height: 42
+                                            color: searchHover.containsMouse ? "#36365a" : "transparent"
+
+                                            Rectangle {
+                                                anchors.top: parent.top
+                                                anchors.left: parent.left; anchors.right: parent.right
+                                                height: 1; color: "#2a2a48"
+                                                visible: index > 0
+                                            }
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 14; anchors.rightMargin: 14
+                                                spacing: 8
+
+                                                Label {
+                                                    text: modelData.name
+                                                    font.family: appFont.name; font.pixelSize: 14; color: "#cccccc"
+                                                    Layout.fillWidth: true; elide: Text.ElideRight
+                                                }
+                                                Label {
+                                                    text: modelData.artist
+                                                    font.family: appFont.name; font.pixelSize: 12; color: "#888"
+                                                    Layout.preferredWidth: Math.max(60, parent.width * 0.3)
+                                                    elide: Text.ElideRight; horizontalAlignment: Text.AlignRight
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: searchHover
+                                                anchors.fill: parent; hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    musicManager.playFromLibrary(modelData.index)
+                                                    mainWindow.searchScrollIndex = modelData.index
+                                                    searchInput.focus = false
+                                                    searchPopup.close()
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // ---- 无结果提示 ----
+                                    Rectangle {
+                                        width: searchResultCol.width
+                                        height: 42
+                                        visible: mainWindow.searchResults.length === 0
+                                        color: "transparent"
+
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "暂无相关歌曲"
+                                            font.family: appFont.name; font.pixelSize: 13; color: "#666"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -541,6 +652,7 @@ Window {
             sidebarWidth: mainWindow.sidebarWidth
             windowWidth: mainWindow.width
             fontFamily: appFont.name
+            scrollToIndex: mainWindow.searchScrollIndex
         }
     }
 

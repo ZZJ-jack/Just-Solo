@@ -67,6 +67,7 @@ public:
     Q_INVOKABLE void clearPlaylist();
 
     Q_INVOKABLE void playIndex(int index);
+    Q_INVOKABLE void playFromLibrary(int libraryIndex); // 搜索后播放：同步播放列表=音乐库并按原序播放
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
     Q_INVOKABLE void stop();

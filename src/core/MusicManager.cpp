@@ -740,6 +740,19 @@ void MusicManager::playIndex(int index) {
     addToHistory(track);
 }
 
+void MusicManager::playFromLibrary(int libraryIndex) {
+    if (libraryIndex < 0 || libraryIndex >= m_library.size()) return;
+
+    // 同步播放列表 = 音乐库，不改变顺序
+    m_playlist = m_library;
+    m_playlistSource = 0;
+    emit playlistSourceChanged();
+    emit playlistChanged();
+
+    // 直接播放（同步后 playlist 索引与 library 一致）
+    playIndex(libraryIndex);
+}
+
 void MusicManager::setPlaylistSource(int source) {
     if (source < 0 || source > 2 || source == m_playlistSource) {
         if (source == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {

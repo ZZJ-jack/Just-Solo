@@ -40,6 +40,16 @@ ColumnLayout {
     property real colAlbum:    Math.max(50, _totalW * 2 / 9)
     property real colDuration: Math.max(36, _totalW * 1 / 9)
     property int _pendingIndex: -1
+    property int scrollToIndex: -1
+
+    onScrollToIndexChanged: {
+        if (scrollToIndex >= 0 && scrollToIndex < musicManager.library.length) {
+            // 延迟一帧确保列表已刷新
+            Qt.callLater(function() {
+                musicListView.positionViewAtIndex(scrollToIndex, ListView.Center)
+            })
+        }
+    }
 
     // ---- 列标题 ----
     Rectangle {
