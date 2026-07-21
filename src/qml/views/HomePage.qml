@@ -52,17 +52,20 @@ ColumnLayout {
     }
 
     Component.onCompleted: {
-        if (musicManager.currentIndex >= 0)
-            Qt.callLater(function() {
-                musicListView.positionViewAtIndex(musicManager.currentIndex, ListView.Center)
-            })
+        if (musicManager.currentIndex >= 0) homeScrollTimer.start()
     }
 
     onVisibleChanged: {
-        if (visible && musicManager.currentIndex >= 0)
-            Qt.callLater(function() {
-                musicListView.positionViewAtIndex(musicManager.currentIndex, ListView.Center)
-            })
+        if (visible && musicManager.currentIndex >= 0) homeScrollTimer.start()
+    }
+
+    Timer {
+        id: homeScrollTimer
+        interval: 60
+        repeat: false
+        onTriggered: {
+            musicListView.positionViewAtIndex(musicManager.currentIndex, ListView.Center)
+        }
     }
 
     // ---- 列标题 ----

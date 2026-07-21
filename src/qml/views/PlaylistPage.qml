@@ -27,20 +27,22 @@ ColumnLayout {
     }
 
     Component.onCompleted: {
-        var idx = musicManager.currentIndex
-        if (idx >= 0) Qt.callLater(function() { scrollTo(idx) })
+        if (musicManager.currentIndex >= 0) scrollTimer.start()
     }
 
     onVisibleChanged: {
-        if (visible) {
-            var idx = musicManager.currentIndex
-            if (idx >= 0) Qt.callLater(function() { scrollTo(idx) })
-        }
+        if (visible && musicManager.currentIndex >= 0) scrollTimer.start()
     }
 
-    function scrollTo(idx) {
-        if (idx >= 0 && idx < dynamicModel.length)
-            playlistListView.positionViewAtIndex(idx, ListView.Center)
+    Timer {
+        id: scrollTimer
+        interval: 60
+        repeat: false
+        onTriggered: {
+            var idx = musicManager.currentIndex
+            if (idx >= 0 && idx < dynamicModel.length)
+                playlistListView.positionViewAtIndex(idx, ListView.Center)
+        }
     }
 
     property string playingPath: {
