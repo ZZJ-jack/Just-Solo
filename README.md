@@ -2,9 +2,9 @@
 
 <div align="center">
 
-<img src="./data/image/logo.png" alt="Just Solo" width="150" />
+<img src="./data/image/logo.png" alt="Just Solo" width="200" />
 
-**Just Solo** —— 轻量 · 纯粹
+**Just Solo** —— 纯粹轻量的播放器
 
 [![Qt](https://img.shields.io/badge/Qt-6.8.3-brightgreen?logo=qt)](https://www.qt.io)
 [![C++](https://img.shields.io/badge/C++-17-blue?logo=cplusplus)](https://isocpp.org)
@@ -14,6 +14,8 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://www.microsoft.com/windows)
 
 </div>
+
+<img src="./data/image/photo-1.png" alt="Photo 1" width="200" />
 
 **轻量级桌面音乐播放器** —— 基于 Qt 6.8.3 + QML 构建。
 
