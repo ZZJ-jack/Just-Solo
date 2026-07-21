@@ -74,55 +74,50 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 Just-Solo/
 ├── CMakeLists.txt              # CMake 构建配置
 ├── .gitignore
+├── LICENSE                     # MIT 许可证
 ├── README.md
+├── 安装说明.txt                 # 安装与部署说明
 ├── run.ps1                     # 编译 + 部署 + 运行脚本
+├── package.ps1                 # 一键打包脚本
 ├── cmake/
-│   └── GenerateVersion.ps1    # 自动生成版本号 (yymmddhhmmss)
+│   └── GenerateVersion.ps1    # 自动生成版本号
 ├── src/
-│   ├── main.cpp                # 程序入口
+│   ├── main.cpp                # 程序入口（DWM 标题栏、SMTC、HotkeyManager 初始化）
+│   ├── version.h               # 构建时间戳版本号（由 GenerateVersion.ps1 生成）
 │   ├── core/
-│   │   ├── MusicManager.h      # C++ 音乐管理器（播放/暂停/切歌/列表/收藏/历史/设置/播放模式）
-│   │   ├── MusicManager.cpp
-│   │   ├── MetadataReader.h    # 元数据快速解析（MP3/FLAC/M4A 封面/时长/标签）
-│   │   ├── MetadataReader.cpp
-│   │   ├── SMTCManager.h       # Windows 系统媒体控件（SMTC）管理器
-│   │   ├── SMTCManager.cpp
-│   │   ├── HotkeyManager.h     # 全局快捷键管理器（RegisterHotKey + nativeEventFilter）
-│   │   └── HotkeyManager.cpp
-│   ├── common/                 # 公共工具（预留）
-│   ├── services/               # 业务服务层（预留）
+│   │   ├── MusicManager.h/cpp     # 音乐管理器（播放/列表/收藏/历史/设置/播放模式）
+│   │   ├── MetadataReader.h/cpp   # 元数据快速解析（MP3/FLAC/M4A）
+│   │   ├── SMTCManager.h/cpp      # Windows 系统媒体控件（SMTC）
+│   │   └── HotkeyManager.h/cpp    # 全局快捷键管理器
+│   ├── common/.gitkeep
+│   ├── services/.gitkeep
 │   └── qml/
 │       ├── main.qml            # 主窗口 —— 侧边栏、播放栏、路由控制
-│       ├── components/         # 可复用 QML 组件
+│       ├── components/
 │       │   ├── NavItem.qml     #   侧边栏主菜单项
 │       │   ├── SubNavItem.qml  #   设置页子菜单项
-│       │   └── SongRow.qml     #   歌曲列表行共享组件（封面/标题/歌手/专辑/时长）
-│       └── views/              # 页面视图（按需加载，切换销毁）
+│       │   └── SongRow.qml     #   歌曲列表行共享组件
+│       └── views/              # 页面（预创建，切换时仅切换 visible）
 │           ├── HomePage.qml        # 首页 —— 音乐列表
+│           ├── PlaylistPage.qml    # 播放列表页
 │           ├── FavoritePage.qml    # 收藏页
 │           ├── HistoryPage.qml     # 历史页
-│           ├── SettingsPage.qml    # 设置页 —— 外观/播放/更新/关于
-│           └── PlayerDetailPage.qml# 播放详情页 —— 封面/歌词/逐字高光
+│           ├── SettingsPage.qml    # 设置页
+│           └── PlayerDetailPage.qml# 播放详情页
 ├── data/
 │   ├── image/
-│   │   ├── logo.ico            # exe 嵌入图标
-│   │   ├── logo.png            # 程序图标
-│   │   ├── logo2.png           # 侧边栏 Logo
-│   │   ├── home.png            # 首页图标
-│   │   ├── mylike.png          # 收藏图标
-│   │   ├── history.png         # 历史图标
-│   │   ├── play.png            # 播放按钮图标
-│   │   └── playing.png         # 播放中指示图标
+│   │   ├── logo.ico / logo.png / logo2.png  # 程序图标
+│   │   ├── home.png / mylike.png / history.png / PlayList.png / AddToPlayList.png # 导航图标
+│   │   ├── play.png / playing.png           # 播放控制图标
+│   │   ├── mode_sequential.png / mode_loop.png / mode_single.png / mode_shuffle.png / mode_stop.png # 播放模式图标
+│   │   └── backgroud.png       # 背景图
 │   └── font/
-│       └── HarmonyOS_Sans_SC_Regular.ttf
+│       └── HarmonyOS_Sans_SC_Regular.ttf    # 字体文件（HarmonyOS Sans SC 正常字型）
 ├── resources/
 │   ├── app.rc                  # Windows 资源文件（嵌入 ico）
-│   ├── fonts/                  # 备用字体目录
-│   └── icons/                  # 备用图标目录
-├── release/                    # 打包输出目录（运行 package.ps1 生成）
-└── tests/
-    ├── unit/                   # 单元测试（预留）
-    └── qml/                    # QML 测试（预留）
+│   ├── fonts/.gitkeep
+│   └── icons/.gitkeep
+└── release/                    # 打包输出目录
 ```
 
 ---
@@ -624,8 +619,14 @@ cmake --build build --config Release
 **导入**
 - BATCH_SIZE 8 → 10，每次批量处理更多文件
 
+**UI/交互优化**
+- 首页/播放列表页切换时自动滚动列表到当前播放歌曲
+- 播放详情页入场动画加 80ms 延时等毛玻璃就绪，消除开启动画闪屏
+- 页面从 Loader 销毁重建改为预创建 + visible 切换，消除页面切换闪屏
+
 **修复**
 - 全局快捷键 `valid` 默认 `false` 导致首次运行不注册
+- 全局快捷键构造时注册过早（消息循环未就绪），改为 `QTimer::singleShot` 延迟注册
 - 快捷键卡片 `Repeater` 在 `ColumnLayout` 中布局重叠
 - 顺序模式最后一首点下一首直接停止
 

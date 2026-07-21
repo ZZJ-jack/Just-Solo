@@ -51,6 +51,16 @@ ColumnLayout {
         }
     }
 
+    Component.onCompleted: {
+        if (musicManager.currentIndex >= 0)
+            scrollToIndex = musicManager.currentIndex
+    }
+
+    onVisibleChanged: {
+        if (visible && musicManager.currentIndex >= 0)
+            scrollToIndex = musicManager.currentIndex
+    }
+
     // ---- 列标题 ----
     Rectangle {
         Layout.fillWidth: true; height: 32; color: "transparent"

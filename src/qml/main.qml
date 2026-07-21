@@ -4,8 +4,8 @@
 // 设计要点:
 //   - 全自适应的响应式布局，所有尺寸随窗口大小弹性变化
 //   - 系统原生标题栏，C++ 端通过 DWM API 深度自定义暗黑/边框颜色
-//   - 支持 Home / 收藏 / 历史 / 设置 四个视图切换
-//   - 页面按需加载，切换时销毁旧页面释放内存
+//   - 支持 Home / 播放列表 / 收藏 / 历史 / 设置 五个视图切换
+//   - 页面预创建，切换时仅切换 visible，消除闪屏
 // ============================================================
 
 import QtQuick
@@ -682,22 +682,47 @@ Window {
                 Item { Layout.preferredHeight: 16 }
 
                 // ==================================================
-                // 页面内容区（按需加载，切换时销毁旧页面释放内存）
+                // 页面内容区（预创建所有页面，切换时只切换可见性，消除闪屏）
                 // ==================================================
-                Loader {
-                    id: pageLoader
+                Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    asynchronous: false
-                    sourceComponent: {
-                        switch (mainWindow.currentMenu) {
-                            case "settings": return settingsPageComp
-                            case "home": return homePageComp
-                            case "playlist": return playlistPageComp
-                            case "favorite": return favoritePageComp
-                            case "history": return historyPageComp
-                            default: return null
-                        }
+                    clip: true
+
+                    HomePage {
+                        anchors.fill: parent
+                        visible: currentMenu === "home"
+                        sidebarWidth: mainWindow.sidebarWidth
+                        windowWidth: mainWindow.width
+                        fontFamily: appFont.name
+                        scrollToIndex: mainWindow.searchScrollIndex
+                    }
+                    PlaylistPage {
+                        anchors.fill: parent
+                        visible: currentMenu === "playlist"
+                        sidebarWidth: mainWindow.sidebarWidth
+                        windowWidth: mainWindow.width
+                        fontFamily: appFont.name
+                    }
+                    FavoritePage {
+                        anchors.fill: parent
+                        visible: currentMenu === "favorite"
+                        sidebarWidth: mainWindow.sidebarWidth
+                        windowWidth: mainWindow.width
+                        fontFamily: appFont.name
+                    }
+                    HistoryPage {
+                        anchors.fill: parent
+                        visible: currentMenu === "history"
+                        sidebarWidth: mainWindow.sidebarWidth
+                        windowWidth: mainWindow.width
+                        fontFamily: appFont.name
+                    }
+                    SettingsPage {
+                        anchors.fill: parent
+                        visible: currentMenu === "settings"
+                        settingsSubMenu: mainWindow.settingsSubMenu
+                        fontFamily: appFont.name
                     }
                 }
             }
@@ -730,55 +755,6 @@ Window {
                     musicManager.addFiles(paths)
                 }
             }
-        }
-    }
-
-    // ============================================================
-    // 页面组件包装器 —— 注入外部依赖属性后交给 Loader 实例化
-    // ============================================================
-
-    Component {
-        id: settingsPageComp
-        SettingsPage {
-            settingsSubMenu: mainWindow.settingsSubMenu
-            fontFamily: appFont.name
-        }
-    }
-
-    Component {
-        id: homePageComp
-        HomePage {
-            sidebarWidth: mainWindow.sidebarWidth
-            windowWidth: mainWindow.width
-            fontFamily: appFont.name
-            scrollToIndex: mainWindow.searchScrollIndex
-        }
-    }
-
-    Component {
-        id: playlistPageComp
-        PlaylistPage {
-            sidebarWidth: mainWindow.sidebarWidth
-            windowWidth: mainWindow.width
-            fontFamily: appFont.name
-        }
-    }
-
-    Component {
-        id: favoritePageComp
-        FavoritePage {
-            sidebarWidth: mainWindow.sidebarWidth
-            windowWidth: mainWindow.width
-            fontFamily: appFont.name
-        }
-    }
-
-    Component {
-        id: historyPageComp
-        HistoryPage {
-            sidebarWidth: mainWindow.sidebarWidth
-            windowWidth: mainWindow.width
-            fontFamily: appFont.name
         }
     }
 
@@ -830,7 +806,6 @@ Window {
 
     // 统一关闭入口：停所有循环 → 退出
     onClosing: function(close) {
-        pageLoader.asynchronous = false   // 防止异步加载未完成时引擎销毁告警
         close.accepted = true
         playerDetail.visible = false      // 关 ShaderEffectSource live
         musicManager.stop()               // 停播放

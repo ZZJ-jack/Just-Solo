@@ -16,6 +16,28 @@ ColumnLayout {
     property var rightClickedTrack: null
     property string fontFamily: ""
 
+    property int scrollToIndex: -1
+
+    onScrollToIndexChanged: {
+        if (scrollToIndex >= 0 && scrollToIndex < dynamicModel.length) {
+            Qt.callLater(function() {
+                playlistListView.positionViewAtIndex(scrollToIndex, ListView.Center)
+            })
+        }
+    }
+
+    Component.onCompleted: {
+        var idx = musicManager.currentIndex
+        if (idx >= 0) scrollToIndex = idx
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            var idx = musicManager.currentIndex
+            if (idx >= 0) scrollToIndex = idx
+        }
+    }
+
     property string playingPath: {
         try {
             var ci = musicManager.currentIndex

@@ -37,14 +37,23 @@ Item {
         if (visible) {
             bgBlur.live = true
             blurFx.blurEnabled = true
+            bgBlur.scheduleUpdate()
             _lastScroll = -1
             opening = true
-            openAnim.start()
+            // 等毛玻璃渲染就绪后再开始动画（约 2-3 帧）
+            blurReadyTimer.restart()
         } else {
             blurFx.blurEnabled = false
             bgBlur.live = false
             openAnim.stop(); closeAnim.stop()
+            blurReadyTimer.stop()
         }
+    }
+
+    Timer {
+        id: blurReadyTimer
+        interval: 80
+        onTriggered: openAnim.start()
     }
 
     Connections {
