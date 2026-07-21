@@ -28,14 +28,19 @@ ColumnLayout {
 
     Component.onCompleted: {
         var idx = musicManager.currentIndex
-        if (idx >= 0) scrollToIndex = idx
+        if (idx >= 0) Qt.callLater(function() { scrollTo(idx) })
     }
 
     onVisibleChanged: {
         if (visible) {
             var idx = musicManager.currentIndex
-            if (idx >= 0) scrollToIndex = idx
+            if (idx >= 0) Qt.callLater(function() { scrollTo(idx) })
         }
+    }
+
+    function scrollTo(idx) {
+        if (idx >= 0 && idx < dynamicModel.length)
+            playlistListView.positionViewAtIndex(idx, ListView.Center)
     }
 
     property string playingPath: {

@@ -53,12 +53,16 @@ ColumnLayout {
 
     Component.onCompleted: {
         if (musicManager.currentIndex >= 0)
-            scrollToIndex = musicManager.currentIndex
+            Qt.callLater(function() {
+                musicListView.positionViewAtIndex(musicManager.currentIndex, ListView.Center)
+            })
     }
 
     onVisibleChanged: {
         if (visible && musicManager.currentIndex >= 0)
-            scrollToIndex = musicManager.currentIndex
+            Qt.callLater(function() {
+                musicListView.positionViewAtIndex(musicManager.currentIndex, ListView.Center)
+            })
     }
 
     // ---- 列标题 ----
