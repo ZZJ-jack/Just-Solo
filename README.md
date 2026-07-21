@@ -3,7 +3,7 @@
 
 <img src="./data/image/logo.png" alt="Just Solo" width="200" />
 
-**Just Solo** —— 纯粹轻量的播放器
+**Just Solo** —— 纯粹轻量的本地音乐播放器
 
 [![Qt](https://img.shields.io/badge/Qt-6.8.3-brightgreen?logo=qt)](https://www.qt.io)
 [![C++](https://img.shields.io/badge/C++-17-blue?logo=cplusplus)](https://isocpp.org)
@@ -18,13 +18,13 @@
 
 <font size="1">PS：本示范图片仅用于展示功能，歌曲版权属于原作者</font>
 
-## **轻量级桌面音乐播放器** —— 基于 Qt 6.8.3 + QML 构建。
+## **轻量级本地音乐播放器** —— 基于 Qt 6.8.3 + QML 构建。
 
 ### **作者**: ZZJ-JACK ([zzjjack.us.kg](https://zzjjack.us.kg))
 
 ### **仓库**: [GitCode](https://gitcode.com/ZZJ-JACK/Just-Solo) | [Gitee](https://gitee.com/zzj-jack/just-solo) | [GitHub](https://github.com/ZZJ-jack/Just-Solo)
 
-### 下载即用：前往 Releases 下载最新 .exe 安装包，双击即可使用。
+### 暂时仅支持 Windows 平台，如需下载，前往 Releases 下载最新 .exe 安装包。
 
 ## 项目简介
 
