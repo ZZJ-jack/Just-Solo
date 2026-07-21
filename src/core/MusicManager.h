@@ -5,6 +5,7 @@
 #include <QVariantList>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 #include <QMediaPlayer>
 #include <QAudioOutput>
 #include <QFileInfo>
@@ -162,6 +163,14 @@ signals:
     void importProgressChanged();
 
 private:
+    // 预编译歌词缓存：纯整数，播放时零分配
+    struct LyricEntry {
+        int time;      // 时间戳 (ms)
+        qint64 offset; // 预算偏移 (2.15 × 字数)
+    };
+    void rebuildLyricCache();
+    QVector<LyricEntry> m_lyricCache;
+
     void updateCurrentTrack();
     void updateLyricIndex();
     void onMetaDataChanged();

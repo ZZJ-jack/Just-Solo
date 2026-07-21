@@ -308,7 +308,7 @@ MusicManager::MusicManager(QObject *parent)
 {
     m_player = new QMediaPlayer(this);
     m_audioOutput = new QAudioOutput(this);
-    m_audioOutput->setVolume(1.0);  // 直通输出，不衰减
+    m_audioOutput->setVolume(0.9); // 留 10% 余量，防止数字削波爆音
     m_player->setAudioOutput(m_audioOutput);
 
     m_loadTimer = new QTimer(this);
@@ -316,15 +316,16 @@ MusicManager::MusicManager(QObject *parent)
     m_loadTimer->setInterval(0);
     connect(m_loadTimer, &QTimer::timeout, this, &MusicManager::processNextPending);
 
-    // 歌词索引节流：positionChanged 每帧触发 → debounce 100ms 后计算
+    // 歌词索引防抖：positionChanged 很频繁（~10-60次/秒）
+    // 用 30ms debounce 聚合成最多约 33 次/秒的歌词更新，大幅减少重复遍历开销
     m_lyricTimer = new QTimer(this);
     m_lyricTimer->setSingleShot(true);
     m_lyricTimer->setInterval(30);
     connect(m_lyricTimer, &QTimer::timeout, this, &MusicManager::updateLyricIndex);
 
-    connect(m_player, &QMediaPlayer::positionChanged, this, [this](qint64) {
-        emit positionChanged(m_player->position());
-        updateLyricIndex();  // 直接计算，无延迟
+    connect(m_player, &QMediaPlayer::positionChanged, this, [this](qint64 pos) {
+        emit positionChanged(pos);
+        m_lyricTimer->start();  // 防抖，不会重复触发
     });
     connect(m_player, &QMediaPlayer::playbackStateChanged, this, &MusicManager::playbackStateChanged);
     connect(m_player, &QMediaPlayer::sourceChanged, this, &MusicManager::updateCurrentTrack);
@@ -861,6 +862,7 @@ void MusicManager::updateCurrentTrack() {
         m_currentMediaPath = track["path"].toString();
         // 加载歌词
         m_currentLyrics = loadLyricsForFile(m_currentMediaPath);
+        rebuildLyricCache();
         m_lyricIndex = -1;
         m_embeddedLyricsLoaded = false;  // 等待 metaDataChanged 回调
     } else {
@@ -873,9 +875,9 @@ void MusicManager::updateCurrentTrack() {
     emit currentLyricsChanged();
 }
 
-// ---- C++ 端计算歌词索引（节流到 100ms，避免每帧 QML JS 计算） ----
+// ---- C++ 端计算歌词索引（纯整数比较，零分配） ----
 void MusicManager::updateLyricIndex() {
-    if (m_currentLyrics.isEmpty()) {
+    if (m_lyricCache.isEmpty()) {
         if (m_lyricIndex != -1) {
             m_lyricIndex = -1;
             emit lyricIndexChanged();
@@ -883,23 +885,33 @@ void MusicManager::updateLyricIndex() {
         return;
     }
 
-    qint64 rawPos = m_player ? m_player->position() : 0;
+    qint64 pos = m_player ? m_player->position() + m_lyricOffset : 0;
     int newIdx = -1;
 
-    // 按行遍历：每行用各自歌词长度算偏移（2.15×字长）
-    for (int i = 0; i < m_currentLyrics.size(); i++) {
-        int lineLen = m_currentLyrics[i].toMap()["text"].toString().length();
-        qint64 lineOffset = m_lyricOffset + qint64(2.15 * lineLen);
-        if (m_currentLyrics[i].toMap()["time"].toInt() <= rawPos + lineOffset) {
+    for (int i = 0; i < m_lyricCache.size(); i++) {
+        const auto &e = m_lyricCache[i];
+        if (e.time <= pos + e.offset)
             newIdx = i;
-        } else {
+        else
             break;
-        }
     }
 
     if (newIdx != m_lyricIndex) {
         m_lyricIndex = newIdx;
         emit lyricIndexChanged();
+    }
+}
+
+// ---- 歌词预编译缓存：将 QVariantList 转为纯整数数组，消除播放时的分配开销 ----
+void MusicManager::rebuildLyricCache() {
+    m_lyricCache.clear();
+    m_lyricCache.reserve(m_currentLyrics.size());
+    for (const auto &item : m_currentLyrics) {
+        QVariantMap map = item.toMap();
+        LyricEntry e;
+        e.time = map["time"].toInt();
+        e.offset = qint64(2.15 * map["text"].toString().length());
+        m_lyricCache.append(e);
     }
 }
 
@@ -1036,6 +1048,7 @@ void MusicManager::onMetaDataChanged() {
         QString lyrics = extractEmbeddedLyricsFromFile(m_currentMediaPath);
         if (!lyrics.isEmpty()) {
             m_currentLyrics = parseEmbeddedLyrics(lyrics);
+            rebuildLyricCache();
             if (!m_currentLyrics.isEmpty()) {
                 m_lyricIndex = -1;
                 emit currentLyricsChanged();
