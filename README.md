@@ -15,7 +15,7 @@
 
 </div>
 
-<img src="./data/image/photo-1.png" alt="Photo 1" width="200" />
+<img src="./data/image/photo-1.png" alt="Photo 1" width="700" />
 
 **轻量级桌面音乐播放器** —— 基于 Qt 6.8.3 + QML 构建。
 
