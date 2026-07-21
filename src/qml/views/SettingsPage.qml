@@ -137,8 +137,6 @@ Rectangle {
             }
         }
 
-        Item { Layout.preferredHeight: 14 }
-
         // 跨来源跟踪开关
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520
