@@ -35,11 +35,6 @@ Rectangle {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "update"
 
-        Label {
-            text: "软件更新"
-            font.family: fontFamily; font.pixelSize: 18; font.bold: true
-            color: "#f4f4f4"
-        }
         Item { Layout.preferredHeight: 24 }
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520
@@ -75,7 +70,8 @@ Rectangle {
 
     // ---- 播放设置 ----
     ColumnLayout {
-        anchors.fill: parent; spacing: 0
+        anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+        spacing: 0
         visible: settingsSubMenu === "playback"
 
         // 歌词延时
@@ -136,6 +132,8 @@ Rectangle {
                 }
             }
         }
+
+        Item { Layout.preferredHeight: 14 }
 
         // 跨来源跟踪开关
         Rectangle {
