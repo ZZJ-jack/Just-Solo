@@ -72,6 +72,17 @@ Window {
         searchResults = res
     }
 
+    // 搜索关键词高亮（不区分大小写）
+    function highlightKw(text, keyword) {
+        if (!text || !keyword) return text || ""
+        var t = String(text)
+        var k = String(keyword).trim()
+        if (!k) return t
+        var idx = t.toLowerCase().indexOf(k.toLowerCase())
+        if (idx < 0) return t
+        return t.substring(0, idx) + "<font color='#00d4ff'><b>" + t.substring(idx, idx + k.length) + "</b></font>" + t.substring(idx + k.length)
+    }
+
     function onSearchResultClicked(libraryIndex) {
         // 切到首页
         currentMenu = "home"
@@ -434,7 +445,8 @@ Window {
 
                                                     Text {
                                                         id: nameText
-                                                        text: modelData.name
+                                                        text: mainWindow.highlightKw(modelData.name, searchInput.text)
+                                                        textFormat: Text.StyledText
                                                         font.family: appFont.name; font.pixelSize: 14; color: "#cccccc"
                                                         y: (parent.height - height) / 2
                                                         x: 0
@@ -460,7 +472,8 @@ Window {
 
                                                     Text {
                                                         id: artistText
-                                                        text: modelData.artist
+                                                        text: mainWindow.highlightKw(modelData.artist, searchInput.text)
+                                                        textFormat: Text.StyledText
                                                         font.family: appFont.name; font.pixelSize: 13; color: "#888"
                                                         y: (parent.height - height) / 2
                                                         x: 0
@@ -488,7 +501,8 @@ Window {
 
                                                     Text {
                                                         id: albumText
-                                                        text: modelData.album
+                                                        text: mainWindow.highlightKw(modelData.album, searchInput.text)
+                                                        textFormat: Text.StyledText
                                                         font.family: appFont.name; font.pixelSize: 13; color: "#666"
                                                         y: (parent.height - height) / 2
                                                         x: 0
