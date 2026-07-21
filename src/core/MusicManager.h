@@ -39,6 +39,7 @@ class MusicManager : public QObject
     Q_PROPERTY(qreal menuOpacity READ menuOpacity WRITE setMenuOpacity NOTIFY menuOpacityChanged)
     Q_PROPERTY(int playlistSource READ playlistSource WRITE setPlaylistSource NOTIFY playlistSourceChanged)
     Q_PROPERTY(bool trackCrossSource READ trackCrossSource WRITE setTrackCrossSource NOTIFY trackCrossSourceChanged)
+    Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY minimizeToTrayChanged)
 
 public:
     explicit MusicManager(QObject *parent = nullptr);
@@ -108,6 +109,10 @@ public:
     bool trackCrossSource() const { return m_trackCrossSource; }
     void setTrackCrossSource(bool v);
 
+    // ---- 关闭到系统托盘 ----
+    bool minimizeToTray() const { return m_minimizeToTray; }
+    void setMinimizeToTray(bool v);
+
     // ---- 播放列表操作 ----
     Q_INVOKABLE void addToPlaylist(const QVariantMap &track);     // 追加单曲到播放列表
     Q_INVOKABLE void removeFromPlaylist(const QVariantMap &track); // 按路径从播放队列删除
@@ -158,6 +163,7 @@ signals:
     void menuOpacityChanged();
     void playlistSourceChanged();
     void trackCrossSourceChanged();
+    void minimizeToTrayChanged();
     void positionChanged(qint64 ms);
     void durationChanged();
     void isLoadingChanged();
@@ -202,6 +208,7 @@ private:
     qreal m_menuOpacity = 0.80;     // 模式菜单透明度 (0.3-1.0)
     int m_playlistSource = 0;       // 活跃播放列表来源 (SourcePlaylist=0)
     bool m_trackCrossSource = false; // 跨来源播放跟踪（默认关闭）
+    bool m_minimizeToTray = false;     // 关闭窗口自动最小化到系统托盘（默认关闭）
     void loadSettings();
     void saveSettings();
     int m_currentIndex = -1;

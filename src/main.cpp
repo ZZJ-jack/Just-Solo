@@ -1,4 +1,4 @@
-#include <QGuiApplication>
+#include <QApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -7,6 +7,8 @@
 #include <QStringList>
 #include <QTimer>
 #include <QStandardPaths>
+#include <QSystemTrayIcon>
+#include <QMenu>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -75,6 +77,48 @@ static void customizeTitleBar(HWND hwnd) {
 #include "core/SMTCManager.h"
 #include "core/HotkeyManager.h"
 
+// ============================================================
+// 系统托盘：关闭窗口后最小化到任务栏
+// ============================================================
+static void setupSystemTray(QQuickWindow *window, MusicManager *mgr) {
+    QSystemTrayIcon *tray = new QSystemTrayIcon(window);
+    tray->setIcon(QIcon(":/qt/qml/JustSolo/data/image/logo.png"));
+    tray->setToolTip("Just Solo");
+
+    QMenu *menu = new QMenu();
+
+    QAction *showAction = menu->addAction("显示主窗口");
+    QAction *quitAction = menu->addAction("退出");
+
+    tray->setContextMenu(menu);
+
+    // 显示/恢复窗口
+    QObject::connect(showAction, &QAction::triggered, [window]() {
+        window->show();
+        window->raise();
+        window->requestActivate();
+    });
+
+    // 左键/双击托盘图标也恢复窗口
+    QObject::connect(tray, &QSystemTrayIcon::activated, [window](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::DoubleClick || reason == QSystemTrayIcon::Trigger) {
+            window->show();
+            window->raise();
+            window->requestActivate();
+        }
+    });
+
+    // 真正退出：清理播放状态后退出进程
+    QObject::connect(quitAction, &QAction::triggered, [window, mgr]() {
+        window->hide();
+        mgr->stop();
+        mgr->shutdown();
+        QApplication::quit();
+    });
+
+    tray->show();
+}
+
 // APP_VERSION_DISPLAY 由 CMake target_compile_definitions 传入
 // BUILD_VERSION 由 cmake/GenerateVersion.ps1 生成（格式: ts-machineId-vX.Y.Z）
 
@@ -108,7 +152,7 @@ int main(int argc, char *argv[])
     SetCurrentProcessExplicitAppUserModelID(L"JustSolo.JustSolo");
 #endif
 
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     app.setApplicationName("Just Solo");
     app.setApplicationDisplayName("Just Solo");
 
@@ -153,8 +197,9 @@ int main(int argc, char *argv[])
         Qt::QueuedConnection
     );
 
-    // 关闭窗口时退出进程（--develop 模式同样生效）
-    QObject::connect(&engine, &QQmlApplicationEngine::quit, &app, &QGuiApplication::quit);
+    // 关闭窗口时退出进程 — 备注：关闭事件已被 QML onClosing 拦截（隐藏到托盘），
+    // 此连接仅在系统托盘「退出」菜单或 Qt.quit() 调用时生效
+    QObject::connect(&engine, &QQmlApplicationEngine::quit, &app, &QApplication::quit);
 
     engine.load(url);
 
@@ -163,6 +208,9 @@ int main(int argc, char *argv[])
     if (!engine.rootObjects().isEmpty()) {
         QQuickWindow *win = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
         if (win) {
+            // 系统托盘（跨平台，在引擎加载后立即设置）
+            setupSystemTray(win, musicManager);
+
             QTimer::singleShot(200, win, [win, musicManager]() {
                 HWND hwnd = HWND(win->winId());
                 customizeTitleBar(hwnd);
@@ -171,6 +219,12 @@ int main(int argc, char *argv[])
                 new SMTCManager(musicManager, hwnd, musicManager);
             });
         }
+    }
+#else
+    // 非 Windows 平台：仅设置系统托盘
+    if (!engine.rootObjects().isEmpty()) {
+        QQuickWindow *win = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+        if (win) setupSystemTray(win, musicManager);
     }
 #endif
 

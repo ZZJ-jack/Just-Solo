@@ -472,6 +472,57 @@ Rectangle {
             }
         }
 
+        Item { Layout.preferredHeight: 14 }
+
+        // 关闭窗口行为
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 70; radius: 8
+            color: "#2e2e4a"; border.color: "#3a3a55"
+
+            RowLayout {
+                anchors.fill: parent; anchors.leftMargin: 20; anchors.rightMargin: 20; anchors.topMargin: 12; anchors.bottomMargin: 20
+                spacing: 10
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Label {
+                        text: "关闭窗口时最小化到系统托盘"
+                        font.family: fontFamily; font.pixelSize: 14; color: "#e8e8e8"
+                    }
+                    Label {
+                        text: "关闭后音乐继续在后台播放，可通过托盘图标恢复"
+                        font.family: fontFamily; font.pixelSize: 11; color: "#999"
+                        wrapMode: Text.WordWrap; Layout.fillWidth: true
+                    }
+                }
+
+                Switch {
+                    Layout.alignment: Qt.AlignVCenter
+                    checked: musicManager.minimizeToTray
+                    onToggled: musicManager.minimizeToTray = checked
+
+                    indicator: Rectangle {
+                        implicitWidth: 34
+                        implicitHeight: 20
+                        x: parent.leftPadding
+                        y: parent.topPadding + (parent.availableHeight - height) / 2
+                        radius: 10
+                        color: parent.checked ? "#00d4ff" : "#555"
+                        border.color: parent.checked ? "#00b4e0" : "#444"
+
+                        Rectangle {
+                            x: parent.checked ? parent.width - width - 3 : 3
+                            y: (parent.height - height) / 2
+                            width: 14; height: 14; radius: 7
+                            color: "#fff"
+                        }
+                    }
+                }
+            }
+        }
+
         Label {
             text: "修改后立即生效，重启后保持设置"
             font.family: fontFamily; font.pixelSize: 12; color: "#999"

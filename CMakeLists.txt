@@ -31,6 +31,7 @@ find_package(Qt6 6.8.3 REQUIRED COMPONENTS
     QuickLayouts
     Multimedia
     Network
+    Widgets
 )
 
 qt_standard_project_setup()
@@ -91,6 +92,7 @@ target_link_libraries(JustSolo PRIVATE
     Qt6::QuickLayouts
     Qt6::Multimedia
     Qt6::Network
+    Qt6::Widgets
 )
 
 # Windows: DWM API + runtimeobject (SMTC) + shell32 (AUMID)

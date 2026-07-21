@@ -414,6 +414,10 @@ void MusicManager::loadSettings() {
         m_trackCrossSource = obj.value("trackCrossSource").toBool(false);
         emit trackCrossSourceChanged();
     }
+    if (obj.contains("minimizeToTray")) {
+        m_minimizeToTray = obj.value("minimizeToTray").toBool(false);
+        emit minimizeToTrayChanged();
+    }
 }
 
 void MusicManager::saveSettings() {
@@ -424,6 +428,7 @@ void MusicManager::saveSettings() {
     obj["playMode"] = m_playMode;
     obj["menuOpacity"] = m_menuOpacity;
     obj["trackCrossSource"] = m_trackCrossSource;
+    obj["minimizeToTray"] = m_minimizeToTray;
     QJsonDocument doc(obj);
     QFile file(m_cacheDir + "/settings.json");
     if (file.open(QIODevice::WriteOnly)) {
@@ -460,6 +465,13 @@ void MusicManager::setTrackCrossSource(bool v) {
     if (v == m_trackCrossSource) return;
     m_trackCrossSource = v;
     emit trackCrossSourceChanged();
+    saveSettings();
+}
+
+void MusicManager::setMinimizeToTray(bool v) {
+    if (v == m_minimizeToTray) return;
+    m_minimizeToTray = v;
+    emit minimizeToTrayChanged();
     saveSettings();
 }
 

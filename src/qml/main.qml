@@ -804,12 +804,19 @@ Window {
         }
     }
 
-    // 统一关闭入口：停所有循环 → 退出
+    // ---- 关闭窗口 ----
+    // 根据设置决定最小化到系统托盘（音乐继续播放）或真退出
     onClosing: function(close) {
-        close.accepted = true
-        playerDetail.visible = false      // 关 ShaderEffectSource live
-        musicManager.stop()               // 停播放
-        musicManager.shutdown()           // 停所有定时器
+        if (musicManager.minimizeToTray) {
+            close.accepted = false
+            mainWindow.hide()
+            playerDetail.visible = false      // 关 ShaderEffectSource live
+        } else {
+            // 真退出：清理播放状态
+            playerDetail.visible = false
+            musicManager.stop()
+            musicManager.shutdown()
+        }
     }
 
     // ============================================================
