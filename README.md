@@ -1,5 +1,4 @@
 # Just Solo
-----------------------------------------------------------
 <div align="center">
 
 <img src="./data/image/logo.png" alt="Just Solo" width="200" />
