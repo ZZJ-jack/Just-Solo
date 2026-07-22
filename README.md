@@ -33,7 +33,7 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 同时，Just Solo 已原生支持 Windows SMTC 系统媒体控件，可配合 [NSD 灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen大佬](https://github.com/GEORGEWWWU) 开发）显示音乐信息与控制播放（暂请将目标音乐平台设置成通用音频）。
 
 **性能**
-- 平均内存占用 < 150MB（vs Electron 的 500MB+） （PS：随着功能增加，软件在前台运行时内存占用可能会增加，但是放在后台、托盘运行时内存占用会自动释放）
+- 平均内存占用 < 150MB（vs Electron 的 500MB+） （PS：随着功能增加，软件在前台运行时内存占用可能会增加，但是放在后台或托盘运行时内存占用会自动释放）
 - 冷启动 < 0.5s
 - 原生 GPU 渲染，60fps 流畅动画
 - `MetadataReader` 二进制解析（~1ms/文件），批处理 10 文件/轮
@@ -102,7 +102,7 @@ Just-Solo/
 ├── cmake/
 │   └── GenerateVersion.ps1    # 自动生成版本号
 ├── src/
-│   ├── main.cpp                # 程序入口（DWM 标题栏、SMTC、HotkeyManager 初始化）
+│   ├── main.cpp                # 程序入口（单实例检测、DWM 标题栏、Tray、SMTC、HotkeyManager）
 │   ├── version.h               # 构建时间戳版本号（由 GenerateVersion.ps1 生成）
 │   ├── core/
 │   │   ├── MusicManager.h/cpp     # 音乐管理器（播放/列表/收藏/历史/设置/播放模式）
@@ -117,9 +117,9 @@ Just-Solo/
 │       │   ├── NavItem.qml     #   侧边栏主菜单项
 │       │   ├── SubNavItem.qml  #   设置页子菜单项
 │       │   ├── SongRow.qml     #   歌曲列表行共享组件
-│       │   └── MusicListView.qml # 通用歌曲列表组件（列头+列表+滚动+右键）
-│       └── views/              # 页面（预创建，切换时仅切换 visible）
-│           ├── HomePage.qml        # 首页 —— 音乐列表
+│       │   └── MusicListView.qml # 通用歌曲列表组件（列头+列表+滚动+右键/弹窗）
+│       └── views/              # 页面（预创建，切换时仅切换 visible，零闪屏）
+│           ├── HomePage.qml        # 所有音乐 / 自定义列表（统一组件）
 │           ├── PlaylistPage.qml    # 播放列表页
 │           ├── FavoritePage.qml    # 收藏页
 │           ├── HistoryPage.qml     # 历史页
@@ -129,6 +129,7 @@ Just-Solo/
 │   ├── image/
 │   │   ├── logo.ico / logo.png / logo2.png  # 程序图标
 │   │   ├── home.png / mylike.png / history.png / PlayList.png / AddToPlayList.png # 导航图标
+│   │   ├── creatList.png / SelfList.png       # 自建列表图标
 │   │   ├── play.png / playing.png           # 播放控制图标
 │   │   ├── mode_sequential.png / mode_loop.png / mode_single.png / mode_shuffle.png / mode_stop.png # 播放模式图标
 │   │   └── backgroud.png       # 背景图
@@ -194,15 +195,21 @@ cmake --build build --config Release
 
 ## 当前功能
 
-- 无边框自定义窗口（最小化 / 最大化 / 关闭，悬停 ToolTip）
-- 侧边栏导航（首页 / 播放列表 / 收藏 / 播放历史）
+- 系统原生标题栏（DWM 深度自定义暗黑模式/边框颜色）
+- 侧边栏导航（所有音乐 / 播放列表 / 收藏 / 播放历史 / 自定义播放列表）
 - 设置页面（外观设置 / 播放设置 / 快捷键设置 / 软件更新 / 关于 JustSolo）
-  - 外观设置：播放详情页透明度滑块、模式菜单透明度滑块
+  - 外观设置：播放详情页透明度滑块、模式菜单透明度滑块、关闭最小化到托盘开关
   - 播放设置：歌词预读偏移滑块（±5ms 步长，持久化）、跨来源跟踪开关
   - 快捷键设置：全局快捷键自定义捕获界面，支持播放/暂停、上一首、下一首
   - 关于页：作者信息 / 项目地址 / 运行环境 / 图标来源
   - 软件更新页：GitCode / GitHub 仓库链接
+- **单实例运行检测**：基于 `QLocalServer`，防止重复开多进程，隐藏到托盘后点快捷方式恢复窗口
+- **系统托盘**：关闭窗口最小化到托盘，音乐后台播放，左键/双击恢复，右键菜单退出
 - Windows 系统媒体控件 (SMTC)：任务栏音量弹窗 / 锁屏 / 蓝牙显示歌名歌手封面
+- **自建播放列表**：侧边栏创建/重命名/删除，右键添加本地音乐，持久化到 `custom_playlists.json`
+  - 列表名仅允许中英文、数字、`-`、`_`，禁止重名
+  - 添加的音乐同时加入所有音乐，不同列表切换播放时确认弹窗
+  - 右键菜单「删除此歌曲」确认弹窗，同步从历史/收藏/播放列表/所有自建列表删除
 - 导入本地音乐（单选 / 多选），`MetadataReader` 加速解析，**自动去重**
   - 同一文件路径跳过
   - 不同文件同一首歌保留音质更高版本
@@ -223,7 +230,8 @@ cmake --build build --config Release
   - 透明度可调持久化
 - **双语字幕**：`.lrc` 外部文件 + FLAC 嵌入 `LYRICS` 双路支持，同时间戳自动合并
 - 音频直通输出
-- 开发者模式 `--develop`
+- 开发者模式 `--develop`（附加控制台输出）
+- 显式清空用户数据 `--clearUserData`
 - 灰色 / 青色暗色主题
 - HarmonyOS Sans 内置字体
 - exe 图标内嵌（`app.rc` + `logo.ico`）
@@ -234,14 +242,15 @@ cmake --build build --config Release
 
 ## 最新版本更新日志（其他详见 `CHANGELOG.md`）
 
-### v0.6.0：全新自建播放列表系统，通用歌曲列表组件重构，全面改进播放定位逻辑。
+### v0.6.0：全新自建播放列表系统、通用歌曲列表组件重构、单实例运行保障。
 #### 侧边栏「创建新列表」按钮，深色弹窗命名，支持添加本地音乐 / 重命名 / 删除
 #### 列表名仅允许中英文、数字、`-`、`_`，禁止重名，持久化到 `custom_playlists.json`
 #### 新增 MusicListView.qml 通用歌曲列表组件，所有页面改为此组件子类
 #### 统一 playingListIndex/pageListIndex 定位系统，匹配才自动滚动
-#### 收藏页点击不同来源歌曲弹出切换确认弹窗
+#### 单实例运行检测：基于 QLocalServer，隐藏到托盘后点快捷方式恢复窗口
 #### 修复 `--develop` 误删用户数据，改为 `--clearUserData` 显式清理
-#### 单实例检测：防止重复开多进程，隐藏到托盘后点快捷方式恢复窗口
+#### 收藏页点击不同来源歌曲弹出切换确认弹窗
+#### `next()`/`previous()` 修复 playlistSource=0 时使用了自定义列表的歌曲列表
 
 ---
 

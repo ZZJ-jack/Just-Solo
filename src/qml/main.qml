@@ -881,6 +881,8 @@ Window {
                         scrollToIndex: currentMenu === "home" ? mainWindow.searchScrollIndex : -1
                         customPlaylistIndex: currentMenu === "customPlaylist" ? currentCustomPlaylistIndex : -1
                         pageListIndex: currentMenu === "customPlaylist" ? 3 + currentCustomPlaylistIndex : 0
+                        emptyHint: currentMenu === "customPlaylist" ? "此列表还没有歌曲" : "还没有音乐"
+                        emptySubHint: currentMenu === "customPlaylist" ? "请到侧边栏右键本列表添加音乐" : "点击上方「添加音乐」导入本地文件"
                         songList: {
                             if (currentMenu === "customPlaylist" && currentCustomPlaylistIndex >= 0
                                 && currentCustomPlaylistIndex < musicManager.customPlaylists.length) {
@@ -962,6 +964,15 @@ Window {
                         musicManager.addSongsToCustomPlaylist(paths, mainWindow._pendingAddToPlaylistIndex)
                         mainWindow._pendingAddToPlaylistIndex = -1
                     }
+                    // 确保导入后页面状态不变（避免异步导入时页面被意外重置）
+                    var savedMenu = mainWindow.currentMenu
+                    var savedCustomIdx = mainWindow.currentCustomPlaylistIndex
+                    Qt.callLater(function() {
+                        if (savedMenu === "customPlaylist") {
+                            mainWindow.currentMenu = savedMenu
+                            mainWindow.currentCustomPlaylistIndex = savedCustomIdx
+                        }
+                    })
                 }
                 onRejected: mainWindow._pendingAddToPlaylistIndex = -1
             }

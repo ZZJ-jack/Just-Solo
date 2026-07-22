@@ -70,6 +70,7 @@ public:
     Q_INVOKABLE void addSongsToCustomPlaylist(const QStringList &paths, int playlistIndex);
     Q_INVOKABLE void addFolder(const QString &path);
     Q_INVOKABLE void removeTrack(int index);
+    Q_INVOKABLE void deleteSongByPath(const QString &path);  // 从所有列表删除（库/播放列表/收藏/历史/自建）
     Q_INVOKABLE void clearPlaylist();
 
     Q_INVOKABLE void playIndex(int index);

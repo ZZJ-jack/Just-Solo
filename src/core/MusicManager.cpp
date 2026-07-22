@@ -625,7 +625,7 @@ void MusicManager::renameCustomPlaylist(int index, const QString &newName) {
 bool MusicManager::isValidPlaylistName(const QString &name) const {
     if (name.trimmed().isEmpty()) return false;
     // 中英文 + 数字 + - + _
-    static const QRegularExpression re("^[a-zA-Z0-9_\\-\\u4e00-\\u9fff]+$");
+    static const QRegularExpression re("^[a-zA-Z0-9_\\-\\x{4e00}-\\x{9fff}]+$");
     return re.match(name.trimmed()).hasMatch();
 }
 
@@ -663,7 +663,30 @@ void MusicManager::playCustomPlaylist(int playlistIndex, int songIndex) {
 void MusicManager::deleteCustomPlaylist(int index) {
     if (index < 0 || index >= m_customPlaylists.size()) return;
     bool wasPlaying = (m_playingListIndex == 3 + index);
+
+    // 收集该列表的所有歌曲路径，用于清理历史
+    QVariantMap pl = m_customPlaylists[index].toMap();
+    QVariantList songs = pl["songs"].toList();
+    QStringList paths;
+    for (const QVariant &entry : songs) {
+        paths << entry.toMap()["path"].toString();
+    }
+
+    // 从历史中删除所有该列表的条目（无论是否正在播放）
+    bool histChanged = false;
+    for (int h = m_history.size() - 1; h >= 0; h--) {
+        if (paths.contains(m_history[h].toMap()["path"].toString())) {
+            m_history.removeAt(h);
+            histChanged = true;
+        }
+    }
+    if (histChanged) {
+        saveHistory();
+        emit historyChanged();
+    }
+
     if (wasPlaying) {
+        // 清空播放状态
         m_playingListIndex = -1;
         m_currentIndex = -1;
         m_currentCover.clear();
@@ -673,12 +696,14 @@ void MusicManager::deleteCustomPlaylist(int index) {
         emit currentIndexChanged();
         emit currentTrackChanged();
     }
+
     m_customPlaylists.removeAt(index);
-    // 删除后如果正在播放此列表，index 指后续列表，清空播放栏
+
     if (wasPlaying) {
         m_playlist.clear();
         emit playlistChanged();
     }
+
     saveCustomPlaylists();
     emit customPlaylistsChanged();
 }
@@ -841,6 +866,81 @@ void MusicManager::removeTrack(int index) {
     saveCache();
 }
 
+void MusicManager::deleteSongByPath(const QString &path) {
+    if (path.isEmpty()) return;
+
+    // 从音乐库删除
+    for (int i = 0; i < m_library.size(); i++) {
+        if (m_library[i].toMap()["path"].toString() == path) {
+            m_library.removeAt(i);
+            emit libraryChanged();
+            break;
+        }
+    }
+
+    // 从播放列表删除
+    for (int i = 0; i < m_playlist.size(); i++) {
+        if (m_playlist[i].toMap()["path"].toString() == path) {
+            if (m_currentIndex == i) {
+                m_currentIndex = -1;
+                m_player->stop();
+                emit currentIndexChanged();
+            } else if (m_currentIndex > i) {
+                m_currentIndex--;
+            }
+            m_playlist.removeAt(i);
+            emit playlistChanged();
+            break;
+        }
+    }
+
+    // 从收藏删除
+    for (int i = 0; i < m_favorites.size(); i++) {
+        if (m_favorites[i].toMap()["path"].toString() == path) {
+            m_favorites.removeAt(i);
+            saveFavorites();
+            emit favoritesChanged();
+            break;
+        }
+    }
+
+    // 从历史删除
+    for (int i = 0; i < m_history.size(); i++) {
+        if (m_history[i].toMap()["path"].toString() == path) {
+            m_history.removeAt(i);
+            saveHistory();
+            emit historyChanged();
+            break;
+        }
+    }
+
+    // 从所有自定义列表删除
+    bool plChanged = false;
+    for (int pl = 0; pl < m_customPlaylists.size(); pl++) {
+        QVariantMap plMap = m_customPlaylists[pl].toMap();
+        QVariantList songs = plMap["songs"].toList();
+        bool removed = false;
+        for (int s = 0; s < songs.size(); s++) {
+            if (songs[s].toMap()["path"].toString() == path) {
+                songs.removeAt(s);
+                removed = true;
+                break;
+            }
+        }
+        if (removed) {
+            plMap["songs"] = songs;
+            m_customPlaylists[pl] = plMap;
+            plChanged = true;
+        }
+    }
+    if (plChanged) {
+        saveCustomPlaylists();
+        emit customPlaylistsChanged();
+    }
+
+    saveCache();
+}
+
 void MusicManager::clearPlaylist() {
     m_playlist.clear();
     m_currentIndex = -1;
@@ -904,13 +1004,13 @@ void MusicManager::playFromLibrary(int libraryIndex) {
 
 void MusicManager::setPlaylistSource(int source) {
     if (source < 0 || source > 3 || source == m_playlistSource) {
-        if (source == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {
+        if (source == 0 && m_playlist.size() != m_library.size() && !m_library.isEmpty()) {
             m_playlist = m_library;
             emit playlistChanged();
         }
         return;
     }
-    if (source == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {
+    if (source == 0 && !m_library.isEmpty()) {
         m_playlist = m_library;
         emit playlistChanged();
     }
@@ -993,6 +1093,13 @@ void MusicManager::shutdown() {
 }
 
 void MusicManager::next() {
+    // 所有音乐模式：确保 m_playlist 与音乐库同步（防止被自定义列表覆盖）
+    if (m_playlistSource == 0) {
+        if (m_playlist.size() != m_library.size()) {
+            m_playlist = m_library;
+            emit playlistChanged();
+        }
+    }
     QVariantList &list = currentPlaylist();
     if (list.isEmpty()) return;
     int nextIdx;
@@ -1005,6 +1112,13 @@ void MusicManager::next() {
 }
 
 void MusicManager::previous() {
+    // 所有音乐模式：确保 m_playlist 与音乐库同步
+    if (m_playlistSource == 0) {
+        if (m_playlist.size() != m_library.size()) {
+            m_playlist = m_library;
+            emit playlistChanged();
+        }
+    }
     QVariantList &list = currentPlaylist();
     if (list.isEmpty()) return;
     int prevIdx = m_currentIndex <= 0 ? list.size() - 1 : m_currentIndex - 1;

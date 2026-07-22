@@ -33,6 +33,8 @@ ColumnLayout {
     property string emptySubHint: "点击上方「添加音乐」导入本地文件"
     // 额外右键菜单项：[{text, onClicked}, ...]
     property var contextMenuExtra: []
+    // 是否显示默认右键菜单项（收藏/取消收藏、删除此歌曲）
+    property bool showDefaultContextMenu: true
 
     // 当前正在播放的歌曲路径（跨来源匹配）
     // 不受 trackCrossSource 影响，始终返回当前播放歌曲路径
@@ -218,17 +220,25 @@ ColumnLayout {
     // ---- 右键菜单 ----
     Menu {
         id: contextMenu
-        background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 140 }
+        background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 150 }
         MenuItem {
             id: menuItem
+            visible: root.showDefaultContextMenu
             text: root.rightClickedTrack ? (musicManager.isFavorite(root.rightClickedTrack) ? "取消收藏" : "收藏") : "收藏"
             onClicked: { if (root.rightClickedTrack) musicManager.toggleFavorite(root.rightClickedTrack) }
             contentItem: Label { text: menuItem.text; font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
             background: Rectangle { color: menuItem.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
         }
+        MenuItem {
+            visible: root.showDefaultContextMenu
+            text: "删除此歌曲"
+            contentItem: Label { text: "删除此歌曲"; font.family: fontFamily; font.pixelSize: 14; color: "#e06666"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+            background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
+            onClicked: deleteConfirmDialog.open()
+        }
         MenuSeparator {
-            visible: root.contextMenuExtra.length > 0
-            contentItem: Rectangle { implicitHeight: 1; implicitWidth: 120; color: "#444466" }
+            visible: root.showDefaultContextMenu && root.contextMenuExtra.length > 0
+            contentItem: Rectangle { implicitHeight: 1; implicitWidth: 130; color: "#444466" }
         }
         Instantiator {
             model: root.contextMenuExtra
@@ -333,6 +343,90 @@ ColumnLayout {
                             }
                             switchSourceDialog.close()
                             Qt.callLater(function() { root.scrollToPlaying() })
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- 删除歌曲确认弹窗 ----
+    Dialog {
+        id: deleteConfirmDialog
+        parent: Overlay.overlay
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 380
+        padding: 28
+
+        Overlay.modal: Rectangle { color: "transparent" }
+
+        background: Rectangle {
+            color: "#2a2a48"
+            radius: 10
+            border.color: "#444466"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 16
+
+            RowLayout {
+                spacing: 10
+                Label {
+                    text: "🗑"
+                    font.pixelSize: 22
+                    color: "#e06666"
+                }
+                Label {
+                    text: "删除此歌曲"
+                    font.family: fontFamily
+                    font.pixelSize: 17
+                    font.bold: true
+                    color: "#dddddd"
+                }
+            }
+
+            Label {
+                text: "我们不会从磁盘删除此歌曲文件，欢迎重新加回。\n\n此操作会同步删除历史记录、播放列表、收藏及所有自定义列表中的此歌曲。"
+                font.family: fontFamily
+                font.pixelSize: 13
+                lineHeight: 1.5
+                color: "#aaaaaa"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                spacing: 12
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 80; radius: 6
+                    color: delCancelMA.containsMouse ? "#3a3a5a" : "#333350"
+                    border.color: "#444466"; border.width: 1
+                    Label { text: "取消"; anchors.centerIn: parent; font.family: fontFamily; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: delCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: deleteConfirmDialog.close()
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 80; radius: 6
+                    color: delConfirmMA.containsMouse ? "#cc5555" : "#994444"
+                    Label { text: "删除"; anchors.centerIn: parent; font.family: fontFamily; font.pixelSize: 13; color: "#eee" }
+                    MouseArea {
+                        id: delConfirmMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (root.rightClickedTrack) {
+                                musicManager.deleteSongByPath(root.rightClickedTrack.path || "")
+                                root.rightClickedTrack = null
+                            }
+                            deleteConfirmDialog.close()
                         }
                     }
                 }

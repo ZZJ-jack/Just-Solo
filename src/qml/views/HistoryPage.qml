@@ -6,6 +6,7 @@ import QtQuick
 MusicListView {
     songList: musicManager.history
     pageListIndex: 2
+    showDefaultContextMenu: false
     emptyHint: "还没有播放历史"
     emptySubHint: "播放歌曲后会自动记录"
     contextMenuExtra: [{ text: "删除历史", onClicked: function() { musicManager.removeHistoryItem(rightClickedIndex) } }]

@@ -6,6 +6,7 @@ import QtQuick
 MusicListView {
     songList: musicManager.favorites
     pageListIndex: 1
+    showDefaultContextMenu: false
     emptyHint: "还没有收藏的歌曲"
     emptySubHint: "在首页右键歌曲即可收藏"
     contextMenuExtra: [{ text: "取消收藏", onClicked: function() { musicManager.removeFavorite(rightClickedIndex) } }]

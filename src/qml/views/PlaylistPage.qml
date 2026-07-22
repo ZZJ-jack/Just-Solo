@@ -13,6 +13,7 @@ MusicListView {
                  : (src === 2 ? musicManager.history : musicManager.playlist)
         } catch (e) { return musicManager.playlist }
     }
+    showDefaultContextMenu: false
     emptyHint: "播放列表为空"
     emptySubHint: "在其他页面右键歌曲即可添加"
     contextMenuExtra: [
