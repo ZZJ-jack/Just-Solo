@@ -13,7 +13,7 @@ $OutputDir     = "release"
 # ============================================================
 # 1. 编译 Release
 # ============================================================
-Write-Host "开始打包......\n[1/3] 编译 Release......" -ForegroundColor Cyan
+Write-Host "[1/3] 编译 Release......" -ForegroundColor Cyan
 & $CMakePath --build $BuildDir --config Release
 if ($LASTEXITCODE -ne 0) {
     Write-Host "编译失败！" -ForegroundColor Red

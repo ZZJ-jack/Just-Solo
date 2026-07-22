@@ -883,8 +883,13 @@ void MusicManager::deleteSongByPath(const QString &path) {
         if (m_playlist[i].toMap()["path"].toString() == path) {
             if (m_currentIndex == i) {
                 m_currentIndex = -1;
+                m_playingListIndex = -1;
+                m_currentCover.clear();
+                m_currentAlbum.clear();
                 m_player->stop();
+                emit playingListIndexChanged();
                 emit currentIndexChanged();
+                emit currentTrackChanged();
             } else if (m_currentIndex > i) {
                 m_currentIndex--;
             }
