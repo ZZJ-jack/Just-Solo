@@ -221,9 +221,11 @@ ColumnLayout {
     Menu {
         id: contextMenu
         background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 150 }
+        topPadding: 0; bottomPadding: 0
         MenuItem {
             id: menuItem
             visible: root.showDefaultContextMenu
+            height: root.showDefaultContextMenu ? implicitHeight : 0
             text: root.rightClickedTrack ? (musicManager.isFavorite(root.rightClickedTrack) ? "取消收藏" : "收藏") : "收藏"
             onClicked: { if (root.rightClickedTrack) musicManager.toggleFavorite(root.rightClickedTrack) }
             contentItem: Label { text: menuItem.text; font.family: fontFamily; font.pixelSize: 14; color: "#cccccc"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
@@ -231,6 +233,7 @@ ColumnLayout {
         }
         MenuItem {
             visible: root.showDefaultContextMenu
+            height: root.showDefaultContextMenu ? implicitHeight : 0
             text: "删除此歌曲"
             contentItem: Label { text: "删除此歌曲"; font.family: fontFamily; font.pixelSize: 14; color: "#e06666"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
             background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
@@ -238,6 +241,7 @@ ColumnLayout {
         }
         MenuSeparator {
             visible: root.showDefaultContextMenu && root.contextMenuExtra.length > 0
+            height: root.showDefaultContextMenu && root.contextMenuExtra.length > 0 ? implicitHeight : 0
             contentItem: Rectangle { implicitHeight: 1; implicitWidth: 130; color: "#444466" }
         }
         Instantiator {

@@ -561,3 +561,7 @@ Just Solo更新日志：
   - `next()`/`previous()` 在 playlistSource=0 时使用了自定义列表的歌曲列表
   - `setPlaylistSource(0)` 不同步 `m_playlist` 导致弹窗确认后无法播放
   - `isValidPlaylistName` 正则 `\u4e00` 不兼容 QRegularExpression 改为 `\x{4e00}`
+  - 删除正在播放的歌曲时播放栏未清空（缺少 cover/album 清除与 currentTrackChanged 信号）
+  - 删除自建列表时历史清理逻辑被 `wasPlaying` 条件包裹，非播放列表不清理
+  - 右键菜单隐藏项留有空白（加 `height: 0` + `topPadding/bottomPadding: 0`）
+  - 自建列表导入完成后页面跳回欢迎页（添加恢复逻辑）

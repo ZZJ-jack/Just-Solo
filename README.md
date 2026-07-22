@@ -76,6 +76,7 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 - CMake 构建系统 + windeployqt 部署
 - 软件版本号 + 构建时间戳双版本号系统
 - 内置 `--develop` 开发者模式（提供控制台输出，方便调试）
+- 内置 `--develop --clearUserData` 开发者模式并清除用户数据（播放历史、收藏、设置）
 
 ---
 
@@ -249,8 +250,10 @@ cmake --build build --config Release
 #### 统一 playingListIndex/pageListIndex 定位系统，匹配才自动滚动
 #### 单实例运行检测：基于 QLocalServer，隐藏到托盘后点快捷方式恢复窗口
 #### 修复 `--develop` 误删用户数据，改为 `--clearUserData` 显式清理
+#### 右键菜单「删除此歌曲」确认弹窗，同步清理历史/收藏/播放列表/自定义列表
 #### 收藏页点击不同来源歌曲弹出切换确认弹窗
 #### `next()`/`previous()` 修复 playlistSource=0 时使用了自定义列表的歌曲列表
+#### 删除播放中的歌曲/自建列表时自动清空播放控制栏
 
 ---
 
