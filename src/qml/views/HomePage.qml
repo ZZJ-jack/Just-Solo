@@ -164,11 +164,12 @@ ColumnLayout {
 
     Dialog {
         id: switchSourceDialog
+        parent: Overlay.overlay
         modal: true
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
-        width: 320
-        padding: 0
+        width: 340
+        padding: 28
 
         Overlay.modal: Rectangle { color: "transparent" }
 
@@ -180,8 +181,7 @@ ColumnLayout {
         }
 
         contentItem: ColumnLayout {
-            spacing: 12
-            anchors.margins: 20
+            spacing: 14
 
             Label {
                 text: "切换播放列表"

@@ -123,8 +123,13 @@ Window {
             color: "#222236"
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 10
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: createListBtn.top
+                anchors.topMargin: 10
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
                 spacing: 0
 
                 // ---- Logo + 标题 ----
@@ -399,10 +404,11 @@ Window {
 
             // ---- 创建新列表（参照 NavItem 样式） ----
             Rectangle {
+                id: createListBtn
                 anchors.bottom: parent.bottom
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.bottomMargin: 10
+                anchors.bottomMargin: 2
                 anchors.leftMargin: 10
                 anchors.rightMargin: 10
                 height: 50
@@ -456,7 +462,7 @@ Window {
             ColumnLayout {
                 anchors.fill: parent
                 anchors.topMargin: 14
-                anchors.bottomMargin: playerBarHeight + 14
+                anchors.bottomMargin: 10
                 anchors.leftMargin: 30
                 anchors.rightMargin: 30
                 spacing: 0
@@ -1182,8 +1188,8 @@ Window {
         modal: true
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
-        width: 320
-        padding: 0
+        width: 340
+        padding: 28
 
         Overlay.modal: Rectangle { color: "transparent" }
 
@@ -1195,8 +1201,7 @@ Window {
         }
 
         contentItem: ColumnLayout {
-            spacing: 12
-            anchors.margins: 20
+            spacing: 14
 
             Label {
                 text: "新播放列表"
@@ -1214,6 +1219,7 @@ Window {
                 leftPadding: 12
                 rightPadding: 12
                 placeholderText: "例如：我的歌单"
+                placeholderTextColor: "#aaa"
                 font.family: appFont.name
                 font.pixelSize: 14
                 color: "#ddd"

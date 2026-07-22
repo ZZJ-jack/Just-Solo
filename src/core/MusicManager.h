@@ -143,6 +143,7 @@ public:
 
     // 缓存控制：开发者模式不启用，非开发者模式持久化到用户目录
     Q_INVOKABLE void setUseCache(bool use);
+    Q_INVOKABLE void clearUserData();
 
     // ---- 收藏 ----
     Q_INVOKABLE void toggleFavorite(const QVariantMap &track);   // 切换收藏（有则删，无则加）

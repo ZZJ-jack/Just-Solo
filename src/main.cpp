@@ -267,9 +267,14 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("OS_VERSION", osVersionString());
 #endif
 
-    // 注册音乐管理器（非开发者模式启用本地缓存）
+    // 注册音乐管理器（始终启用本地缓存；--develop 仅开控制台日志，不再清空数据）
     MusicManager *musicManager = new MusicManager(&app);
-    musicManager->setUseCache(!args.contains("--develop"));
+    musicManager->setUseCache(true);
+
+    // --clearUserData：显式清空用户配置和缓存数据（独立于 --develop）
+    if (args.contains("--clearUserData"))
+        musicManager->clearUserData();
+
     engine.rootContext()->setContextProperty("musicManager", musicManager);
 
     // 全局快捷键

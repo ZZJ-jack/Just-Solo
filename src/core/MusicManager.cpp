@@ -367,15 +367,6 @@ MusicManager::MusicManager(QObject *parent)
 
 void MusicManager::setUseCache(bool use) {
     m_useCache = use;
-    if (!m_useCache) {
-        // 开发者模式：删除已有持久化数据，每次启动从头开始
-        QString devCache = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-        QDir(devCache).removeRecursively();
-        return;
-    }
-
-    // 缓存目录：%APPDATA%/Just Solo （Windows）
-    //            ~/.local/share/Just Solo （Linux / macOS）
     m_cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(m_cacheDir);
     loadSettings();
@@ -383,6 +374,11 @@ void MusicManager::setUseCache(bool use) {
     loadFavorites();
     loadHistory();
     loadCustomPlaylists();
+}
+
+void MusicManager::clearUserData() {
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir(dir).removeRecursively();
 }
 
 // ---- 设置文件（透明度等） ----
