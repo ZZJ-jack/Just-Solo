@@ -594,11 +594,118 @@ void MusicManager::loadCustomPlaylists() {
 // ---- 自定义播放列表操作 ----
 
 void MusicManager::createCustomPlaylist(const QString &name) {
-    if (name.trimmed().isEmpty()) return;
+    QString n = name.trimmed();
+    if (!isValidPlaylistName(n)) return;
+    // 检查重名
+    for (const QVariant &pl : m_customPlaylists) {
+        if (pl.toMap()["name"].toString() == n) return;
+    }
     QVariantMap pl;
-    pl["name"] = name.trimmed();
+    pl["name"] = n;
     pl["songs"] = QVariantList();
     m_customPlaylists.append(pl);
+    saveCustomPlaylists();
+    emit customPlaylistsChanged();
+}
+
+void MusicManager::renameCustomPlaylist(int index, const QString &newName) {
+    QString n = newName.trimmed();
+    if (index < 0 || index >= m_customPlaylists.size() || !isValidPlaylistName(n)) return;
+    // 检查重名（排除自己）
+    for (int i = 0; i < m_customPlaylists.size(); i++) {
+        if (i != index && m_customPlaylists[i].toMap()["name"].toString() == n) return;
+    }
+    QVariantMap pl = m_customPlaylists[index].toMap();
+    pl["name"] = n;
+    m_customPlaylists[index] = pl;
+    saveCustomPlaylists();
+    emit customPlaylistsChanged();
+}
+
+bool MusicManager::isValidPlaylistName(const QString &name) const {
+    if (name.trimmed().isEmpty()) return false;
+    // 中英文 + 数字 + - + _
+    static const QRegularExpression re("^[a-zA-Z0-9_\\-\\u4e00-\\u9fff]+$");
+    return re.match(name.trimmed()).hasMatch();
+}
+
+void MusicManager::playCustomPlaylist(int playlistIndex, int songIndex) {
+    if (playlistIndex < 0 || playlistIndex >= m_customPlaylists.size()) return;
+    QVariantMap pl = m_customPlaylists[playlistIndex].toMap();
+    QVariantList songPaths = pl["songs"].toList();
+    if (songIndex < 0 || songIndex >= songPaths.size()) return;
+
+    // 根据路径从音乐库查找完整信息，构建播放列表
+    QVariantList newPlaylist;
+    for (const QVariant &entry : songPaths) {
+        QString path = entry.toMap()["path"].toString();
+        if (path.isEmpty()) continue;
+        for (const QVariant &libEntry : m_library) {
+            if (libEntry.toMap()["path"].toString() == path) {
+                newPlaylist.append(libEntry);
+                break;
+            }
+        }
+    }
+
+    if (newPlaylist.isEmpty()) return;
+
+    m_playlist = newPlaylist;
+    m_playingListIndex = 3 + playlistIndex;
+    emit playingListIndexChanged();
+    m_playlistSource = 3;
+    emit playlistSourceChanged();
+    emit playlistChanged();
+
+    playIndex(songIndex);
+}
+
+void MusicManager::deleteCustomPlaylist(int index) {
+    if (index < 0 || index >= m_customPlaylists.size()) return;
+    bool wasPlaying = (m_playingListIndex == 3 + index);
+    if (wasPlaying) {
+        m_playingListIndex = -1;
+        m_currentIndex = -1;
+        m_currentCover.clear();
+        m_currentAlbum.clear();
+        m_player->stop();
+        emit playingListIndexChanged();
+        emit currentIndexChanged();
+        emit currentTrackChanged();
+    }
+    m_customPlaylists.removeAt(index);
+    // 删除后如果正在播放此列表，index 指后续列表，清空播放栏
+    if (wasPlaying) {
+        m_playlist.clear();
+        emit playlistChanged();
+    }
+    saveCustomPlaylists();
+    emit customPlaylistsChanged();
+}
+
+void MusicManager::addSongsToCustomPlaylist(const QStringList &paths, int index) {
+    if (index < 0 || index >= m_customPlaylists.size()) return;
+    QVariantMap pl = m_customPlaylists[index].toMap();
+    QVariantList songs = pl["songs"].toList();
+
+    for (const QString &path : paths) {
+        // 去重
+        bool exists = false;
+        for (const QVariant &s : songs) {
+            if (s.toMap()["path"].toString() == path) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            QVariantMap entry;
+            entry["path"] = path;
+            songs.append(entry);
+        }
+    }
+
+    pl["songs"] = songs;
+    m_customPlaylists[index] = pl;
     saveCustomPlaylists();
     emit customPlaylistsChanged();
 }
@@ -738,9 +845,11 @@ void MusicManager::clearPlaylist() {
     m_playlist.clear();
     m_currentIndex = -1;
     m_playlistSource = 0;
+    m_playingListIndex = -1;
     m_currentCover.clear();            // 清空封面
     m_currentAlbum.clear();            // 清空专辑
     m_player->stop();
+    emit playingListIndexChanged();
     emit playlistChanged();
     emit playlistSourceChanged();
     emit currentIndexChanged();
@@ -764,6 +873,11 @@ void MusicManager::playIndex(int index) {
     }
     if (index < 0 || index >= list.size()) return;
     m_currentIndex = index;
+    // 同步播放列表索引（0=库, 1=收藏, 2=历史；3+n 由 playCustomPlaylist 设置）
+    if (m_playlistSource < 3) {
+        m_playingListIndex = m_playlistSource;
+        emit playingListIndexChanged();
+    }
     QVariantMap track = list[index].toMap();
     QUrl url = QUrl::fromLocalFile(track["path"].toString());
     m_currentCover = track["cover"].toString();
@@ -789,7 +903,7 @@ void MusicManager::playFromLibrary(int libraryIndex) {
 }
 
 void MusicManager::setPlaylistSource(int source) {
-    if (source < 0 || source > 2 || source == m_playlistSource) {
+    if (source < 0 || source > 3 || source == m_playlistSource) {
         if (source == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {
             m_playlist = m_library;
             emit playlistChanged();

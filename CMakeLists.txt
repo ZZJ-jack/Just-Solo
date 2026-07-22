@@ -59,13 +59,13 @@ qt_add_qml_module(JustSolo
         src/qml/components/NavItem.qml
         src/qml/components/SubNavItem.qml
         src/qml/components/SongRow.qml
+        src/qml/components/MusicListView.qml
         src/qml/views/HomePage.qml
+        src/qml/views/PlaylistPage.qml
         src/qml/views/FavoritePage.qml
         src/qml/views/HistoryPage.qml
         src/qml/views/SettingsPage.qml
         src/qml/views/PlayerDetailPage.qml
-        src/qml/views/PlaylistPage.qml
-        src/qml/views/CustomPlaylistPage.qml
     RESOURCES
         data/image/logo.png
         data/image/logo2.png

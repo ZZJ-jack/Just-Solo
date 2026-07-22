@@ -33,7 +33,7 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 同时，Just Solo 已原生支持 Windows SMTC 系统媒体控件，可配合 [NSD 灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen大佬](https://github.com/GEORGEWWWU) 开发）显示音乐信息与控制播放（暂请将目标音乐平台设置成通用音频）。
 
 **性能**
-- 平均内存占用 < 150MB（vs Electron 的 500MB+）
+- 平均内存占用 < 150MB（vs Electron 的 500MB+） （PS：随着功能增加，软件在前台运行时内存占用可能会增加，但是放在后台、托盘运行时内存占用会自动释放）
 - 冷启动 < 0.5s
 - 原生 GPU 渲染，60fps 流畅动画
 - `MetadataReader` 二进制解析（~1ms/文件），批处理 10 文件/轮

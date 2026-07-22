@@ -43,6 +43,7 @@ class MusicManager : public QObject
 
     // ---- 自定义播放列表 ----
     Q_PROPERTY(QVariantList customPlaylists READ customPlaylists NOTIFY customPlaylistsChanged)
+    Q_PROPERTY(int playingListIndex READ playingListIndex NOTIFY playingListIndexChanged)  // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义
 
 public:
     explicit MusicManager(QObject *parent = nullptr);
@@ -66,6 +67,7 @@ public:
     Q_ENUM(PlaylistSource)
 
     Q_INVOKABLE void addFiles(const QStringList &paths);
+    Q_INVOKABLE void addSongsToCustomPlaylist(const QStringList &paths, int playlistIndex);
     Q_INVOKABLE void addFolder(const QString &path);
     Q_INVOKABLE void removeTrack(int index);
     Q_INVOKABLE void clearPlaylist();
@@ -123,6 +125,11 @@ public:
 
     // ---- 自定义播放列表 ----
     Q_INVOKABLE void createCustomPlaylist(const QString &name);
+    Q_INVOKABLE void renameCustomPlaylist(int index, const QString &newName);
+    Q_INVOKABLE void playCustomPlaylist(int playlistIndex, int songIndex);
+    Q_INVOKABLE void deleteCustomPlaylist(int index);
+    Q_INVOKABLE bool isValidPlaylistName(const QString &name) const;
+    int playingListIndex() const { return m_playingListIndex; }
     QVariantList customPlaylists() const { return m_customPlaylists; }
 
     Q_INVOKABLE qint64 position() const;
@@ -173,6 +180,7 @@ signals:
     void trackCrossSourceChanged();
     void minimizeToTrayChanged();
     void customPlaylistsChanged();
+    void playingListIndexChanged();
     void positionChanged(qint64 ms);
     void durationChanged();
     void isLoadingChanged();
@@ -220,7 +228,8 @@ private:
     int m_playlistSource = 0;       // 活跃播放列表来源 (SourcePlaylist=0)
     bool m_trackCrossSource = false; // 跨来源播放跟踪（默认关闭）
     bool m_minimizeToTray = false;
-    QVariantList m_customPlaylists;     // 关闭窗口自动最小化到系统托盘（默认关闭）
+    QVariantList m_customPlaylists;         // 自定义播放列表
+    int m_playingListIndex = -1;            // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义
     void loadSettings();
     void saveSettings();
     int m_currentIndex = -1;

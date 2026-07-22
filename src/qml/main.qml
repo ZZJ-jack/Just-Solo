@@ -50,6 +50,8 @@ Window {
 
     // ---- 自定义播放列表 ----
     property int currentCustomPlaylistIndex: -1
+    property int _pendingAddToPlaylistIndex: -1   // 右键添加音乐的待定列表
+    property int _rightClickedPlaylistIndex: -1   // 右键菜单的列表索引
 
     // ---- 搜索 ----
     property string searchText: ""
@@ -238,7 +240,7 @@ Window {
 
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/home.png"
-                        label: "首页"
+                        label: "所有音乐"
                         iconW: 34; iconH: 34; iconSrcSize: 26
                         active: currentMenu === "home"
                         fontFamily: appFont.name
@@ -390,9 +392,71 @@ Window {
                             id: plMA
                             anchors.fill: parent; hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                mainWindow.currentMenu = "customPlaylist"
-                                mainWindow.currentCustomPlaylistIndex = index
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: function(mouse) {
+                                if (mouse.button === Qt.RightButton) {
+                                    mainWindow._pendingAddToPlaylistIndex = index
+                                    mainWindow._rightClickedPlaylistIndex = index
+                                    plContextMenu.popup()
+                                } else {
+                                    mainWindow.currentMenu = "customPlaylist"
+                                    mainWindow.currentCustomPlaylistIndex = index
+                                }
+                            }
+                        }
+
+                        Menu {
+                            id: plContextMenu
+                            property QtObject win: mainWindow
+                            background: Rectangle { color: "#2a2a3a"; border.color: "#444466"; radius: 6; implicitWidth: 150 }
+
+                            MenuItem {
+                                text: "添加本地音乐"
+                                font.family: appFont.name; font.pixelSize: 14
+                                contentItem: Label {
+                                    text: "添加本地音乐"
+                                    font.family: appFont.name; font.pixelSize: 14; color: "#cccccc"
+                                    verticalAlignment: Text.AlignVCenter; leftPadding: 12
+                                }
+                                background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
+                                onClicked: fileDialog.open()
+                            }
+
+                            MenuItem {
+                                text: "重命名"
+                                font.family: appFont.name; font.pixelSize: 14
+                                contentItem: Label {
+                                    text: "重命名"
+                                    font.family: appFont.name; font.pixelSize: 14; color: "#cccccc"
+                                    verticalAlignment: Text.AlignVCenter; leftPadding: 12
+                                }
+                                background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
+                                onClicked: {
+                                    renameField.text = musicManager.customPlaylists[plContextMenu.win._rightClickedPlaylistIndex]?.name || ""
+                                    renameDialog.open()
+                                }
+                            }
+
+                            MenuItem {
+                                text: "删除"
+                                font.family: appFont.name; font.pixelSize: 14
+                                contentItem: Label {
+                                    text: "删除"
+                                    font.family: appFont.name; font.pixelSize: 14; color: "#cc5555"
+                                    verticalAlignment: Text.AlignVCenter; leftPadding: 12
+                                }
+                                background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
+                                onClicked: {
+                                    if (plContextMenu.win._rightClickedPlaylistIndex >= 0) {
+                                        musicManager.deleteCustomPlaylist(plContextMenu.win._rightClickedPlaylistIndex)
+                                        // 如果删除的是当前显示的列表，切回首页
+                                        if (plContextMenu.win.currentMenu === "customPlaylist"
+                                            && plContextMenu.win.currentCustomPlaylistIndex === plContextMenu.win._rightClickedPlaylistIndex) {
+                                            plContextMenu.win.currentMenu = "home"
+                                            plContextMenu.win.currentCustomPlaylistIndex = -1
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -710,7 +774,7 @@ Window {
 
                     Label {
                         text: currentMenu === "" ? "欢迎使用 Just Solo"
-                              : currentMenu === "home" ? "首页"
+                              : currentMenu === "home" ? "所有音乐"
                               : currentMenu === "playlist" ? "播放列表"
                               : currentMenu === "favorite" ? "收藏"
                               : currentMenu === "history" ? "历史"
@@ -807,13 +871,35 @@ Window {
                     Layout.fillHeight: true
                     clip: true
 
+                    // 全局通用歌曲列表（所有音乐 & 自建列表共用）
                     HomePage {
                         anchors.fill: parent
-                        visible: currentMenu === "home"
+                        visible: currentMenu === "home" || currentMenu === "customPlaylist"
                         sidebarWidth: mainWindow.sidebarWidth
                         windowWidth: mainWindow.width
                         fontFamily: appFont.name
-                        scrollToIndex: mainWindow.searchScrollIndex
+                        scrollToIndex: currentMenu === "home" ? mainWindow.searchScrollIndex : -1
+                        customPlaylistIndex: currentMenu === "customPlaylist" ? currentCustomPlaylistIndex : -1
+                        pageListIndex: currentMenu === "customPlaylist" ? 3 + currentCustomPlaylistIndex : 0
+                        songList: {
+                            if (currentMenu === "customPlaylist" && currentCustomPlaylistIndex >= 0
+                                && currentCustomPlaylistIndex < musicManager.customPlaylists.length) {
+                                var raw = musicManager.customPlaylists[currentCustomPlaylistIndex].songs || []
+                                var lib = musicManager.library
+                                var result = []
+                                for (var i = 0; i < raw.length; i++) {
+                                    var path = raw[i].path || ""
+                                    for (var j = 0; j < lib.length; j++) {
+                                        if (lib[j].path === path) {
+                                            result.push(lib[j])
+                                            break
+                                        }
+                                    }
+                                }
+                                return result
+                            }
+                            return musicManager.library
+                        }
                     }
                     PlaylistPage {
                         anchors.fill: parent
@@ -835,14 +921,6 @@ Window {
                         sidebarWidth: mainWindow.sidebarWidth
                         windowWidth: mainWindow.width
                         fontFamily: appFont.name
-                    }
-                    CustomPlaylistPage {
-                        anchors.fill: parent
-                        visible: currentMenu === "customPlaylist"
-                        sidebarWidth: mainWindow.sidebarWidth
-                        windowWidth: mainWindow.width
-                        fontFamily: appFont.name
-                        playlistIndex: mainWindow.currentCustomPlaylistIndex
                     }
                     SettingsPage {
                         anchors.fill: parent
@@ -879,7 +957,13 @@ Window {
                         paths.push(fileDialog.selectedFiles[i].toString().replace("file:///", ""))
                     }
                     musicManager.addFiles(paths)
+                    // 如果是从自建列表右键调用的，同时加入该列表
+                    if (mainWindow._pendingAddToPlaylistIndex >= 0) {
+                        musicManager.addSongsToCustomPlaylist(paths, mainWindow._pendingAddToPlaylistIndex)
+                        mainWindow._pendingAddToPlaylistIndex = -1
+                    }
                 }
+                onRejected: mainWindow._pendingAddToPlaylistIndex = -1
             }
         }
     }
@@ -1234,6 +1318,14 @@ Window {
                 Keys.onEnterPressed: doCreateList()
             }
 
+            Label {
+                id: createNameHint
+                text: ""
+                font.family: appFont.name; font.pixelSize: 11; color: "#cc5555"
+                Layout.topMargin: -4
+                visible: text.length > 0
+            }
+
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 4
@@ -1264,13 +1356,137 @@ Window {
         }
     }
 
+    // ---- 重命名自定义列表对话框 ----
+    Dialog {
+        id: renameDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 340
+        padding: 28
+
+        Overlay.modal: Rectangle { color: "transparent" }
+
+        background: Rectangle {
+            color: "#2a2a48"
+            radius: 10
+            border.color: "#444466"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+
+            Label {
+                text: "重命名列表"
+                font.family: appFont.name
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+                Layout.bottomMargin: 4
+            }
+
+            TextField {
+                id: renameField
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                leftPadding: 12; rightPadding: 12
+                placeholderText: "输入新名称"
+                placeholderTextColor: "#aaa"
+                font.family: appFont.name
+                font.pixelSize: 14
+                color: "#ddd"
+                background: Rectangle {
+                    radius: 6
+                    color: "#333350"
+                    border.color: "#555577"
+                    border.width: 1
+                }
+                onTextChanged: renameHint.text = ""
+                Keys.onReturnPressed: doRename()
+                Keys.onEnterPressed: doRename()
+            }
+
+            Label {
+                id: renameHint
+                text: ""
+                font.family: appFont.name; font.pixelSize: 11; color: "#cc5555"
+                Layout.topMargin: -4
+                visible: text.length > 0
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 12
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: renameCancelMA.containsMouse ? "#3a3a5a" : "#333350"
+                    border.color: "#444466"; border.width: 1
+                    Label { text: "取消"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: renameCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: { renameField.text = ""; renameDialog.close() }
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: renameConfirmMA.containsMouse ? "#4a6a8a" : "#3a5a7a"
+                    Label { text: "确定"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#ddd" }
+                    MouseArea {
+                        id: renameConfirmMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: doRename()
+                    }
+                }
+            }
+        }
+    }
+
     function doCreateList() {
         var name = listNameField.text.trim()
-        if (name.length > 0) {
-            musicManager.createCustomPlaylist(name)
-            listNameField.text = ""
-            createListDialog.close()
+        if (name.length === 0) return
+        // 验证名称格式
+        if (!musicManager.isValidPlaylistName(name)) {
+            createNameHint.text = "仅支持中英文、数字、- 和 _"
+            return
         }
+        // 检查重名
+        var lists = musicManager.customPlaylists
+        for (var i = 0; i < lists.length; i++) {
+            if (lists[i].name === name) {
+                createNameHint.text = "已存在同名列表"
+                return
+            }
+        }
+        createNameHint.text = ""
+        musicManager.createCustomPlaylist(name)
+        listNameField.text = ""
+        createListDialog.close()
+    }
+
+    function doRename() {
+        var name = renameField.text.trim()
+        if (name.length === 0 || mainWindow._rightClickedPlaylistIndex < 0) return
+        // 验证名称格式
+        if (!musicManager.isValidPlaylistName(name)) {
+            renameHint.text = "仅支持中英文、数字、- 和 _"
+            return
+        }
+        // 检查重名（排除自己）
+        var lists = musicManager.customPlaylists
+        for (var i = 0; i < lists.length; i++) {
+            if (i !== mainWindow._rightClickedPlaylistIndex && lists[i].name === name) {
+                renameHint.text = "已存在同名列表"
+                return
+            }
+        }
+        renameHint.text = ""
+        musicManager.renameCustomPlaylist(mainWindow._rightClickedPlaylistIndex, name)
+        renameField.text = ""
+        renameDialog.close()
     }
 
     function customPlaylistName() {
