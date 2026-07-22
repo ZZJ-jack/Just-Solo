@@ -382,6 +382,7 @@ void MusicManager::setUseCache(bool use) {
     loadCache();
     loadFavorites();
     loadHistory();
+    loadCustomPlaylists();
 }
 
 // ---- 设置文件（透明度等） ----
@@ -578,6 +579,32 @@ void MusicManager::loadHistory() {
     m_history = readVariantListFromFile(m_cacheDir + "/history_cache.json");
     if (!m_history.isEmpty())
         emit historyChanged();
+}
+
+// ---- 自定义播放列表缓存 ----
+
+void MusicManager::saveCustomPlaylists() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    writeVariantListToFile(m_customPlaylists, m_cacheDir + "/custom_playlists.json");
+}
+
+void MusicManager::loadCustomPlaylists() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    m_customPlaylists = readVariantListFromFile(m_cacheDir + "/custom_playlists.json");
+    if (!m_customPlaylists.isEmpty())
+        emit customPlaylistsChanged();
+}
+
+// ---- 自定义播放列表操作 ----
+
+void MusicManager::createCustomPlaylist(const QString &name) {
+    if (name.trimmed().isEmpty()) return;
+    QVariantMap pl;
+    pl["name"] = name.trimmed();
+    pl["songs"] = QVariantList();
+    m_customPlaylists.append(pl);
+    saveCustomPlaylists();
+    emit customPlaylistsChanged();
 }
 
 void MusicManager::addFiles(const QStringList &paths) {

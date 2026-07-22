@@ -65,6 +65,7 @@ qt_add_qml_module(JustSolo
         src/qml/views/SettingsPage.qml
         src/qml/views/PlayerDetailPage.qml
         src/qml/views/PlaylistPage.qml
+        src/qml/views/CustomPlaylistPage.qml
     RESOURCES
         data/image/logo.png
         data/image/logo2.png
@@ -81,6 +82,8 @@ qt_add_qml_module(JustSolo
         data/image/mode_stop.png
         data/image/PlayList.png
         data/image/AddToPlayList.png
+        data/image/creatList.png
+        data/image/SelfList.png
         data/font/HarmonyOS_Sans_SC_Regular.ttf
 )
 

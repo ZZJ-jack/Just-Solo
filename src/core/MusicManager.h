@@ -41,6 +41,9 @@ class MusicManager : public QObject
     Q_PROPERTY(bool trackCrossSource READ trackCrossSource WRITE setTrackCrossSource NOTIFY trackCrossSourceChanged)
     Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY minimizeToTrayChanged)
 
+    // ---- 自定义播放列表 ----
+    Q_PROPERTY(QVariantList customPlaylists READ customPlaylists NOTIFY customPlaylistsChanged)
+
 public:
     explicit MusicManager(QObject *parent = nullptr);
 
@@ -118,6 +121,10 @@ public:
     Q_INVOKABLE void removeFromPlaylist(const QVariantMap &track); // 按路径从播放队列删除
     Q_INVOKABLE void copyToPlaylist(int source);                  // 将指定来源列表全部复制到播放列表
 
+    // ---- 自定义播放列表 ----
+    Q_INVOKABLE void createCustomPlaylist(const QString &name);
+    QVariantList customPlaylists() const { return m_customPlaylists; }
+
     Q_INVOKABLE qint64 position() const;
     Q_INVOKABLE qint64 duration() const;
     Q_INVOKABLE void seek(qint64 ms);
@@ -164,6 +171,7 @@ signals:
     void playlistSourceChanged();
     void trackCrossSourceChanged();
     void minimizeToTrayChanged();
+    void customPlaylistsChanged();
     void positionChanged(qint64 ms);
     void durationChanged();
     void isLoadingChanged();
@@ -193,6 +201,8 @@ private:
     void loadFavorites();
     void saveHistory();
     void loadHistory();
+    void saveCustomPlaylists();
+    void loadCustomPlaylists();
     QString m_cacheDir;          // 缓存目录（如 %APPDATA%/Just Solo）
     bool m_useCache = false;     // 开发者模式=false，非开发者模式=true
 
@@ -208,7 +218,8 @@ private:
     qreal m_menuOpacity = 0.80;     // 模式菜单透明度 (0.3-1.0)
     int m_playlistSource = 0;       // 活跃播放列表来源 (SourcePlaylist=0)
     bool m_trackCrossSource = false; // 跨来源播放跟踪（默认关闭）
-    bool m_minimizeToTray = false;     // 关闭窗口自动最小化到系统托盘（默认关闭）
+    bool m_minimizeToTray = false;
+    QVariantList m_customPlaylists;     // 关闭窗口自动最小化到系统托盘（默认关闭）
     void loadSettings();
     void saveSettings();
     int m_currentIndex = -1;

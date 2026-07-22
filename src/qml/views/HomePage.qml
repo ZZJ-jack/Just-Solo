@@ -164,19 +164,75 @@ ColumnLayout {
 
     Dialog {
         id: switchSourceDialog
-        parent: Overlay.overlay
-        title: "切换播放列表"
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        anchors.centerIn: parent
-        background: Rectangle { radius: 10; color: "#1e1e30"; border.color: "#3a3a55" }
-        Label {
-            text: "当前播放来源不是首页，\n点击确定将从头播放选定的歌曲。"
-            font.family: fontFamily; font.pixelSize: 13; color: "#ccc"
-            wrapMode: Text.WordWrap; width: 260
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 320
+        padding: 0
+
+        Overlay.modal: Rectangle { color: "transparent" }
+
+        background: Rectangle {
+            color: "#2a2a48"
+            radius: 10
+            border.color: "#444466"
+            border.width: 1
         }
-        onAccepted: {
-            musicManager.playlistSource = 0
-            musicManager.playIndex(musicListLayout._pendingIndex)
+
+        contentItem: ColumnLayout {
+            spacing: 12
+            anchors.margins: 20
+
+            Label {
+                text: "切换播放列表"
+                font.family: fontFamily
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+                Layout.bottomMargin: 4
+            }
+
+            Label {
+                text: "当前播放来源不是首页，\n点击确定将从头播放选定的歌曲。"
+                font.family: fontFamily
+                font.pixelSize: 14
+                lineHeight: 1.4
+                color: "#cccccc"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 12
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: switchCancelMA.containsMouse ? "#3a3a5a" : "#333350"
+                    border.color: "#444466"; border.width: 1
+                    Label { text: "取消"; anchors.centerIn: parent; font.family: fontFamily; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: switchCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: switchSourceDialog.close()
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: switchConfirmMA.containsMouse ? "#4a6a8a" : "#3a5a7a"
+                    Label { text: "确定"; anchors.centerIn: parent; font.family: fontFamily; font.pixelSize: 13; color: "#ddd" }
+                    MouseArea {
+                        id: switchConfirmMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            musicManager.playlistSource = 0
+                            musicManager.playIndex(musicListLayout._pendingIndex)
+                            switchSourceDialog.close()
+                        }
+                    }
+                }
+            }
         }
     }
 }

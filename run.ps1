@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
-
+# 以下为可选操作，编译失败可以尝试取消注释
 # # 强制清掉所有 QML 编译产物
 # $qmlDirs = @(
 #     (Join-Path $PSScriptRoot "build\.qmlcache"),

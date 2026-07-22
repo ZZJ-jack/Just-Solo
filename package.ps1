@@ -13,7 +13,7 @@ $OutputDir     = "release"
 # ============================================================
 # 1. 编译 Release
 # ============================================================
-Write-Host "[1/3] 编译 Release..." -ForegroundColor Cyan
+Write-Host "开始打包......\n[1/3] 编译 Release......" -ForegroundColor Cyan
 & $CMakePath --build $BuildDir --config Release
 if ($LASTEXITCODE -ne 0) {
     Write-Host "编译失败！" -ForegroundColor Red
@@ -24,7 +24,7 @@ if ($LASTEXITCODE -ne 0) {
 # ============================================================
 # 2. 准备输出目录
 # ============================================================
-Write-Host "[2/3] 准备输出目录..." -ForegroundColor Cyan
+Write-Host "[2/3] 准备输出目录......" -ForegroundColor Cyan
 if (Test-Path $OutputDir) {
     Remove-Item -Recurse -Force $OutputDir
 }
@@ -42,7 +42,7 @@ Copy-Item $ExePath $OutputDir
 # ============================================================
 # 3. windeployqt
 # ============================================================
-Write-Host "[3/3] 部署 Qt 依赖..." -ForegroundColor Cyan
+Write-Host "[3/3] 部署 Qt 依赖......" -ForegroundColor Cyan
 $DeployExe = "$OutputDir\$AppName.exe"
 & "$QtBinDir\windeployqt.exe" --qmldir "src\qml" $DeployExe
 if ($LASTEXITCODE -ne 0) {

@@ -48,6 +48,9 @@ Window {
     // ---- 播放详情页控制 ----
     property bool showPlayerDetail: false
 
+    // ---- 自定义播放列表 ----
+    property int currentCustomPlaylistIndex: -1
+
     // ---- 搜索 ----
     property string searchText: ""
     property var searchResults: []
@@ -105,7 +108,10 @@ Window {
     // 主体布局：侧边栏 | 内容区
     // ============================================================
     RowLayout {
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: playerBar.top
         spacing: 0
 
         // ----------------------------------------------------------
@@ -252,7 +258,7 @@ Window {
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/history.png"
                         label: "历史"
-                        iconW: 34; iconH: 34; iconSrcSize: 32
+                        iconW: 34; iconH: 34; iconSrcSize: 26
                         active: currentMenu === "history"
                         fontFamily: appFont.name
                         onClicked: currentMenu = "history"
@@ -330,8 +336,112 @@ Window {
                     }
                 }
 
+                // ---- 自定义播放列表 ----
+                ListView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    visible: musicManager.customPlaylists.length > 0
+                    clip: true
+                    spacing: 2
+                    model: musicManager.customPlaylists
+
+                    delegate: Rectangle {
+                        width: ListView.view.width
+                        height: 55
+                        radius: 6
+                        color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === index ? "#36365a"
+                             : (plMA.containsMouse ? "#2a2a48" : "transparent")
+
+                        RowLayout {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 10
+
+                            Rectangle {
+                                Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: 4; color: "transparent"
+                                Image {
+                                    anchors.centerIn: parent
+                                    source: "qrc:/qt/qml/JustSolo/data/image/SelfList.png"
+                                    sourceSize.width: 30
+                                    sourceSize.height: 30
+                                }
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                text: modelData.name || "未命名"
+                                font.family: appFont.name
+                                font.pixelSize: 17
+                                color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === index ? "#cccccc" : (plMA.containsMouse ? "#cccccc" : "#888")
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        MouseArea {
+                            id: plMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                mainWindow.currentMenu = "customPlaylist"
+                                mainWindow.currentCustomPlaylistIndex = index
+                            }
+                        }
+                    }
+                }
+
                 // ---- 弹性撑满 ----
                 Item { Layout.fillHeight: true }
+            }
+
+            // ---- 创建新列表（参照 NavItem 样式） ----
+            Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottomMargin: 10
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                height: 50
+                radius: 6
+                z: 10
+                color: sidebarCreateMA.containsMouse ? "#2a2a48" : "transparent"
+
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    spacing: 10
+
+                    Rectangle {
+                        width: 34; height: 34; radius: 4; color: "transparent"
+
+                        Image {
+                            anchors.centerIn: parent
+                            source: "qrc:/qt/qml/JustSolo/data/image/creatList.png"
+                            sourceSize.width: 26
+                            sourceSize.height: 26
+                        }
+                    }
+
+                    Label {
+                        text: "创建新列表"
+                        font.family: appFont.name
+                        font.pixelSize: 17
+                        color: sidebarCreateMA.containsMouse ? "#cccccc" : "#888"
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+
+                MouseArea {
+                    id: sidebarCreateMA
+                    anchors.fill: parent; hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: createListDialog.open()
+                }
             }
         }
 
@@ -574,6 +684,7 @@ Window {
                            : currentMenu === "playlist" ? "qrc:/qt/qml/JustSolo/data/image/PlayList.png"
                            : currentMenu === "favorite" ? "qrc:/qt/qml/JustSolo/data/image/mylike.png"
                            : currentMenu === "history" ? "qrc:/qt/qml/JustSolo/data/image/history.png"
+                           : currentMenu === "customPlaylist" ? "qrc:/qt/qml/JustSolo/data/image/SelfList.png"
                            : ""
                             sourceSize.width: 28
                             sourceSize.height: 28
@@ -597,6 +708,7 @@ Window {
                               : currentMenu === "playlist" ? "播放列表"
                               : currentMenu === "favorite" ? "收藏"
                               : currentMenu === "history" ? "历史"
+                              : currentMenu === "customPlaylist" ? customPlaylistName()
                               : (settingsSubMenu === "playback" ? "播放设置"
                               : (settingsSubMenu === "hotkeys" ? "快捷键设置"
                               : (settingsSubMenu === "update" ? "软件更新"
@@ -717,6 +829,14 @@ Window {
                         sidebarWidth: mainWindow.sidebarWidth
                         windowWidth: mainWindow.width
                         fontFamily: appFont.name
+                    }
+                    CustomPlaylistPage {
+                        anchors.fill: parent
+                        visible: currentMenu === "customPlaylist"
+                        sidebarWidth: mainWindow.sidebarWidth
+                        windowWidth: mainWindow.width
+                        fontFamily: appFont.name
+                        playlistIndex: mainWindow.currentCustomPlaylistIndex
                     }
                     SettingsPage {
                         anchors.fill: parent
@@ -851,6 +971,7 @@ Window {
                 Rectangle {
                     id: playerCoverRect
                     width: 48; height: 48; radius: 6; color: "#3a3a55"
+
                     Image {
                         anchors.fill: parent
                         anchors.margins: 2
@@ -1051,6 +1172,105 @@ Window {
             if (!visible)
                 mainWindow.showPlayerDetail = false
         }
+    }
+
+    // ============================================================
+    // 创建新列表对话框
+    // ============================================================
+    Dialog {
+        id: createListDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 320
+        padding: 0
+
+        Overlay.modal: Rectangle { color: "transparent" }
+
+        background: Rectangle {
+            color: "#2a2a48"
+            radius: 10
+            border.color: "#444466"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+            anchors.margins: 20
+
+            Label {
+                text: "新播放列表"
+                font.family: appFont.name
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+                Layout.bottomMargin: 4
+            }
+
+            TextField {
+                id: listNameField
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                leftPadding: 12
+                rightPadding: 12
+                placeholderText: "例如：我的歌单"
+                font.family: appFont.name
+                font.pixelSize: 14
+                color: "#ddd"
+                verticalAlignment: TextInput.AlignVCenter
+                background: Rectangle {
+                    radius: 6
+                    color: "#333350"
+                    border.color: "#555577"
+                    border.width: 1
+                }
+                Keys.onReturnPressed: doCreateList()
+                Keys.onEnterPressed: doCreateList()
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 12
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: cancelMA.containsMouse ? "#3a3a5a" : "#333350"
+                    border.color: "#444466"; border.width: 1
+                    Label { text: "取消"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: cancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: { listNameField.text = ""; createListDialog.close() }
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: confirmMA.containsMouse ? "#4a6a8a" : "#3a5a7a"
+                    Label { text: "确定"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#ddd" }
+                    MouseArea {
+                        id: confirmMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: doCreateList()
+                    }
+                }
+            }
+        }
+    }
+
+    function doCreateList() {
+        var name = listNameField.text.trim()
+        if (name.length > 0) {
+            musicManager.createCustomPlaylist(name)
+            listNameField.text = ""
+            createListDialog.close()
+        }
+    }
+
+    function customPlaylistName() {
+        if (currentCustomPlaylistIndex >= 0 && currentCustomPlaylistIndex < musicManager.customPlaylists.length)
+            return musicManager.customPlaylists[currentCustomPlaylistIndex].name || "自定义列表"
+        return "自定义列表"
     }
 
     // 外部触发详情页显隐
