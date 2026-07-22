@@ -116,7 +116,8 @@ Just-Solo/
 │       ├── components/
 │       │   ├── NavItem.qml     #   侧边栏主菜单项
 │       │   ├── SubNavItem.qml  #   设置页子菜单项
-│       │   └── SongRow.qml     #   歌曲列表行共享组件
+│       │   ├── SongRow.qml     #   歌曲列表行共享组件
+│       │   └── MusicListView.qml # 通用歌曲列表组件（列头+列表+滚动+右键）
 │       └── views/              # 页面（预创建，切换时仅切换 visible）
 │           ├── HomePage.qml        # 首页 —— 音乐列表
 │           ├── PlaylistPage.qml    # 播放列表页
@@ -233,12 +234,14 @@ cmake --build build --config Release
 
 ## 最新版本更新日志（其他详见 `CHANGELOG.md`）
 
-### v0.5.1：新增关闭最小化到系统托盘功能，设置页可自由开关。
-#### 关闭窗口自动最小化到系统托盘，音乐继续后台播放
-#### 右键托盘图标菜单：显示主窗口 / 退出
-#### 左键/双击托盘图标恢复窗口
-#### 设置 → 外观 新增开关，默认关闭，持久化重启保持
-#### 引入 Qt::Widgets 模块（QSystemTrayIcon 依赖）
+### v0.6.0：全新自建播放列表系统，通用歌曲列表组件重构，全面改进播放定位逻辑。
+#### 侧边栏「创建新列表」按钮，深色弹窗命名，支持添加本地音乐 / 重命名 / 删除
+#### 列表名仅允许中英文、数字、`-`、`_`，禁止重名，持久化到 `custom_playlists.json`
+#### 新增 MusicListView.qml 通用歌曲列表组件，所有页面改为此组件子类
+#### 统一 playingListIndex/pageListIndex 定位系统，匹配才自动滚动
+#### 收藏页点击不同来源歌曲弹出切换确认弹窗
+#### 修复 `--develop` 误删用户数据，改为 `--clearUserData` 显式清理
+#### 单实例检测：防止重复开多进程，隐藏到托盘后点快捷方式恢复窗口
 
 ---
 

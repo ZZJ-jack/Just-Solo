@@ -220,7 +220,7 @@ Just Solo更新日志：
   - 外观设置：播放详情页透明度滑块（30%-100%），两者均实时生效持久化
   - MusicManager 新增 lyricOffset 属性（Q_PROPERTY int，默认 170ms）
   - 设置界面所有文字提亮：标题 #f4f4f4，标签 #e8e8e8，辅助 #aaa
-  - 窗口控制按钮 ToolTip：“最小化”“最大化 / 还原”“关闭”
+  - 窗口控制按钮 ToolTip："最小化""最大化 / 还原""关闭"
 
   导入加速：
 
@@ -232,7 +232,7 @@ Just Solo更新日志：
 
   欢迎页：
 
-  - 未选择菜单时显示“欢迎使用 Just Solo”（标题栏）+“点击左侧列表开始使用”（正下方独立行）
+  - 未选择菜单时显示"欢迎使用 Just Solo"（标题栏）+"点击左侧列表开始使用"（正下方独立行）
   - 仅 currentMenu === "" 可见，切换菜单自动隐藏
 
   优化：
@@ -472,3 +472,69 @@ Just Solo更新日志：
   - 左键/双击托盘图标恢复窗口
   - 设置 → 外观 新增开关「关闭窗口时最小化到系统托盘」，默认关闭
   - 设置持久化到 settings.json，重启保持
+
+- v0.6.0（已发行）- 2026.7.22
+  v0.6.0，全新自建播放列表系统，通用歌曲列表组件重构，弹窗交互优化，全面改进播放定位逻辑。
+
+  新增：
+
+  自建播放列表：
+
+  - 侧边栏「创建新列表」按钮，点击弹出深色弹窗命名
+  - 创建列表使用 `creatList.png` 图标，列表项使用 `SelfList.png` 图标
+  - 右键菜单：添加本地音乐（同时添加到所有音乐）、重命名、删除
+  - 列表名仅允许中英文、数字、`-`、`_`，禁止重名
+  - 持久化到 `custom_playlists.json`，重启恢复
+  - 点击列表歌曲弹出确认弹窗（每次都弹，不受设置页影响）
+  - 列表为空时显示空列表提示
+
+  通用歌曲列表组件：
+
+  - 新增 `MusicListView.qml` 作为核心歌曲列表组件
+  - 列头 / ListView / SongRow / 右键菜单 / 切换来源弹窗全部统一
+  - HomePage、HistoryPage、FavoritePage、PlaylistPage 全部改为 MusicListView 子类
+  - 每页只定制 songList、onLeftClick、contextMenuExtra、emptyHint/emptySubHint
+  - 列宽、列头、行样式全局一致，改一处同步所有页面
+
+  统一列表索引定位系统：
+
+  - MusicManager 新增 `playingListIndex` 属性（-1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义）
+  - 每个页面设 `pageListIndex`，`scrollToPlaying()` 直接比较索引，匹配才定位
+  - 删除正在播放的自定义列表时自动清空播放栏
+
+  弹窗交互优化：
+
+  - 首页跨来源弹窗保留（由 trackCrossSource 设置控制）
+  - 自建列表点击每次都弹确认弹窗
+  - 收藏页点击不同来源歌曲弹出切换确认弹窗
+  - 无歌曲播放时点击任何列表歌曲直接播放，不弹窗
+  - 已播放当前列表歌曲时直接播放/暂停，不弹窗
+
+  播放定位优化：
+
+  - 切换到正在播放的列表页面自动定位到当前行
+  - 其他列表页面不定位
+  - 弹窗确认后自动定位
+  - 自动定位改用 `Qt.callLater` 确保绑定稳定后比较
+
+  其他优化：
+
+  - 单实例检测：防止重复开多进程，隐藏到托盘后点快捷方式恢复窗口
+  - 修复 `--develop` 模式误删用户数据的问题，改为 `--clearUserData` 显式清理
+  - 移除封面 hover 提示（showSourceHint），只保留弹窗
+  - 所有音乐页来源提示 ToolTip 移除
+  - 历史页不再自动定位
+  - 侧边栏 ScrollView 支持列表过多时滚动
+  - 播放列表改为独立 MusicListView（非统一 HomePage 实例），始终自动定位
+
+  修复：
+
+  - 多进程打开问题
+  - 自建列表歌曲信息显示异常（从库中查完整元数据）
+  - 切换页面时自动定位时序竞争问题
+  - `–develop` 模式 `setUseCache(false)` 不加载数据导致界面为空
+  - `Qt.callLater` 参数类型错误
+  - `contextMenu.items` 在 Qt 6 中不可用改为 `count`
+  - MenuItem 中 `mainWindow` 作用域不可用改为 `Menu.property win`
+  - 收藏页 `switchSourceDialog` 不可用改为 `openSwitchDialog` 函数
+  - 自建列表同列表重复弹窗问题
