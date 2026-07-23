@@ -735,6 +735,39 @@ void MusicManager::addSongsToCustomPlaylist(const QStringList &paths, int index)
     emit customPlaylistsChanged();
 }
 
+void MusicManager::addLibrarySongsToCustomPlaylist(const QVariantList &libraryIndices, int playlistIndex) {
+    if (playlistIndex < 0 || playlistIndex >= m_customPlaylists.size()) return;
+
+    QVariantMap pl = m_customPlaylists[playlistIndex].toMap();
+    QVariantList songs = pl["songs"].toList();
+
+    for (const QVariant &idx : libraryIndices) {
+        int i = idx.toInt();
+        if (i < 0 || i >= m_library.size()) continue;
+
+        QString path = m_library[i].toMap()["path"].toString();
+
+        // 按 path 精确去重
+        bool exists = false;
+        for (const QVariant &s : songs) {
+            if (s.toMap()["path"].toString() == path) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            QVariantMap entry;
+            entry["path"] = path;
+            songs.append(entry);
+        }
+    }
+
+    pl["songs"] = songs;
+    m_customPlaylists[playlistIndex] = pl;
+    saveCustomPlaylists();
+    emit customPlaylistsChanged();
+}
+
 void MusicManager::addFiles(const QStringList &paths) {
     m_pendingPaths.append(paths);
     if (!m_loading) {
@@ -802,8 +835,8 @@ void MusicManager::processNextPending() {
         }
 
         if (shouldAdd) {
-            m_library.append(track);
-            m_playlist.append(track);
+            m_library.prepend(track);
+            m_playlist.prepend(track);
             playlistModified = true;
         }
 

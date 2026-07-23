@@ -58,6 +58,13 @@ Window {
     property var searchResults: []
     property int searchScrollIndex: -1
 
+    // ---- 从音乐库导入对话框 ----
+    property var _libSelectedSet: ({})       // {libIndex: true}
+    property var _libAlreadyInPlaylistSet: ({})  // {path: true}
+    property int _importTargetPlaylist: -1
+    property var _libFilteredModel: []
+    property int _libSelectedVersion: 0      // 递增触发绑定刷新
+
     function updateSearch(text) {
         searchText = text.toLowerCase().trim()
         if (!searchText) {
@@ -96,6 +103,93 @@ Window {
         searchScrollIndex = libraryIndex
         searchInput.focus = false
         searchPopup.close()
+    }
+
+    // ---- 从音乐库导入辅助函数 ----
+    function _buildAlreadyInPlaylistSet(playlistIndex) {
+        _libAlreadyInPlaylistSet = ({})
+        if (playlistIndex < 0 || playlistIndex >= musicManager.customPlaylists.length) return
+        var songs = musicManager.customPlaylists[playlistIndex].songs || []
+        for (var i = 0; i < songs.length; i++) {
+            var p = songs[i].path || ""
+            if (p) _libAlreadyInPlaylistSet[p] = true
+        }
+    }
+
+    // 用全局 searchText 过滤音乐库，结果写入 _libFilteredModel
+    function _rebuildDialogLibrary() {
+        var query = searchText  // 读但不写全局搜索
+        var lib = musicManager.library
+        if (!query) {
+            _libFilteredModel = lib.slice()
+            return
+        }
+        var result = []
+        for (var i = 0; i < lib.length; i++) {
+            var name = (lib[i].title || lib[i].name || "").toLowerCase()
+            var artist = (lib[i].artist || "").toLowerCase()
+            var album = (lib[i].album || "").toLowerCase()
+            if (name.indexOf(query) >= 0 || artist.indexOf(query) >= 0 || album.indexOf(query) >= 0)
+                result.push(lib[i])
+        }
+        _libFilteredModel = result
+    }
+
+    function _toggleLibSelect(libIndex) {
+        if (_libAlreadyInPlaylistSet[musicManager.library[libIndex].path]) return
+        if (_libSelectedSet[libIndex])
+            delete _libSelectedSet[libIndex]
+        else
+            _libSelectedSet[libIndex] = true
+        _libSelectedVersion++
+    }
+
+    function _toggleLibSelectAll() {
+        var allSelected = true
+        // 检查当前所有未在列表中的歌曲是否已全选
+        for (var i = 0; i < _libFilteredModel.length; i++) {
+            var realIdx = musicManager.library.indexOf(_libFilteredModel[i])
+            if (realIdx < 0) continue
+            var path = _libFilteredModel[i].path || ""
+            if (_libAlreadyInPlaylistSet[path]) continue
+            if (!_libSelectedSet[realIdx]) {
+                allSelected = false
+                break
+            }
+        }
+        // 全选/取消
+        for (var j = 0; j < _libFilteredModel.length; j++) {
+            var rIdx = musicManager.library.indexOf(_libFilteredModel[j])
+            if (rIdx < 0) continue
+            var p = _libFilteredModel[j].path || ""
+            if (_libAlreadyInPlaylistSet[p]) continue
+            if (allSelected)
+                delete _libSelectedSet[rIdx]
+            else
+                _libSelectedSet[rIdx] = true
+        }
+        _libSelectedVersion++
+    }
+
+    function _countLibSelected() {
+        var count = 0
+        for (var k in _libSelectedSet) {
+            if (_libSelectedSet.hasOwnProperty(k)) count++
+        }
+        return count
+    }
+
+    function _doImport() {
+        var indices = []
+        for (var k in _libSelectedSet) {
+            if (_libSelectedSet.hasOwnProperty(k))
+                indices.push(parseInt(k))
+        }
+        if (indices.length === 0 || _importTargetPlaylist < 0) return
+        musicManager.addLibrarySongsToCustomPlaylist(indices, _importTargetPlaylist)
+        _libSelectedSet = ({})
+        _libSelectedVersion = 0
+        libraryImportDialog.close()
     }
 
     // ============================================================
@@ -296,12 +390,6 @@ Window {
                         onClicked: settingsSubMenu = "hotkeys"
                     }
                     SubNavItem {
-                        label: "媒体库设置"
-                        active: settingsSubMenu === "library"
-                        fontFamily: appFont.name
-                        onClicked: settingsSubMenu = "library"
-                    }
-                    SubNavItem {
                         label: "软件更新"
                         active: settingsSubMenu === "update"
                         fontFamily: appFont.name
@@ -426,6 +514,27 @@ Window {
                                 }
                                 background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
                                 onClicked: fileDialog.open()
+                            }
+
+                            MenuItem {
+                                text: "从音乐库导入"
+                                font.family: appFont.name; font.pixelSize: 14
+                                contentItem: Label {
+                                    text: "从音乐库导入"
+                                    font.family: appFont.name; font.pixelSize: 14; color: "#cccccc"
+                                    verticalAlignment: Text.AlignVCenter; leftPadding: 12
+                                }
+                                background: Rectangle { color: parent.hovered ? "#3a3a5a" : "transparent"; radius: 4 }
+                                enabled: musicManager.library.length > 0
+                                onClicked: {
+                                    var targetIdx = plContextMenu.win._rightClickedPlaylistIndex
+                                    plContextMenu.win._importTargetPlaylist = targetIdx
+                                    plContextMenu.win._buildAlreadyInPlaylistSet(targetIdx)
+                                    plContextMenu.win._libSelectedSet = ({})
+                                    libSearchField.text = searchText
+                                    plContextMenu.win._rebuildDialogLibrary()
+                                    libraryImportDialog.open()
+                                }
                             }
 
                             MenuItem {
@@ -596,7 +705,7 @@ Window {
                                 width: Math.max(parent.width + 120, 420)
                                 padding: 0
                                 closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                                visible: searchInput.text.trim().length > 0
+                                visible: searchInput.text.trim().length > 0 && !musicManager.isLoading
 
                                 background: Rectangle {
                                     color: "#222236"
@@ -854,6 +963,37 @@ Window {
                             anchors.fill: parent; hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: fileDialog.open()
+                        }
+                    }
+
+                    // ---- 从音乐库导入（仅自定义列表页） ----
+                    Rectangle {
+                        Layout.preferredWidth: importLibBtnText.contentWidth + 28
+                        Layout.preferredHeight: 36
+                        radius: 6
+                        color: importLibBtnMA.containsMouse ? "#4a6a8a" : "#3a5a7a"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        visible: currentMenu === "customPlaylist" && musicManager.library.length > 0
+                        Label {
+                            id: importLibBtnText
+                            anchors.centerIn: parent
+                            text: "从音乐库导入"
+                            font.family: appFont.name
+                            font.pixelSize: 13
+                            color: "#ddd"
+                        }
+                        MouseArea {
+                            id: importLibBtnMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                _importTargetPlaylist = currentCustomPlaylistIndex
+                                _buildAlreadyInPlaylistSet(_importTargetPlaylist)
+                                _libSelectedSet = ({})
+                                libSearchField.text = searchText  // 保持与全局搜索一致
+                                _rebuildDialogLibrary()
+                                libraryImportDialog.open()
+                            }
                         }
                     }
                 }
@@ -1462,6 +1602,269 @@ Window {
                     MouseArea {
                         id: renameConfirmMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                         onClicked: doRename()
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // 从音乐库导入对话框
+    // ============================================================
+    Dialog {
+        id: libraryImportDialog
+        parent: Overlay.overlay
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: Math.min(parent.width * 0.8, 540)
+        height: Math.min(parent.height * 0.8, 460)
+        padding: 0
+
+        Overlay.modal: Rectangle { color: "#80000000" }
+
+        background: Rectangle { color: "#2a2a48"; radius: 10; border.color: "#444466"; border.width: 1 }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            // 标题栏
+            Rectangle {
+                Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 10
+                color: "#333355"
+                Rectangle { width: parent.width; height: 1; color: "#444466"; anchors.bottom: parent.bottom }
+
+                RowLayout {
+                    anchors.fill: parent; anchors.margins: 16; spacing: 8
+                    Label {
+                        text: "从音乐库导入"
+                        font.family: appFont.name; font.pixelSize: 16; font.bold: true; color: "#ddd"
+                        Layout.fillWidth: true
+                    }
+                    Label {
+                        text: {
+                            var _ = mainWindow._libSelectedVersion
+                            var c = mainWindow._countLibSelected()
+                            return c > 0 ? "已选 " + c + " 首" : ""
+                        }
+                        font.family: appFont.name; font.pixelSize: 12; color: "#00d4ff"
+                        visible: {
+                            mainWindow._libSelectedVersion
+                            mainWindow._countLibSelected() > 0
+                        }
+                    }
+                }
+            }
+
+            // 搜索栏
+            Rectangle {
+                Layout.fillWidth: true; Layout.preferredHeight: 40
+                color: "#333350"
+                RowLayout {
+                    anchors.fill: parent; anchors.margins: 8; spacing: 8
+                    TextField {
+                        id: libSearchField
+                        Layout.fillWidth: true; Layout.preferredHeight: 30
+                        placeholderText: "搜索歌曲或歌手..."
+                        placeholderTextColor: "#888"
+                        font.family: appFont.name; font.pixelSize: 13; color: "#ddd"
+                        leftPadding: 10
+                        background: Rectangle { radius: 6; color: "#3a3a5a"; border.color: "#555577" }
+                        onTextChanged: {
+                            // 独立过滤，不碰全局 searchText/updateSearch
+                            var query = text.toLowerCase().trim()
+                            var lib = musicManager.library
+                            if (!query) {
+                                mainWindow._libFilteredModel = lib.slice()
+                                return
+                            }
+                            var result = []
+                            for (var i = 0; i < lib.length; i++) {
+                                var name = (lib[i].title || lib[i].name || "").toLowerCase()
+                                var artist = (lib[i].artist || "").toLowerCase()
+                                var album = (lib[i].album || "").toLowerCase()
+                                if (name.indexOf(query) >= 0 || artist.indexOf(query) >= 0 || album.indexOf(query) >= 0)
+                                    result.push(lib[i])
+                            }
+                            mainWindow._libFilteredModel = result
+                        }
+                    }
+                    // 全选/取消
+                    Rectangle {
+                        Layout.preferredHeight: 28; Layout.preferredWidth: 50; radius: 6
+                        color: selectAllMA.containsMouse ? "#4a4a6a" : "#3a3a5a"
+                        Label {
+                            anchors.centerIn: parent
+                            text: {
+                                if (_libFilteredModel.length === 0) return "全选"
+                                var allSel = true
+                                for (var i = 0; i < _libFilteredModel.length; i++) {
+                                    var ri = musicManager.library.indexOf(_libFilteredModel[i])
+                                    if (ri < 0) continue
+                                    if (_libAlreadyInPlaylistSet[_libFilteredModel[i].path]) continue
+                                    if (!_libSelectedSet[ri]) { allSel = false; break }
+                                }
+                                return allSel ? "取消" : "全选"
+                            }
+                            font.family: appFont.name; font.pixelSize: 12; color: "#ccc"
+                        }
+                        MouseArea {
+                            id: selectAllMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: mainWindow._toggleLibSelectAll()
+                        }
+                    }
+                }
+            }
+
+            // 歌曲列表
+            ListView {
+                id: libSongListView
+                Layout.fillWidth: true; Layout.fillHeight: true
+                Layout.topMargin: 4
+                spacing: 1; clip: true
+                model: _libFilteredModel
+
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded; width: 10
+                    background: Rectangle { implicitWidth: 10; radius: 5; color: "#2a2a3a" }
+                    contentItem: Rectangle {
+                        implicitWidth: 10; radius: 5
+                        color: libThumbHover.containsMouse ? "#7777aa" : "#555577"
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        MouseArea {
+                            id: libThumbHover
+                            hoverEnabled: true; acceptedButtons: Qt.NoButton
+                            propagateComposedEvents: true
+                        }
+                    }
+                }
+
+                // 空结果提示
+                Label {
+                    anchors.centerIn: parent
+                    text: libSearchField.text.trim() ? "未找到匹配的歌曲" : "音乐库为空"
+                    font.family: appFont.name; font.pixelSize: 14; color: "#888"
+                    visible: _libFilteredModel.length === 0
+                }
+
+                delegate: Rectangle {
+                    id: libItemRoot
+                    width: libSongListView.width; height: 44; color: "transparent"
+
+                    // 从 modelData 提取路径
+                    readonly property string _dp: modelData ? (modelData.path || "") : ""
+
+                    // 是否为已存在歌曲
+                    readonly property bool _iai: _dp ? (_libAlreadyInPlaylistSet[_dp] === true) : false
+
+                    // 选中状态（依赖 _libSelectedVersion 触发刷新）
+                    readonly property bool _sel: {
+                        mainWindow._libSelectedVersion
+                        if (_iai) return false
+                        // 不使用 _rli，直接用函数计算
+                        var lib = musicManager.library
+                        for (var i = 0; i < lib.length; i++) {
+                            if (lib[i].path === _dp) return _libSelectedSet[i] === true
+                        }
+                        return false
+                    }
+
+                    RowLayout {
+                        anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 10
+
+                        // Checkbox
+                        Rectangle {
+                            Layout.preferredWidth: 20; Layout.preferredHeight: 20; radius: 4
+                            color: libItemRoot._sel ? "#00d4ff" : "transparent"
+                            border.color: libItemRoot._iai ? "#555577" : (libItemRoot._sel ? "#00d4ff" : "#666")
+                            border.width: libItemRoot._sel ? 0 : 1
+                            Label {
+                                anchors.centerIn: parent
+                                text: libItemRoot._sel ? "✓" : ""
+                                font.pixelSize: 13; color: "#111"
+                                visible: libItemRoot._sel
+                            }
+                        }
+
+                        // 歌曲信息
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: 2
+                            Label {
+                                text: modelData.title || modelData.name || "未知歌曲"
+                                font.family: appFont.name; font.pixelSize: 13
+                                color: libItemRoot._iai ? "#666" : "#ccc"
+                                elide: Text.ElideRight; Layout.fillWidth: true
+                            }
+                            Label {
+                                text: modelData.artist || "未知歌手"
+                                font.family: appFont.name; font.pixelSize: 11
+                                color: libItemRoot._iai ? "#555" : "#888"
+                                elide: Text.ElideRight; Layout.fillWidth: true
+                            }
+                        }
+
+                        // 已添加标记
+                        Label {
+                            text: "已添加"
+                            font.family: appFont.name; font.pixelSize: 11; color: "#00d4ff"
+                            visible: libItemRoot._iai
+                        }
+                    }
+
+                    // 点击处理
+                    MouseArea {
+                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                        enabled: !libItemRoot._iai
+                        onClicked: {
+                            var lib = musicManager.library
+                            for (var i = 0; i < lib.length; i++) {
+                                if (lib[i].path === libItemRoot._dp) {
+                                    mainWindow._toggleLibSelect(i)
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 底部按钮
+            Rectangle {
+                Layout.fillWidth: true; Layout.preferredHeight: 52
+                color: "#2a2a48"
+                Rectangle { width: parent.width; height: 1; color: "#444466"; anchors.top: parent.top }
+
+                RowLayout {
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    anchors.rightMargin: 16; spacing: 10
+
+                    Rectangle {
+                        Layout.preferredHeight: 34; Layout.preferredWidth: 80; radius: 6
+                        color: cancelImportMA.containsMouse ? "#3a3a5a" : "#333350"
+                        border.color: "#444466"; border.width: 1
+                        Label { anchors.centerIn: parent; text: "取消"; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                        MouseArea {
+                            id: cancelImportMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: { mainWindow._libSelectedSet = ({}); libraryImportDialog.close() }
+                        }
+                    }
+                    Rectangle {
+                        Layout.preferredHeight: 34; Layout.preferredWidth: 100; radius: 6
+                        property bool _canImport: { mainWindow._libSelectedVersion; return mainWindow._countLibSelected() > 0 }
+                        color: _canImport ? (confirmImportMA.containsMouse ? "#4a6a8a" : "#3a5a7a") : "#333350"
+                        border.color: _canImport ? "#555577" : "#444466"
+                        border.width: 1
+                        Label {
+                            anchors.centerIn: parent
+                            text: "确认导入"
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: parent._canImport ? "#ddd" : "#666"
+                        }
+                        MouseArea {
+                            id: confirmImportMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            enabled: parent._canImport
+                            onClicked: mainWindow._doImport()
+                        }
                     }
                 }
             }

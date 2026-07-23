@@ -3,7 +3,7 @@ project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 
 # ---- 软件版本号 ----
 set(APP_VERSION_MAJOR 0)
-set(APP_VERSION_MINOR 6)
+set(APP_VERSION_MINOR 7)
 set(APP_VERSION_PATCH 0)
 set(APP_VERSION_PRE   0)   # 0=正式版, >0=beta.N
 
@@ -47,7 +47,6 @@ qt_add_executable(JustSolo WIN32
     src/core/MetadataReader.cpp
     src/core/SMTCManager.cpp
     src/core/HotkeyManager.cpp
-    src/core/FolderSyncManager.cpp
     resources/app.rc
 )
 
