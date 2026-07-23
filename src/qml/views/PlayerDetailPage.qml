@@ -9,7 +9,7 @@ Item {
 
     property bool opening: false
     property int _lastScroll: -1
-    property int _pastIdx: (typeof musicManager !== "undefined" && musicManager) ? musicManager.lyricIndex : -1  // 延迟收缩
+    property int _pastIdx: -1  // 仅增大，不收缩（由 onLyricIndexChanged 维护）
     property real originX: 0
     property real originY: root.height
 
@@ -60,10 +60,12 @@ Item {
         target: typeof musicManager !== "undefined" && musicManager ? musicManager : null
         function onLyricIndexChanged() {
             var idx = musicManager.lyricIndex
-            if (idx < 0 || idx === root._lastScroll || lyricsView.count === 0) return
+            if (idx < 0 || lyricsView.count === 0) return
+            // _pastIdx 只增大不收缩（歌词高亮不回退）
+            if (idx > root._pastIdx)
+                root._pastIdx = idx
+            if (idx === root._lastScroll) return
             root._lastScroll = idx
-            // 缩放和滚动同时进行
-            root._pastIdx = idx
             lyricsView.positionViewAtIndex(idx, ListView.Center)
         }
     }
@@ -89,13 +91,11 @@ Item {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.AllButtons
-        hoverEnabled: true
+        hoverEnabled: false        // 无 hover 视觉反馈，关闭减少事件开销
         preventStealing: true
         propagateComposedEvents: false
         onWheel: function(w) { w.accepted = true }
         onPressed: function(m) { m.accepted = true }
-        onReleased: function(m) { m.accepted = true }
-        onPositionChanged: function(m) { m.accepted = true }
     }
 
     // ============================================================
@@ -111,7 +111,7 @@ Item {
         id: blurFx
         anchors.fill: parent
         source: bgBlur
-        blurEnabled: true; blurMax: 48; blur: 0.7
+        blurEnabled: true; blurMax: 24; blur: 0.6
         brightness: 0.15; saturation: 0.1
     }
     Rectangle { anchors.fill: parent; color: Qt.rgba(0.05, 0.05, 0.09, musicManager ? musicManager.detailOpacity : 0.85) }
@@ -269,9 +269,8 @@ Item {
                     property bool isCurrent: (typeof musicManager !== "undefined" && musicManager) && index === musicManager.lyricIndex
                     property bool isPast: index < root._pastIdx
                     property bool hasTrans: (modelData.translation || "") !== ""
-                    property bool highlight: isCurrent || isPast
 
-                    // 歌词+翻译（WordWrap，行高自适应，整段高光）
+                    // 歌词主体（行高自适应，整段通过单色控制高亮）
                     Item {
                         id: mainContainer
                         anchors.left: parent.left; anchors.leftMargin: 4
@@ -286,80 +285,46 @@ Item {
                             // 主歌词行（高度自适应，超长自动换行）
                             Item {
                                 width: mainContainer.width
-                                height: Math.max(52, mainGray.implicitHeight)
+                                height: Math.max(52, mainText.implicitHeight)
                                 clip: true
 
                                 Text {
-                                    id: mainGray
+                                    id: mainText
                                     anchors.left: parent.left
                                     y: (parent.height - height) / 2
                                     width: parent.width
                                     text: modelData.text || ""
                                     font.family: root.fontFamily
                                     font.pixelSize: lyricDelegate.isCurrent ? 58 : 36
-                                    color: lyricDelegate.isPast ? "#3a3a3a"
-                                         : (lyricDelegate.isCurrent ? "#555" : "#6a9ac0")
+                                    // 单层文本直接切换高亮色，无需 overlay 叠加
+                                    color: lyricDelegate.isPast ? "#FFD700"
+                                         : (lyricDelegate.isCurrent ? "#00d4ff" : "#6a9ac0")
                                     horizontalAlignment: Text.AlignLeft
                                     wrapMode: Text.WordWrap
                                     Behavior on font.pixelSize { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                    Behavior on color { ColorAnimation { duration: 300 } }
-                                }
-
-                                // 整段高亮覆盖层：已播=黄色，当前=青色
-                                Text {
-                                    anchors.left: parent.left
-                                    anchors.top: mainGray.top
-                                    width: parent.width
-                                    height: mainGray.implicitHeight
-                                    visible: lyricDelegate.highlight
-                                    text: modelData.text || ""
-                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 58 : 36
-                                    color: lyricDelegate.isPast ? "#FFD700" : "#00d4ff"
-                                    horizontalAlignment: Text.AlignLeft
-                                    wrapMode: Text.WordWrap
-                                    Behavior on font.pixelSize { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                    Behavior on opacity { NumberAnimation { duration: 250 } }
-                                    Behavior on color { ColorAnimation { duration: 300 } }
                                 }
                             }
 
                             // 翻译行（高度自适应）
                             Item {
                                 width: mainContainer.width
-                                height: hasTrans ? Math.max(38, transGray.implicitHeight) : 0
+                                height: hasTrans ? Math.max(38, transText.implicitHeight) : 0
                                 visible: hasTrans
                                 clip: true
 
                                 Text {
-                                    id: transGray
+                                    id: transText
                                     anchors.left: parent.left
                                     y: (parent.height - height) / 2
                                     width: parent.width
                                     text: modelData.translation || ""
                                     font.family: root.fontFamily
                                     font.pixelSize: lyricDelegate.isCurrent ? 34 : 24
-                                    color: lyricDelegate.isPast ? "#2a2a2a"
-                                         : (lyricDelegate.isCurrent ? "#333" : "#4a6a8a")
+                                    color: lyricDelegate.isPast ? "#b8960f"
+                                         : (lyricDelegate.isCurrent ? "#FFD700" : "#4a6a8a")
                                     horizontalAlignment: Text.AlignLeft
                                     wrapMode: Text.WordWrap
                                     Behavior on font.pixelSize { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                    Behavior on color { ColorAnimation { duration: 300 } }
-                                }
-
-                                // 翻译整段高亮覆盖层：已播=暗金，当前=金色
-                                Text {
-                                    anchors.left: parent.left
-                                    anchors.top: transGray.top
-                                    width: parent.width
-                                    height: transGray.implicitHeight
-                                    visible: lyricDelegate.highlight && lyricDelegate.hasTrans
-                                    text: modelData.translation || ""
-                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 34 : 24
-                                    color: lyricDelegate.isPast ? "#b8960f" : "#FFD700"
-                                    horizontalAlignment: Text.AlignLeft
-                                    wrapMode: Text.WordWrap
-                                    Behavior on font.pixelSize { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                                    Behavior on opacity { NumberAnimation { duration: 250 } }
                                 }
                             }
                         }
@@ -509,7 +474,10 @@ Item {
                     height: parent.height; radius: 2; color: "#00d4ff"
                     readonly property real autoRatio: musicManager.duration > 0 ? musicManager.position / musicManager.duration : 0
                     width: parent.width * (seekMA.pressed ? seekMA._dragRatio : autoRatio)
-                    Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                    Behavior on width {
+                        enabled: root.visible
+                        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+                    }
                 }
 
                 MouseArea {
