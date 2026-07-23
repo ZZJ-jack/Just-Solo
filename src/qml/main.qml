@@ -925,8 +925,9 @@ Window {
                         fontFamily: appFont.name
                     }
                     Loader {
+                        // Loader 必须锚定父容器，否则默认 0×0，被加载的 SettingsPage 也会塌成 0×0
+                        anchors.fill: parent
                         active: currentMenu === "settings"
-                        asynchronous: true
                         sourceComponent: Component {
                             SettingsPage {
                                 anchors.fill: parent
