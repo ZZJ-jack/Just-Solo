@@ -308,7 +308,7 @@ MusicManager::MusicManager(QObject *parent)
 {
     m_player = new QMediaPlayer(this);
     m_audioOutput = new QAudioOutput(this);
-    m_audioOutput->setVolume(0.9); // 留 10% 余量，防止数字削波爆音
+    m_audioOutput->setVolume(0.9);
     m_player->setAudioOutput(m_audioOutput);
 
     m_loadTimer = new QTimer(this);

@@ -9,7 +9,7 @@ Item {
 
     property bool opening: false
     property int _lastScroll: -1
-    property bool _justChanged: false
+    property int _pastIdx: (typeof musicManager !== "undefined" && musicManager) ? musicManager.lyricIndex : -1  // 延迟收缩
     property real originX: 0
     property real originY: root.height
 
@@ -62,21 +62,9 @@ Item {
             var idx = musicManager.lyricIndex
             if (idx < 0 || idx === root._lastScroll || lyricsView.count === 0) return
             root._lastScroll = idx
-            // Phase 1: 先放大下一句到 40，暂不滚动
-            root._justChanged = true
-            lyricsView.interactive = false
-            scrollTimer.restart()
-        }
-    }
-
-    Timer {
-        id: scrollTimer
-        interval: 250
-        onTriggered: {
-            // Phase 2: 滚动到目标行，同时字体从 40 自然过渡到 58
-            root._justChanged = false
-            lyricsView.positionViewAtIndex(root._lastScroll, ListView.Center)
-            lyricsView.interactive = true
+            // 缩放和滚动同时进行
+            root._pastIdx = idx
+            lyricsView.positionViewAtIndex(idx, ListView.Center)
         }
     }
 
@@ -267,11 +255,11 @@ Item {
                 id: lyricsView
                 anchors.fill: parent
                 model: (typeof musicManager !== "undefined" && musicManager) ? (musicManager.currentLyrics || []) : []
-                spacing: 10
+                spacing: 20
                 // 上下留白让当前行居中，只展示约 5 句
                 topMargin: parent.height * 0.38; bottomMargin: parent.height * 0.38
-                clip: true; cacheBuffer: 600; reuseItems: false
-                Behavior on contentY { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+                clip: true; cacheBuffer: 400; reuseItems: true
+                Behavior on contentY { NumberAnimation { duration: 1000; easing.type: Easing.InOutQuad } }
 
                 delegate: Item {
                     id: lyricDelegate
@@ -279,7 +267,7 @@ Item {
                     height: mainContainer.height + 8
 
                     property bool isCurrent: (typeof musicManager !== "undefined" && musicManager) && index === musicManager.lyricIndex
-                    property bool isPast: (typeof musicManager !== "undefined" && musicManager) && index < musicManager.lyricIndex
+                    property bool isPast: index < root._pastIdx
                     property bool hasTrans: (modelData.translation || "") !== ""
                     property bool highlight: isCurrent || isPast
 
@@ -308,7 +296,7 @@ Item {
                                     width: parent.width
                                     text: modelData.text || ""
                                     font.family: root.fontFamily
-                                    font.pixelSize: lyricDelegate.isCurrent ? (root._justChanged ? 40 : 58) : 36
+                                    font.pixelSize: lyricDelegate.isCurrent ? 58 : 36
                                     color: lyricDelegate.isPast ? "#3a3a3a"
                                          : (lyricDelegate.isCurrent ? "#555" : "#6a9ac0")
                                     horizontalAlignment: Text.AlignLeft
@@ -325,7 +313,7 @@ Item {
                                     height: mainGray.implicitHeight
                                     visible: lyricDelegate.highlight
                                     text: modelData.text || ""
-                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? (root._justChanged ? 40 : 58) : 36
+                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 58 : 36
                                     color: lyricDelegate.isPast ? "#FFD700" : "#00d4ff"
                                     horizontalAlignment: Text.AlignLeft
                                     wrapMode: Text.WordWrap
@@ -349,7 +337,7 @@ Item {
                                     width: parent.width
                                     text: modelData.translation || ""
                                     font.family: root.fontFamily
-                                    font.pixelSize: lyricDelegate.isCurrent ? (root._justChanged ? 28 : 34) : 24
+                                    font.pixelSize: lyricDelegate.isCurrent ? 34 : 24
                                     color: lyricDelegate.isPast ? "#2a2a2a"
                                          : (lyricDelegate.isCurrent ? "#333" : "#4a6a8a")
                                     horizontalAlignment: Text.AlignLeft
@@ -366,7 +354,7 @@ Item {
                                     height: transGray.implicitHeight
                                     visible: lyricDelegate.highlight && lyricDelegate.hasTrans
                                     text: modelData.translation || ""
-                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? (root._justChanged ? 28 : 34) : 24
+                                    font.family: root.fontFamily; font.pixelSize: lyricDelegate.isCurrent ? 34 : 24
                                     color: lyricDelegate.isPast ? "#b8960f" : "#FFD700"
                                     horizontalAlignment: Text.AlignLeft
                                     wrapMode: Text.WordWrap

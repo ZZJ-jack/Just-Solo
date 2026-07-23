@@ -241,6 +241,8 @@ int main(int argc, char *argv[])
     // SetCurrentProcessExplicitAppUserModelID 必须在创建任何窗口/UI 之前调用
     // 否则 SMTC 无法正确解析 DisplayName，始终显示"未知应用"
     SetCurrentProcessExplicitAppUserModelID(L"JustSolo.JustSolo");
+    // 使用 Windows Media Foundation 后端，避免 FFmpeg 24-bit 重采样无声问题
+    qputenv("QT_MEDIA_BACKEND", "windows");
 #endif
 
     QApplication app(argc, argv);
