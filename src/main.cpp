@@ -84,6 +84,7 @@ static void customizeTitleBar(HWND hwnd) {
 #include "core/MusicManager.h"
 #include "core/SMTCManager.h"
 #include "core/HotkeyManager.h"
+#include "services/LyricServer.h"
 
 // ============================================================
 // 系统托盘：关闭窗口后最小化到任务栏
@@ -278,6 +279,10 @@ int main(int argc, char *argv[])
         musicManager->clearUserData();
 
     engine.rootContext()->setContextProperty("musicManager", musicManager);
+
+    // 实时歌词推送服务（WebSocket ws://127.0.0.1:47290）
+    LyricServer *lyricServer = new LyricServer(musicManager, &app);
+    lyricServer->start(47290);
 
     // 全局快捷键
     QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Just Solo · 实时歌词推送测试</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+  }
+  h1 { font-size: 22px; margin-bottom: 8px; color: #7c83ff; }
+  .status-bar {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    display: inline-block; margin-right: 6px;
+  }
+  .dot.on  { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+  .dot.off { background: #ef4444; }
+  .badge {
+    padding: 4px 12px; border-radius: 12px;
+    font-size: 12px; font-weight: 600;
+  }
+  .badge.playing { background: #1a4a2e; color: #4ade80; }
+  .badge.paused  { background: #4a1a1a; color: #f87171; }
+  .pos { font-family: "Cascadia Code", monospace; color: #a0a0c0; }
+  .lyrics {
+    width: 100%; max-width: 600px;
+    height: 400px; overflow-y: auto;
+    background: #16162a; border-radius: 12px;
+    padding: 20px; border: 1px solid #2a2a4a;
+  }
+  .line {
+    padding: 8px 16px; margin: 2px 0;
+    border-radius: 6px; transition: all 0.2s;
+    font-size: 16px; color: #666;
+  }
+  .line.active {
+    background: #2a2a5a; color: #fff;
+    transform: scale(1.02);
+    box-shadow: 0 2px 12px rgba(124,131,255,0.3);
+  }
+  .empty { color: #555; text-align: center; padding: 40px; }
+  .reconnect {
+    margin-top: 16px; font-size: 13px; color: #888;
+  }
+</style>
+</head>
+<body>
+
+<h1>Just Solo 实时歌词推送测试</h1>
+<div class="status-bar">
+  <span><span class="dot off" id="dot"></span><span id="connText">未连接</span></span>
+  <span class="badge paused" id="pbBadge">paused</span>
+  <span class="pos" id="posText">--:-- / --:--</span>
+</div>
+<div class="lyrics" id="lyricsBox">
+  <div class="empty">等待歌词数据…</div>
+</div>
+<div class="reconnect" id="reconnectInfo"></div>
+
+<script>
+const WS_URL = 'ws://127.0.0.1:47290';
+
+let ws = null;
+let lyrics = [];       // [{time, text}]
+let activeIdx = -1;
+let reconnectDelay = 1000;
+
+function fmt(ms) {
+  if (!ms || ms < 0) ms = 0;
+  const s = Math.floor(ms / 1000);
+  return String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
+}
+
+function connect() {
+  document.getElementById('reconnectInfo').textContent = '正在连接 ' + WS_URL + ' …';
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    reconnectDelay = 1000;
+    document.getElementById('dot').className = 'dot on';
+    document.getElementById('connText').textContent = '已连接';
+    document.getElementById('reconnectInfo').textContent = '';
+  };
+
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch(e) { return; }
+
+    if (msg.type === 'init') {
+      lyrics = msg.lyrics || [];
+      activeIdx = -1;
+      renderLyrics();
+    }
+    else if (msg.type === 'progress') {
+      updatePosition(msg.position);
+    }
+    else if (msg.type === 'playback') {
+      const badge = document.getElementById('pbBadge');
+      badge.textContent = msg.status;
+      badge.className = 'badge ' + msg.status;
+    }
+  };
+
+  ws.onclose = () => {
+    document.getElementById('dot').className = 'dot off';
+    document.getElementById('connText').textContent = '已断开';
+    document.getElementById('reconnectInfo').textContent =
+      `${Math.round(reconnectDelay/1000)}s 后重连…`;
+    setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 30000);  // 指数退避
+  };
+
+  ws.onerror = () => { ws.close(); };
+}
+
+function renderLyrics() {
+  const box = document.getElementById('lyricsBox');
+  if (lyrics.length === 0) {
+    box.innerHTML = '<div class="empty">当前歌曲无歌词</div>';
+    return;
+  }
+  box.innerHTML = lyrics.map((l, i) =>
+    `<div class="line" id="line-${i}">${l.text || '(间奏)'}</div>`
+  ).join('');
+}
+
+// 二分查找：最后一个 time <= pos 的行
+function findLyricIndex(pos) {
+  let lo = 0, hi = lyrics.length - 1, ans = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (lyrics[mid].time <= pos) { ans = mid; lo = mid + 1; }
+    else hi = mid - 1;
+  }
+  return ans;
+}
+
+function updatePosition(pos) {
+  document.getElementById('posText').textContent = fmt(pos);
+
+  const idx = findLyricIndex(pos);
+  if (idx !== activeIdx) {
+    if (activeIdx >= 0) {
+      const old = document.getElementById('line-' + activeIdx);
+      if (old) old.className = 'line';
+    }
+    activeIdx = idx;
+    if (idx >= 0) {
+      const el = document.getElementById('line-' + idx);
+      if (el) {
+        el.className = 'line active';
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+}
+
+connect();
+</script>
+</body>
+</html>

@@ -31,6 +31,7 @@ find_package(Qt6 6.8.3 REQUIRED COMPONENTS
     QuickLayouts
     Multimedia
     Network
+    WebSockets
     Widgets
 )
 
@@ -47,6 +48,8 @@ qt_add_executable(JustSolo WIN32
     src/core/MetadataReader.cpp
     src/core/SMTCManager.cpp
     src/core/HotkeyManager.cpp
+    src/services/LyricServer.cpp
+    src/services/LyricServer.h
     resources/app.rc
 )
 
@@ -95,6 +98,7 @@ target_link_libraries(JustSolo PRIVATE
     Qt6::QuickLayouts
     Qt6::Multimedia
     Qt6::Network
+    Qt6::WebSockets
     Qt6::Widgets
 )
 
