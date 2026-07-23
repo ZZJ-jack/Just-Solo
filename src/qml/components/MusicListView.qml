@@ -141,7 +141,7 @@ ColumnLayout {
         spacing: 8; clip: true
         boundsBehavior: Flickable.StopAtBounds
         visible: songList.length > 0
-        cacheBuffer: height * 2; reuseItems: true
+        cacheBuffer: Math.min(height * 0.5, 400); reuseItems: true
 
         ScrollBar.vertical: ScrollBar {
             id: listScrollBar; policy: ScrollBar.AsNeeded; width: 10

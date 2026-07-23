@@ -924,11 +924,16 @@ Window {
                         windowWidth: mainWindow.width
                         fontFamily: appFont.name
                     }
-                    SettingsPage {
-                        anchors.fill: parent
-                        visible: currentMenu === "settings"
-                        settingsSubMenu: mainWindow.settingsSubMenu
-                        fontFamily: appFont.name
+                    Loader {
+                        active: currentMenu === "settings"
+                        asynchronous: true
+                        sourceComponent: Component {
+                            SettingsPage {
+                                anchors.fill: parent
+                                settingsSubMenu: mainWindow.settingsSubMenu
+                                fontFamily: appFont.name
+                            }
+                        }
                     }
                 }
             }
