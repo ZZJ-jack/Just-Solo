@@ -58,6 +58,10 @@ Item {
 
     Connections {
         target: typeof musicManager !== "undefined" && musicManager ? musicManager : null
+        function onCurrentLyricsChanged() {
+            // 切换歌曲时重置已播索引，避免旧歌的 _pastIdx 污染新歌词的状态
+            root._pastIdx = -1
+        }
         function onLyricIndexChanged() {
             var idx = musicManager.lyricIndex
             if (idx < 0 || lyricsView.count === 0) return
