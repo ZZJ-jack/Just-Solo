@@ -9,7 +9,7 @@ Item {
 
     property bool opening: false
     property int _lastScroll: -1
-    property int _pastIdx: -1  // 仅增大，不收缩（由 onLyricIndexChanged 维护）
+    property int _pastIdx: -1  // 已播放到的歌词行索引（前进时增大，回退时重置）
     property real originX: 0
     property real originY: root.height
 
@@ -64,8 +64,12 @@ Item {
         }
         function onLyricIndexChanged() {
             var idx = musicManager.lyricIndex
-            if (idx < 0 || lyricsView.count === 0) return
-            // _pastIdx 只增大不收缩（歌词高亮不回退）
+            if (lyricsView.count === 0) return
+            // lyricIndex 回退（单曲循环回到开头 / 手动 seek 回退）→ 重置已播状态
+            if (idx < root._pastIdx)
+                root._pastIdx = -1
+            if (idx < 0) return
+            // 正常前进：_pastIdx 跟随当前行（只增大不收缩）
             if (idx > root._pastIdx)
                 root._pastIdx = idx
             if (idx === root._lastScroll) return

@@ -93,6 +93,11 @@ void LyricServer::onNewConnection()
                 QJsonDocument(pg).toJson(QJsonDocument::Compact)));
         }
     }
+
+    // 客户端连上后，若正在播放但定时器已停（之前因无客户端被 onProgressTick 停掉），
+    // 必须重新启动，否则后续 progress 不会实时推送
+    if (m_mgr->isPlaying() && !m_progressTimer->isActive())
+        m_progressTimer->start();
 }
 
 void LyricServer::onClientDisconnected()

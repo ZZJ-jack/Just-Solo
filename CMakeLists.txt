@@ -5,7 +5,7 @@ project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 set(APP_VERSION_MAJOR 0)
 set(APP_VERSION_MINOR 7)
 set(APP_VERSION_PATCH 2)
-set(APP_VERSION_PRE   1)   # 0=正式版, >0=beta.N
+set(APP_VERSION_PRE   2)   # 0=正式版, >0=beta.N
 
 # 格式化显示版本: v0.3.5 或 v0.3.5-beta.2
 if(APP_VERSION_PRE GREATER 0)
