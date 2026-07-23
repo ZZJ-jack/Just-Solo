@@ -1544,6 +1544,19 @@ void MusicManager::removeHistoryItem(int index) {
 }
 
 // ============================================================
+// 拖放支持工具
+// ============================================================
+
+bool MusicManager::isDirectory(const QString &path) const {
+    return QFileInfo(path).isDir();
+}
+
+bool MusicManager::isAudioFile(const QString &path) const {
+    QString ext = QFileInfo(path).suffix().toLower();
+    return supportedAudioExtensions().contains("*." + ext);
+}
+
+// ============================================================
 // 原画质封面：从音频文件中提取原始内嵌封面，保存为 PNG
 // ============================================================
 

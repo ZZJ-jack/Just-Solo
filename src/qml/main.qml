@@ -296,6 +296,12 @@ Window {
                         onClicked: settingsSubMenu = "hotkeys"
                     }
                     SubNavItem {
+                        label: "媒体库设置"
+                        active: settingsSubMenu === "library"
+                        fontFamily: appFont.name
+                        onClicked: settingsSubMenu = "library"
+                    }
+                    SubNavItem {
                         label: "软件更新"
                         active: settingsSubMenu === "update"
                         fontFamily: appFont.name
@@ -1516,5 +1522,90 @@ Window {
     onShowPlayerDetailChanged: {
         if (showPlayerDetail)
             playerDetail.visible = true
+    }
+
+    // ============================================================
+    // 全局拖放区域 — 支持从资源管理器拖入音乐文件/文件夹
+    // ============================================================
+    DropArea {
+        id: globalDropArea
+        anchors.fill: parent
+        z: 9999
+
+        onEntered: function(drag) {
+            if (drag.hasUrls) {
+                drag.accepted = true
+                dropOverlay.visible = true
+            }
+        }
+
+        onExited: dropOverlay.visible = false
+
+        onDropped: function(drop) {
+            dropOverlay.visible = false
+            if (!drop.hasUrls) return
+
+            drop.accept(Qt.CopyAction)
+
+            var files = [], folders = []
+            for (var i = 0; i < drop.urls.length; i++) {
+                var url = drop.urls[i].toString()
+                var path = url.replace(/^file:\/\/\//, "")
+                if (musicManager.isDirectory(path))
+                    folders.push(path)
+                else if (musicManager.isAudioFile(path))
+                    files.push(path)
+            }
+            // 先处理文件夹再处理文件，避免异步竞争
+            for (var j = 0; j < folders.length; j++)
+                musicManager.addFolder(folders[j])
+            if (files.length > 0)
+                musicManager.addFiles(files)
+        }
+    }
+
+    // ---- 拖放视觉反馈覆盖层 ----
+    Rectangle {
+        id: dropOverlay
+        anchors.fill: parent
+        z: 9998
+        color: "#000000A0"
+        visible: false
+
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 260; height: 200; radius: 20
+            color: "#1e1e2e"
+            border.color: "#00d4ff"
+            border.width: 2
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 16
+
+                Label {
+                    text: "♫"
+                    font.pixelSize: 48
+                    color: "#00d4ff"
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Label {
+                    text: "放开添加音乐"
+                    font.family: appFont.name
+                    font.pixelSize: 16
+                    color: "#cccccc"
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Label {
+                    text: "支持 .mp3 .flac .wav 等格式"
+                    font.family: appFont.name
+                    font.pixelSize: 12
+                    color: "#888"
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+        }
     }
 }

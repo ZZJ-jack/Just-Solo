@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 // ============================================================
 // 设置页 - 外观 / 软件更新 / 关于 三个子页面
@@ -527,6 +528,186 @@ Rectangle {
         Item { Layout.fillHeight: true }
     }
 
+    // ---- 媒体库设置 ----
+    ColumnLayout {
+        anchors.fill: parent; spacing: 0
+        visible: settingsSubMenu === "library"
+
+        Item { Layout.preferredHeight: 24 }
+
+        // 启用同步
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 60; radius: 8
+            color: "#2e2e4a"; border.color: "#3a3a55"
+
+            RowLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 12
+                ColumnLayout {
+                    Layout.fillWidth: true; spacing: 4
+                    Label {
+                        text: "启用文件夹同步"
+                        font.family: fontFamily; font.pixelSize: 14; color: "#e8e8e8"
+                    }
+                    Label {
+                        text: "监控文件夹变化，自动添加/移除音乐"
+                        font.family: fontFamily; font.pixelSize: 12; color: "#999"
+                    }
+                }
+                Switch {
+                    id: syncSwitch
+                    checked: folderSyncManager.syncEnabled
+                    onCheckedChanged: folderSyncManager.syncEnabled = checked
+                    indicator: Rectangle {
+                        implicitWidth: 44; implicitHeight: 22; radius: 11
+                        color: syncSwitch.checked ? "#00d4ff" : "#555577"
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        Rectangle {
+                            x: syncSwitch.checked ? parent.width - width : 0
+                            y: 1; width: 20; height: 20; radius: 10
+                            color: "#eee"
+                            Behavior on x { NumberAnimation { duration: 150 } }
+                        }
+                    }
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 16 }
+
+        // 同步文件夹列表
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: folderList.count > 0
+                ? Math.min(folderList.count * 52 + 64, 300)
+                : 80
+            radius: 8; color: "#2e2e4a"; border.color: "#3a3a55"
+            clip: true
+
+            ColumnLayout {
+                anchors.fill: parent; spacing: 0
+
+                // 列表标题 + 操作按钮
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 20; Layout.rightMargin: 12
+                    Layout.topMargin: 14; Layout.bottomMargin: 8
+                    spacing: 8
+
+                    Label {
+                        text: "监控文件夹"
+                        font.family: fontFamily; font.pixelSize: 14; color: "#ccc"
+                        Layout.fillWidth: true
+                    }
+
+                    // 立即扫描按钮
+                    Rectangle {
+                        id: rescanBtn
+                        Layout.preferredHeight: 28; Layout.preferredWidth: 80; radius: 6
+                        color: rescanBtnMA.containsMouse && !folderSyncManager.isSyncing ? "#3a5a7a" : "#333350"
+                        border.color: "#444466"; border.width: 1
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: folderSyncManager.isSyncing ? "扫描中..." : "立即扫描"
+                            font.family: fontFamily; font.pixelSize: 12; color: folderSyncManager.isSyncing ? "#888" : "#ccc"
+                        }
+                        MouseArea {
+                            id: rescanBtnMA
+                            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            enabled: !folderSyncManager.isSyncing
+                            onClicked: folderSyncManager.rescanNow()
+                        }
+                    }
+
+                    // 添加文件夹按钮
+                    Rectangle {
+                        Layout.preferredHeight: 28; Layout.preferredWidth: 72; radius: 6
+                        color: addBtnMA.containsMouse ? "#4a6a8a" : "#3a5a7a"
+                        Label { anchors.centerIn: parent; text: "添加"; font.family: fontFamily; font.pixelSize: 12; color: "#ddd" }
+                        MouseArea {
+                            id: addBtnMA
+                            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: folderDialog.open()
+                        }
+                    }
+                }
+
+                // 文件夹列表
+                ListView {
+                    id: folderList
+                    Layout.fillWidth: true; Layout.preferredHeight: contentHeight
+                    interactive: false
+                    model: folderSyncManager.syncFolders
+
+                    delegate: Rectangle {
+                        width: folderList.width; height: 44; color: "transparent"
+                        border.color: index < folderList.count - 1 ? "#3a3a55" : "transparent"
+                        border.width: 1
+
+                        RowLayout {
+                            anchors.fill: parent; anchors.margins: 12; spacing: 8
+                            Label {
+                                text: "📁"
+                                font.pixelSize: 16; Layout.preferredWidth: 24
+                            }
+                            Label {
+                                text: modelData
+                                font.family: fontFamily; font.pixelSize: 13
+                                color: "#ccc"; elide: Text.ElideMiddle
+                                Layout.fillWidth: true
+                            }
+                            // 移除按钮
+                            Rectangle {
+                                Layout.preferredHeight: 24; Layout.preferredWidth: 50; radius: 6
+                                color: removeMA.containsMouse ? "#cc5555" : "#994444"
+                                Label { anchors.centerIn: parent; text: "移除"; font.family: fontFamily; font.pixelSize: 11; color: "#eee" }
+                                MouseArea {
+                                    id: removeMA
+                                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: folderSyncManager.removeSyncFolder(index)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 空列表提示
+                Label {
+                    Layout.fillWidth: true; Layout.topMargin: 4
+                    visible: folderList.count === 0
+                    text: "尚未添加监控文件夹"
+                    font.family: fontFamily; font.pixelSize: 13; color: "#888"
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 12 }
+
+        // 说明文字
+        Label {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            text: "提示：添加文件夹后，应用会自动扫描其中的音频文件并加入音乐库。\n"
+                  + "后续文件夹内的文件新增或删除将自动同步到音乐库。\n"
+                  + "支持子目录递归监控，适配 Windows、macOS、Linux 文件系统通知。"
+            font.family: fontFamily; font.pixelSize: 12; color: "#777"
+            lineHeight: 1.4; wrapMode: Text.WordWrap
+            Layout.leftMargin: 4
+        }
+
+        // 同步状态
+        Label {
+            id: syncStatusLabel
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            font.family: fontFamily; font.pixelSize: 12; color: "#999"
+            Layout.leftMargin: 4
+            text: folderSyncManager.isSyncing ? "正在同步..." : ""
+        }
+
+        Item { Layout.fillHeight: true }
+    }
+
     // ---- 关于 ----
     ColumnLayout {
         anchors.fill: parent; spacing: 0
@@ -549,5 +730,18 @@ Rectangle {
         Label { text: "图标来源: 鸿蒙开发者"; font.family: fontFamily; font.pixelSize: 13; color: "#ccc" }
         Label { text: `<a href="https://developer.huawei.com/consumer/cn/">https://developer.huawei.com/consumer/cn</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#00d4ff"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Item { Layout.fillHeight: true }
+    }
+
+    // ---- 选择文件夹对话框 ----
+    FolderDialog {
+        id: folderDialog
+        title: "选择音乐文件夹"
+        modality: Window.Windowed
+        onAccepted: {
+            if (folderDialog.selectedFolder) {
+                var path = folderDialog.selectedFolder.toString().replace("file:///", "")
+                folderSyncManager.addSyncFolder(path)
+            }
+        }
     }
 }

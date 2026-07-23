@@ -163,6 +163,10 @@ public:
     Q_INVOKABLE void clearHistory();
     Q_INVOKABLE void removeHistoryItem(int index);
 
+    // ---- 拖放支持 ----
+    Q_INVOKABLE bool isDirectory(const QString &path) const;
+    Q_INVOKABLE bool isAudioFile(const QString &path) const;
+
 signals:
     void playlistChanged();
     void libraryChanged();

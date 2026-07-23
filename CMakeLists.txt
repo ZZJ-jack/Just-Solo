@@ -47,6 +47,7 @@ qt_add_executable(JustSolo WIN32
     src/core/MetadataReader.cpp
     src/core/SMTCManager.cpp
     src/core/HotkeyManager.cpp
+    src/core/FolderSyncManager.cpp
     resources/app.rc
 )
 
