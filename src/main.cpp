@@ -283,6 +283,8 @@ int main(int argc, char *argv[])
     // Just Solo LyricServer 协议（WebSocket ws://127.0.0.1:47290）
     LyricServer *lyricServer = new LyricServer(musicManager, &app);
     lyricServer->start(47290);
+    engine.rootContext()->setContextProperty("lyricServer", lyricServer);
+    engine.rootContext()->setContextProperty("LYRICSERVER_VERSION", LyricServer::protocolVersion());
 
     // 全局快捷键
     QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);

@@ -34,7 +34,7 @@
 
 - Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++ 高性能核心 + QML 现代界面，无 Electron 依赖，内存占用低，冷启动迅速。
 
-- 同时，Just Solo 已原生支持 Windows SMTC 系统媒体控件，可配合 [NSD 灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen大佬](https://github.com/GEORGEWWWU) 开发）显示音乐信息与控制播放（暂请将目标音乐平台设置成通用音频）。
+- 同时，Just Solo 已原生支持 Windows SMTC系统媒体控件 和 Just Solo LyricServer媒体信息传输协议（基于WebSocket），同时深度适配 [NSD 灵动岛工具](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen大佬](https://github.com/GEORGEWWWU) 开发）以显示音乐信息与控制播放（请将目标音乐平台设置成通用音频）。
 
 - 本项目现阶段没有任何关于网络的功能，仅支持本地音乐播放，如需本地音乐资源，可以使用LX Music等软件下载。
 

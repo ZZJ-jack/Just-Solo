@@ -57,7 +57,18 @@ bool LyricServer::start(quint16 port)
         return false;
     }
     qDebug("JustSolo LyricServer: 监听 ws://127.0.0.1:%u", port);
+    emit runningChanged();
     return true;
+}
+
+bool LyricServer::isRunning() const
+{
+    return m_server && m_server->isListening();
+}
+
+QString LyricServer::protocolVersion()
+{
+    return QStringLiteral(LYRICSERVER_PROTOCOL_VERSION);
 }
 
 // ============================================================

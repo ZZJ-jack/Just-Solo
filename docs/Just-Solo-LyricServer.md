@@ -1,4 +1,4 @@
-# Just Solo LyricServer 协议 v1.0
+# Just Solo LyricServer 协议 v1.0.0
 
 > **Just Solo** 实时歌词推送服务端（LyricServer）对外接口规范。
 > 供外部歌词显示应用（桌面歌词、移动端联动、OBS 直播歌词等）订阅。
@@ -184,4 +184,4 @@ function currentLineIndex() {
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| v1.0 | 2026-07-24 | 初始发布，定义 init / progress / playback 三个消息类型 |
+| v1.0.0 | 2026-07-24 | 初始发布，定义 init / progress / playback 三个消息类型 |

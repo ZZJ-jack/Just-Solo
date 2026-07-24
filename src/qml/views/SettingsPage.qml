@@ -539,6 +539,71 @@ Rectangle {
         Label { text: "基于 Qt 6.8.3 + QML 构建"; font.family: fontFamily; font.pixelSize: 13; color: "#999" }
         Label { text: "运行环境: " + (typeof OS_VERSION !== "undefined" ? OS_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#999" }
         Item { Layout.preferredHeight: 8 }
+
+        // ---- Just Solo LyricServer 协议状态 ----
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 120; radius: 10
+            color: "#2a2a52"; border.color: "#3a3a6a"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 18; spacing: 8
+
+                // 标题行：协议名称 + 状态徽章
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "Just Solo LyricServer"
+                        font.family: fontFamily; font.pixelSize: 15; font.bold: true; color: "#e0e0ff"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        Layout.preferredWidth: 58; Layout.preferredHeight: 22; radius: 11
+                        color: (typeof lyricServer !== "undefined" && lyricServer && lyricServer.running) ? "#1a3a2a" : "#3a1a1a"
+                        border.color: (typeof lyricServer !== "undefined" && lyricServer && lyricServer.running) ? "#2a5a3a" : "#5a2a2a"
+                        RowLayout {
+                            anchors.centerIn: parent; spacing: 4
+                            Rectangle {
+                                width: 7; height: 7; radius: 3.5
+                                color: (typeof lyricServer !== "undefined" && lyricServer && lyricServer.running) ? "#4ade80" : "#ef4444"
+                            }
+                            Label {
+                                text: (typeof lyricServer !== "undefined" && lyricServer && lyricServer.running) ? "已启用" : "未启用"
+                                font.family: fontFamily; font.pixelSize: 11; color: (typeof lyricServer !== "undefined" && lyricServer && lyricServer.running) ? "#4ade80" : "#ef4444"
+                            }
+                        }
+                    }
+                }
+
+                // 版本 + 端点
+                RowLayout {
+                    Layout.fillWidth: true; spacing: 12
+                    Rectangle {
+                        Layout.preferredWidth: 68; Layout.preferredHeight: 22; radius: 6
+                        color: "#3a3a6a"
+                        Label {
+                            anchors.centerIn: parent
+                            text: LYRICSERVER_VERSION || "v1.0.0"
+                            font.family: fontFamily; font.pixelSize: 11; font.bold: true; color: "#00d4ff"
+                        }
+                    }
+                    Label {
+                        text: "ws://127.0.0.1:47290"
+                        font.family: "Cascadia Code, Consolas, monospace"; font.pixelSize: 12; color: "#8888aa"
+                    }
+                }
+
+                // 协议简述
+                Label {
+                    text: "单向实时歌词推送：初始化(init) · 进度(progress) · 状态(playback)"
+                    font.family: fontFamily; font.pixelSize: 11; color: "#7777aa"
+                    elide: Text.ElideRight; Layout.fillWidth: true
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 8 }
+        Item { Layout.preferredHeight: 8 }
         Label { text: "构建版本: " + BUILD_VERSION; font.family: fontFamily; font.pixelSize: 13; color: "#999" }
         Item { Layout.preferredHeight: 12 }
         Label { text: "项目地址"; font.family: fontFamily; font.pixelSize: 13; color: "#ccc" }
