@@ -15,7 +15,7 @@
 LyricServer::LyricServer(MusicManager *mgr, QObject *parent)
     : QObject(parent)
     , m_mgr(mgr)
-    , m_server(new QWebSocketServer(QStringLiteral("Just Solo Lyric Server"),
+    , m_server(new QWebSocketServer(QStringLiteral("Just Solo LyricServer"),
                                     QWebSocketServer::NonSecureMode, this))
     , m_progressTimer(new QTimer(this))
 {
@@ -52,11 +52,11 @@ bool LyricServer::start(quint16 port)
 {
     // 只监听本地环回，不暴露到网卡
     if (!m_server->listen(QHostAddress::LocalHost, port)) {
-        qWarning("LyricServer: listen 失败 port=%u — %s",
+        qWarning("JustSolo LyricServer: listen 失败 port=%u — %s",
                  port, qPrintable(m_server->errorString()));
         return false;
     }
-    qDebug("LyricServer: 监听 ws://127.0.0.1:%u", port);
+    qDebug("JustSolo LyricServer: 监听 ws://127.0.0.1:%u", port);
     return true;
 }
 

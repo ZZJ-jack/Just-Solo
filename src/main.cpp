@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
 
     engine.rootContext()->setContextProperty("musicManager", musicManager);
 
-    // 实时歌词推送服务（WebSocket ws://127.0.0.1:47290）
+    // Just Solo LyricServer 协议（WebSocket ws://127.0.0.1:47290）
     LyricServer *lyricServer = new LyricServer(musicManager, &app);
     lyricServer->start(47290);
 
