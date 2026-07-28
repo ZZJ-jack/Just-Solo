@@ -13,6 +13,7 @@ import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Dialogs
+import QtQuick.Effects
 
 // ============================================================
 // 主窗口
@@ -21,8 +22,8 @@ Window {
     id: mainWindow
 
     // ---- 初始尺寸 ----
-    width: 1200
-    height: 800
+    width: 1150
+    height: 780
     minimumWidth: 900
     minimumHeight: 600
     visible: true
@@ -39,7 +40,7 @@ Window {
 
     // ---- 布局常量 ----
     readonly property int sidebarWidth: 200
-    readonly property int playerBarHeight: 72
+    readonly property int playerBarHeight: 75
 
     // ---- 视图路由 ----
     property string currentMenu: ""              // 空串 = 未选择，不加载页面
@@ -225,7 +226,7 @@ Window {
                 anchors.bottom: createListBtn.top
                 anchors.topMargin: 10
                 anchors.leftMargin: 16
-                anchors.rightMargin: 16 // 现在这个右边距会真正生效了
+                anchors.rightMargin: 16
                 spacing: 0
 
                 // ---- Logo + 标题 ----
@@ -379,7 +380,7 @@ Window {
                 ColumnLayout {
                     // 强制包裹容器受到 16px 留白的控制
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: 5
                     visible: currentMenu === "settings"
 
                     SubNavItem {
@@ -470,7 +471,7 @@ Window {
                     delegate: Rectangle {
                         width: ListView.view.width
                         height: 36 
-                        radius: 6 // 4个圆角现在会完整展现，不会被遮挡
+                        radius: 6
                         color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === index ? "#2C2C2C" : (plMA.containsMouse ? "#222222" : "transparent")
 
                         RowLayout {
@@ -613,6 +614,7 @@ Window {
                 height: 36
                 radius: 6
                 z: 10
+                visible: currentMenu !== "settings"
                 color: sidebarCreateMA.containsMouse ? "#222222" : "transparent"
 
                 Row {
@@ -889,7 +891,7 @@ Window {
                            : currentMenu === "playlist" ? "qrc:/qt/qml/JustSolo/data/image/PlayList.png"
                            : currentMenu === "favorite" ? "qrc:/qt/qml/JustSolo/data/image/mylike.png"
                            : currentMenu === "history" ? "qrc:/qt/qml/JustSolo/data/image/history.png"
-                           : currentMenu === "customPlaylist" ? "qrc:/qt/qml/JustSolo/data/image/SelfList.png"
+                           : currentMenu === "customPlaylist" ? "qrc:/qt/qml/JustSolo/data/image/PlayList.png"
                            : ""
                             sourceSize.width: 28
                             sourceSize.height: 28
@@ -1223,10 +1225,146 @@ Window {
         height: playerBarHeight
         color: "#181818"
 
-
         property double progressFraction: musicManager.duration > 0 ? musicManager.position / Math.max(1, musicManager.duration) : 0
         property int currentSeconds: Math.floor(musicManager.position / 1000)
         property int totalSeconds: Math.floor(musicManager.duration / 1000)
+
+        // 吸顶进度条 (作为 playerBar 的上边框)
+        Rectangle {
+            id: barProgressTrack
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            // 悬浮或拖拽时高度增加到 5px，平时 3px
+            height: (barSeekMA.containsMouse || barSeekMA.pressed) ? 5 : 3
+            color: "#3A3A3A"
+            z: 10
+
+            opacity: (barSeekMA.containsMouse || barSeekMA.pressed) ? 1.0 : 0.4
+            
+            // 让高度变化有一个平滑的过渡动画
+            Behavior on height { 
+                NumberAnimation { duration: 150; easing.type: Easing.OutQuad } 
+            }
+
+            // 颜色渐变过渡动画
+            Behavior on opacity {
+                NumberAnimation { duration: 150 }
+            }
+
+            Rectangle {
+                id: barProgressFill
+                readonly property real autoRatio: Math.min(1, playerBar.progressFraction)
+                width: parent.width * (barSeekMA.pressed ? barSeekMA._dragRatio : autoRatio)
+                height: parent.height
+                color: "#3B82F6"
+                Behavior on width { 
+                    NumberAnimation { duration: 300; easing.type: Easing.OutCubic } 
+                }
+
+                // 2. 拖动锚点
+                Rectangle {
+                    id: barThumb
+                    width: 10
+                    height: 10
+                    radius: 5
+                    color: "#f1f1f1"
+                    
+                    // 垂直居中于进度条，水平位置放在进度条的最右侧末端
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: parent.width - width / 2 
+                    
+                    // 仅在鼠标悬浮或按下拖拽时显示
+                    opacity: (barSeekMA.containsMouse || barSeekMA.pressed) ? 1 : 0
+                    
+                    // 显隐过渡动画
+                    Behavior on opacity { 
+                        NumberAnimation { duration: 150 } 
+                    }
+                }
+            }
+
+            // 悬浮时间进度
+            Rectangle {
+                id: hoverTimeTooltip
+                width: hoverTimeText.contentWidth + 16
+                height: 24
+                radius: 6
+                color: "#282828"
+                border.color: "#3A3A3A"
+                border.width: 1
+                
+                // 悬浮在进度条上方 12px
+                y: -height - 12
+                
+                // X 轴跟随鼠标，并限制在进度条两端内不溢出
+                property real rawX: barSeekMA.mouseX - width / 2
+                x: Math.max(0, Math.min(barProgressTrack.width - width, rawX))
+
+                // 仅在鼠标悬浮或按住拖拽时显示
+                opacity: (barSeekMA.containsMouse || barSeekMA.pressed) ? 1.0 : 0.0
+                
+                Behavior on opacity { NumberAnimation { duration: 150 } }
+                Behavior on x { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
+
+                Label {
+                    id: hoverTimeText
+                    anchors.centerIn: parent
+                    font.family: appFont.name
+                    font.pixelSize: 12
+                    font.bold: true
+                    color: "#777777"            // 默认颜色（应用于 / 总时间 部分）
+                    textFormat: Text.StyledText  // 开启富文本/样式文本支持
+
+                    text: {
+                        var totalSec = Math.floor(musicManager.duration / 1000)
+                        if (totalSec <= 0) return "<font color='#ffffff'>00:00</font> / 00:00"
+
+                        // 计算鼠标悬停位置对应的秒数
+                        var hoverRatio = Math.max(0, Math.min(1, barSeekMA.mouseX / barProgressTrack.width))
+                        var hoverSec = Math.floor((hoverRatio * musicManager.duration) / 1000)
+
+                        // 格式化悬停时间 (XX:XX)
+                        var m1 = Math.floor(hoverSec / 60)
+                        var s1 = Math.floor(hoverSec % 60)
+                        var curStr = (m1 < 10 ? "0" : "") + m1 + ":" + (s1 < 10 ? "0" : "") + s1
+
+                        // 格式化总时长 (XX:XX)
+                        var m2 = Math.floor(totalSec / 60)
+                        var s2 = Math.floor(totalSec % 60)
+                        var totStr = (m2 < 10 ? "0" : "") + m2 + ":" + (s2 < 10 ? "0" : "") + s2
+
+                        // 使用 <font> 标签高亮当前时间为纯白 #ffffff，后面的 / totStr 继承默认的 #777777
+                        return "<font color='#ffffff'>" + curStr + "</font> / " + totStr
+                    }
+                }
+            }
+
+            // 拖拽控制区
+            MouseArea {
+                id: barSeekMA
+                anchors.fill: parent
+                anchors.topMargin: -8 // 上下热区扩大，保证 hover 和拖拽的稳定性
+                anchors.bottomMargin: -8
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                preventStealing: true
+
+                property real _dragRatio: 0
+                property real _trackW: 0
+
+                function seek(mx) {
+                    var w = barSeekMA.pressed ? _trackW : barProgressTrack.width
+                    _dragRatio = Math.max(0, Math.min(1, mx / w))
+                    if (musicManager.duration > 0)
+                        musicManager.seek(_dragRatio * musicManager.duration)
+                }
+
+                onPressed: function(m) { _trackW = barProgressTrack.width; seek(m.x) }
+                onPositionChanged: function(m) { if (pressed) seek(m.x) }
+                onClicked: function(m) { seek(m.x) }
+            }
+        }
 
         RowLayout {
             anchors.fill: parent
@@ -1234,305 +1372,315 @@ Window {
             anchors.rightMargin: 16
             spacing: 0
 
-            // ---- 左侧：封面 + 歌名/歌手 ----
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.maximumWidth: mainWindow.width * 0.35
-                spacing: 12
+            // ==========================================
+        // 1. 左侧：封面 + 歌名/歌手 (靠左死死锚定)
+        // ==========================================
+        RowLayout {
+            anchors.left: parent.left
+            anchors.leftMargin: 16
+            anchors.verticalCenter: parent.verticalCenter
+            // 限制最大宽度为35%，防止歌名太长顶到中间按钮
+            width: Math.min(implicitWidth, mainWindow.width * 0.35)
+            spacing: 12
 
-                Rectangle {
-                    id: playerCoverRect
-                    width: 48; height: 48; radius: 6; color: "#3A3A3A"
+            Rectangle {
+                id: playerCoverRect
+                width: 48; height: 48; radius: 6; color: "#3A3A3A"
 
-                    Image {
-                        anchors.fill: parent
-                        anchors.margins: 2
-                        source: musicManager.currentCover || ""
-                        sourceSize.width: 40
-                        sourceSize.height: 40
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        visible: musicManager.currentCover !== ""
-                        opacity: 0
-                        Behavior on opacity { NumberAnimation { duration: 200 } }
-                        onStatusChanged: {
-                            if (status === Image.Ready) opacity = 1
-                            else if (status === Image.Null || status === Image.Error) opacity = 0
-                        }
+                Image {
+                    anchors.fill: parent
+                    source: musicManager.currentCover || ""
+                    sourceSize.width: 40
+                    sourceSize.height: 40
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    visible: musicManager.currentCover !== ""
+                    opacity: 0
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    onStatusChanged: {
+                        if (status === Image.Ready) opacity = 1
+                        else if (status === Image.Null || status === Image.Error) opacity = 0
                     }
-                    Label {
-                        anchors.centerIn: parent
-                        text: "♫"; font.family: appFont.name; font.pixelSize: 22; color: "#666"
-                        visible: musicManager.currentCover === ""
-                    }
-                    MouseArea {
+                    layer.enabled: true
+                    layer.effect: MultiEffect { maskEnabled: true; maskSource: coverMask }
+                    Rectangle {
+                        id: coverMask
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
-                        onEntered: playerCoverRect.color = "#4A4A4A"
-                        onExited: playerCoverRect.color = "#3A3A3A"
-                        onClicked: {
-                            if (musicManager.currentIndex >= 0)
-                                showPlayerDetail = true
-                        }
+                        radius: 6
+                        visible: false
+                        layer.enabled: true
                     }
                 }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
-                    Label {
-                        text: musicManager.currentTitle ? musicManager.currentTitle : "未在播放"
-                        font.family: appFont.name
-                        font.pixelSize: 15
-                        font.bold: true
-                        color: musicManager.currentTitle ? "#cccccc" : "#777"
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                    Label {
-                        text: musicManager.currentArtist ? musicManager.currentArtist : "选择一首歌曲开始"
-                        font.family: appFont.name
-                        font.pixelSize: 12
-                        color: "#777"
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
+                Label {
+                    anchors.centerIn: parent
+                    text: "♫"; font.family: appFont.name; font.pixelSize: 22; color: "#666"
+                    visible: musicManager.currentCover === ""
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    onEntered: playerCoverRect.color = "#4A4A4A"
+                    onExited: playerCoverRect.color = "#3A3A3A"
+                    onClicked: {
+                        if (musicManager.currentIndex >= 0) showPlayerDetail = true
                     }
                 }
             }
 
-            // ---- 左弹性间距 ----
-            Item { Layout.fillWidth: true }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
+                Label {
+                    text: musicManager.currentTitle ? musicManager.currentTitle : "未在播放"
+                    font.family: appFont.name
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: musicManager.currentTitle ? "#cccccc" : "#777"
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+                Label {
+                    text: musicManager.currentArtist ? musicManager.currentArtist : "选择一首歌曲开始"
+                    font.family: appFont.name
+                    font.pixelSize: 13
+                    font.bold: true
+                    color: "#777"
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
+        }
 
-            // ---- 中间：播放控制按钮 + 音量 ----
-            RowLayout {
-                spacing: 20
+        // ==========================================
+        // 2. 中间：纯播放控制按钮 (绝对物理居中)
+        // ==========================================
+        RowLayout {
+            anchors.centerIn: parent
+            spacing: 24  // 间距可以适当微调得稍微舒服一点
 
-                // 上一首
-                Item {
-                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
-                    Image {
-                        anchors.centerIn: parent
-                        source: "qrc:/qt/qml/JustSolo/data/image/play.png"
-                        width: 22; height: 22
-                        opacity: 0.5
-                        rotation: 180
-                    }
-                    MouseArea {
-                        anchors.fill: parent; anchors.margins: -8
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: musicManager.previous()
+            // 上一首
+            Item {
+                Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                Image {
+                    anchors.centerIn: parent
+                    source: "qrc:/qt/qml/JustSolo/data/image/prve.png"
+                    width: 22; height: 22
+                    opacity: 0.8
+                }
+                MouseArea {
+                    anchors.fill: parent; anchors.margins: -8
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: musicManager.previous()
+                }
+            }
+
+            // 播放 / 暂停
+            Rectangle {
+                width: 42; height: 42; radius: 21; color: "#3A3A3A"
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Image {
+                    source: "qrc:/qt/qml/JustSolo/data/image/play.png"
+                    width: 24; height: 24
+                    anchors.centerIn: parent
+                    opacity: musicManager.isPlaying ? 0 : 1
+                    anchors.horizontalCenterOffset: 1
+                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                }
+                Image {
+                    source: "qrc:/qt/qml/JustSolo/data/image/playing.png"
+                    width: 24; height: 24
+                    anchors.centerIn: parent
+                    opacity: musicManager.isPlaying ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (musicManager.currentIndex >= 0) {
+                            if (musicManager.isPlaying) musicManager.pause()
+                            else musicManager.play()
+                        }
                     }
                 }
+            }
 
-                // 播放/暂停
-                Rectangle {
-                    width: 42; height: 42; radius: 21; color: "#3A3A3A"
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    Image {
-                        source: "qrc:/qt/qml/JustSolo/data/image/play.png"
-                        width: 22; height: 22
-                        anchors.centerIn: parent
-                        opacity: musicManager.isPlaying ? 0 : 1
-                        Behavior on opacity { NumberAnimation { duration: 120 } }
+            // 下一首
+            Item {
+                Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                Image {
+                    anchors.centerIn: parent
+                    source: "qrc:/qt/qml/JustSolo/data/image/next.png"
+                    width: 22; height: 22
+                    opacity: 0.8
+                }
+                MouseArea {
+                    anchors.fill: parent; anchors.margins: -8
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: musicManager.next()
+                }
+            }
+        }
+
+        // ==========================================
+        // 3. 右侧：音量控制区
+        // ==========================================
+        RowLayout {
+            anchors.right: parent.right
+            anchors.rightMargin: 16
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 12
+
+            Item {
+                id: volumeBtn
+                Layout.preferredWidth: 22
+                Layout.preferredHeight: 22
+
+                Image {
+                    anchors.centerIn: parent
+                    source: "qrc:/qt/qml/JustSolo/data/image/volume-logo.png"
+                    width: 20; height: 20
+                    opacity: (volumeMA.containsMouse || volumePopup.visible) ? 1.0 : 0.7
+                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                }
+
+                // 1. 防抖延时定时器：给鼠标移动过间隙留出 250ms 缓冲，防止误关
+                Timer {
+                    id: hideVolumeTimer
+                    interval: 250
+                    repeat: false
+                    onTriggered: volumePopup.close()
+                }
+
+                function showPopup() {
+                    hideVolumeTimer.stop()
+                    volumePopup.open()
+                }
+
+                function scheduleHide() {
+                    hideVolumeTimer.restart()
+                }
+
+                // 2. 悬浮触发动效
+                MouseArea {
+                    id: volumeMA
+                    anchors.fill: parent
+                    anchors.margins: -8 // 扩大图标捕获热区
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+
+                    onEntered: volumeBtn.showPopup()
+                    onExited: volumeBtn.scheduleHide()
+                }
+
+                // 3. 竖向音量悬浮窗
+                Popup {
+                    id: volumePopup
+                    x: (parent.width - width) / 2
+                    y: -height - 12
+                    width: 44
+                    height: 160
+                    padding: 0
+                    
+                    background: Rectangle {
+                        radius: 8
+                        color: "#222222"
+                        border.color: "#3A3A3A"
+                        border.width: 1
                     }
-                    Image {
-                        source: "qrc:/qt/qml/JustSolo/data/image/playing.png"
-                        width: 22; height: 22
-                        anchors.centerIn: parent
-                        opacity: musicManager.isPlaying ? 1 : 0
-                        Behavior on opacity { NumberAnimation { duration: 120 } }
-                    }
-                    MouseArea {
+
+                    contentItem: Item {
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (musicManager.currentIndex >= 0) {
-                                if (musicManager.isPlaying) musicManager.pause()
-                                else musicManager.play()
-                            }
-                        }
-                    }
-                }
-
-                // 下一首
-                Item {
-                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
-                    Image {
-                        anchors.centerIn: parent
-                        source: "qrc:/qt/qml/JustSolo/data/image/play.png"
-                        width: 22; height: 22
-                        opacity: 0.5
-                    }
-                    MouseArea {
-                        anchors.fill: parent; anchors.margins: -8
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: musicManager.next()
-                    }
-                }
-
-                // ---- 音量按钮 ----
-                Item {
-                    id: volumeBtn
-                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
-                    Layout.leftMargin: 8
-
-                    Image {
-                        anchors.centerIn: parent
-                        source: "qrc:/qt/qml/JustSolo/data/image/volume-logo.png"
-                        width: 22; height: 22
-                        opacity: volumeMA.containsMouse ? 0.9 : 0.55
-                        Behavior on opacity { NumberAnimation { duration: 100 } }
-                    }
-                    MouseArea {
-                        id: volumeMA
-                        anchors.fill: parent; anchors.margins: -8
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: volumePopup.open()
-                    }
-
-                    // 音量弹出面板
-                    Popup {
-                        id: volumePopup
-                        x: parent.width / 2 - width / 2
-                        y: -height - 14
-                        width: 180; height: 48
-                        padding: 8
-                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-                        background: Rectangle {
-                            radius: 8; color: "#222222"
-                            opacity: musicManager.menuOpacity
-                            border.color: "#3A3A3A"; border.width: 1
-                        }
-
-                        RowLayout {
+                        
+                        // 捕获悬浮窗内的鼠标进入/移出事件
+                        MouseArea {
+                            id: popupHoverMA
                             anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: volumeBtn.showPopup()
+                            onExited: volumeBtn.scheduleHide()
+                        }
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.topMargin: 12
+                            anchors.bottomMargin: 12
                             spacing: 8
 
+                            // 顶部音量百分比
                             Label {
-                                text: Math.round(musicManager.volume * 100)
+                                text: Math.round(musicManager.volume * 100) + "%"
                                 font.family: appFont.name
-                                font.pixelSize: 12
+                                font.pixelSize: 11
                                 color: "#aaa"
-                                Layout.preferredWidth: 28
-                                horizontalAlignment: Text.AlignRight
+                                Layout.alignment: Qt.AlignHCenter
                             }
 
-                            Slider {
-                                id: volumeSlider
-                                Layout.fillWidth: true
-                                from: 0; to: 1; value: musicManager.volume
-                                snapMode: Slider.NoSnap
-                                live: true
+                            // 竖向进度条
+                            Item {
+                                Layout.fillHeight: true
+                                Layout.alignment: Qt.AlignHCenter
+                                width: 12
 
-                                onMoved: musicManager.volume = value
-
-                                background: Rectangle {
-                                    implicitHeight: 4
-                                    radius: 2
+                                Rectangle {
+                                    id: volTrack
+                                    anchors.centerIn: parent
+                                    width: 4
+                                    height: parent.height
+                                    radius: width / 2
                                     color: "#3A3A3A"
+                                    Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+
+                                    // 填充部分
                                     Rectangle {
-                                        width: volumeSlider.visualPosition * parent.width
-                                        height: parent.height
-                                        radius: 2
-                                        color: "#00d4ff"
+                                        id: volFill
+                                        anchors.bottom: parent.bottom
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        height: parent.height * musicManager.volume
+                                        radius: volTrack.radius
+                                        color: "#3B82F6"
+
+                                        // 拖拽滑块小白点
+                                        Rectangle {
+                                            width: 10; height: 10
+                                            radius: 5
+                                            color: "#f1f1f1"
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            y: -height / 2
+                                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                                        }
                                     }
                                 }
 
-                                handle: Rectangle {
-                                    x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
-                                    y: volumeSlider.topPadding + volumeSlider.implicitHeight / 2 - height / 2
-                                    width: 14; height: 14; radius: 7
-                                    color: volumeHandleMA.containsMouse ? "#eee" : "#ccc"
-                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                // 音量独立拖拽控制
+                                MouseArea {
+                                    id: volDragMA
+                                    anchors.fill: parent
+                                    anchors.margins: -12
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    preventStealing: true
 
-                                    MouseArea {
-                                        id: volumeHandleMA
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
+                                    onEntered: volumeBtn.showPopup()
+                                    onExited: volumeBtn.scheduleHide()
+                                    
+                                    function updateVolume(my) {
+                                        var ratio = 1.0 - Math.max(0, Math.min(1, my / height))
+                                        musicManager.volume = ratio
                                     }
+                                    
+                                    onPressed: function(m) { volumeBtn.showPopup(); updateVolume(m.y) }
+                                    onPositionChanged: function(m) { if (pressed) { volumeBtn.showPopup(); updateVolume(m.y) } }
+                                    onClicked: function(m) { updateVolume(m.y) }
                                 }
-                            }
-
-                            Label {
-                                text: "%"
-                                font.family: appFont.name
-                                font.pixelSize: 12
-                                color: "#666"
-                                Layout.preferredWidth: 14
                             }
                         }
                     }
                 }
             }
-
-            // ---- 右弹性间距 ----
-            Item { Layout.fillWidth: true }
-
-            // ---- 右侧：播放进度（固定窗口 1/3） ----
-            RowLayout {
-                Layout.preferredWidth: mainWindow.width / 3
-                Layout.minimumWidth: mainWindow.width / 3
-                Layout.maximumWidth: mainWindow.width / 3
-                spacing: 8
-
-                Label {
-                    text: {
-                        var m = Math.floor(playerBar.currentSeconds / 60)
-                        var s = Math.floor(playerBar.currentSeconds % 60)
-                        return m + ":" + (s < 10 ? "0" : "") + s
-                    }
-                    font.family: appFont.name; font.pixelSize: 12; color: "#888"
-                    Layout.preferredWidth: 35
-                }
-
-                Rectangle {
-                    id: barProgressTrack
-                    Layout.fillWidth: true; Layout.preferredHeight: 4; radius: 2; color: "#3A3A3A"
-                    Rectangle {
-                        id: barProgressFill
-                        readonly property real autoRatio: Math.min(1, playerBar.progressFraction)
-                        width: parent.width * (barSeekMA.pressed ? barSeekMA._dragRatio : autoRatio)
-                        height: parent.height; radius: 2; color: "#00d4ff"
-                        Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
-                    }
-                    MouseArea {
-                        id: barSeekMA
-                        anchors.fill: parent
-                        anchors.topMargin: -8; anchors.bottomMargin: -8
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        preventStealing: true
-
-                        property real _dragRatio: 0
-                        property real _trackW: 0
-
-                        function seek(mx) {
-                            var w = barSeekMA.pressed ? _trackW : barProgressTrack.width
-                            _dragRatio = Math.max(0, Math.min(1, mx / w))
-                            if (musicManager.duration > 0)
-                                musicManager.seek(_dragRatio * musicManager.duration)
-                        }
-
-                        onPressed: function(m) { _trackW = barProgressTrack.width; seek(m.x) }
-                        onPositionChanged: function(m) { if (pressed) seek(m.x) }
-                        onClicked: function(m) { seek(m.x) }
-                    }
-                }
-
-                Label {
-                    text: {
-                        var m = Math.floor(playerBar.totalSeconds / 60)
-                        var s = Math.floor(playerBar.totalSeconds % 60)
-                        return m + ":" + (s < 10 ? "0" : "") + s
-                    }
-                    font.family: appFont.name; font.pixelSize: 12; color: "#888"
-                    Layout.preferredWidth: 35
-                }
-            }
+        }
         }
     }
 

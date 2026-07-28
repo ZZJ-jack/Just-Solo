@@ -24,11 +24,11 @@ set(LYRICSERVER_PROTOCOL_VERSION "v${LYRICSERVER_PROTOCOL_VERSION_MAJOR}.${LYRIC
 message(STATUS "LyricServer protocol: ${LYRICSERVER_PROTOCOL_VERSION}")
 
 # 指定 Qt 安装目录
-set(Qt6_DIR "C:/Qt/6.8.3/msvc2022_64/lib/cmake/Qt6")
-set(CMAKE_PREFIX_PATH "C:/Qt/6.8.3/msvc2022_64")
+# set(Qt6_DIR "C:/Qt/6.8.3/msvc2022_64/lib/cmake/Qt6")
+# set(CMAKE_PREFIX_PATH "C:/Qt/6.8.3/msvc2022_64")
 
-# set(Qt6_DIR "F:/QT/6.11.1/msvc2022_64/lib/cmake/Qt6")
-# set(CMAKE_PREFIX_PATH "F:/QT/6.11.1/msvc2022_64")
+set(Qt6_DIR "F:/QT/6.11.1/msvc2022_64/lib/cmake/Qt6")
+set(CMAKE_PREFIX_PATH "F:/QT/6.11.1/msvc2022_64")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -104,6 +104,8 @@ qt_add_qml_module(JustSolo
         data/font/HarmonyOS_Sans_SC_Regular.ttf
         data/image/setting.png
         data/image/back.png
+        data/image/prve.png
+        data/image/next.png
 )
 
 # 链接 Qt 库
@@ -147,8 +149,8 @@ target_compile_definitions(JustSolo PRIVATE
 
 # 自动部署 Qt 依赖及 QML 插件
 add_custom_command(TARGET JustSolo POST_BUILD
-#   COMMAND "F:/QT/6.11.1/msvc2022_64/bin/windeployqt.exe"
-    COMMAND "C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe"
+   COMMAND "F:/QT/6.11.1/msvc2022_64/bin/windeployqt.exe"
+#   COMMAND "C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe"
             --qmldir "${CMAKE_SOURCE_DIR}/src/qml"
             "$<TARGET_FILE:JustSolo>"
 )
