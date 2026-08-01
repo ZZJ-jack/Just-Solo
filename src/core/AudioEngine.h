@@ -33,8 +33,8 @@ public:
     // 返回请求的模式是否实际生效（独占失败会自动回退共享并返回 false）
     bool exclusive() const { return m_exclusive; }
     bool setExclusiveMode(bool exclusive, bool force = false);  // force=true 跳过探测强制尝试开启独占
-    // 探测 WASAPI 独占通道当前是否可用（通道被占用时返回 false），不改变现有设备
-    bool exclusiveModeAvailable() const;
+    // 探测 WASAPI 独占通道：0=可用，1=被其他独占客户端占用，2=设备不支持等其他原因不可用
+    int exclusiveModeProbe() const;
 
 signals:
     void positionChanged(qint64 ms);
