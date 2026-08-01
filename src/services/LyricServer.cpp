@@ -12,9 +12,10 @@
 // 构造 / 析构
 // ============================================================
 
-LyricServer::LyricServer(MusicManager *mgr, QObject *parent)
+LyricServer::LyricServer(MusicManager *mgr, bool devMode, QObject *parent)
     : QObject(parent)
     , m_mgr(mgr)
+    , m_devMode(devMode)
     , m_server(new QWebSocketServer(QStringLiteral("Just Solo LyricServer"),
                                     QWebSocketServer::NonSecureMode, this))
     , m_progressTimer(new QTimer(this))
@@ -80,6 +81,12 @@ void LyricServer::onNewConnection()
     while (m_server->hasPendingConnections()) {
         QWebSocket *client = m_server->nextPendingConnection();
         m_clients.append(client);
+
+        // 开发者模式（--develop）：输出客户端连接日志
+        if (m_devMode)
+            qDebug("JustSolo LyricServer: 客户端连接 %s:%u（当前 %d 个客户端）",
+                   qPrintable(client->peerAddress().toString()),
+                   client->peerPort(), m_clients.size());
 
         connect(client, &QWebSocket::disconnected,
                 this, &LyricServer::onClientDisconnected);

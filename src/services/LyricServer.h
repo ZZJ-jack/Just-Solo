@@ -23,7 +23,7 @@ class LyricServer : public QObject
     Q_PROPERTY(bool running READ isRunning NOTIFY runningChanged)
 
 public:
-    explicit LyricServer(MusicManager *mgr, QObject *parent = nullptr);
+    explicit LyricServer(MusicManager *mgr, bool devMode = false, QObject *parent = nullptr);
     ~LyricServer();
 
     bool start(quint16 port = 47290);
@@ -50,6 +50,7 @@ private:
     QWebSocketServer *m_server;
     QList<QWebSocket *> m_clients;
     QTimer *m_progressTimer;
+    bool m_devMode = false;      // 开发者模式（--develop）：输出客户端连接日志
 };
 
 #endif // LYRICSERVER_H
