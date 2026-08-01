@@ -240,7 +240,7 @@ Window {
                     // 循环模式（带弹出菜单）
                     Item {
                         id: modeItem
-                        Layout.preferredWidth: 20; Layout.preferredHeight: 20
+                        Layout.preferredWidth: 22; Layout.preferredHeight: 22
 
                         property var modeIcons: ["mode_sequential.png", "mode_loop.png", "mode_single.png", "mode_shuffle.png", "mode_stop.png"]
 
@@ -250,7 +250,10 @@ Window {
                                 var m = (typeof musicManager !== "undefined" && musicManager) ? musicManager.playMode : 0
                                 return "qrc:/qt/qml/JustSolo/data/image/" + modeItem.modeIcons[m]
                             }
-                            width: 18; height: 18
+                            sourceSize.width: musicManager.playMode === 0 ? 22 : (musicManager.playMode === 1 ? 20 : (musicManager.playMode === 4 ? 15 : 18))
+                            sourceSize.height: musicManager.playMode === 0 ? 22 : (musicManager.playMode === 1 ? 20 : (musicManager.playMode === 4 ? 15 : 18))
+                            width: musicManager.playMode === 0 ? 22 : (musicManager.playMode === 1 ? 20 : (musicManager.playMode === 4 ? 15 : 18))
+                            height: musicManager.playMode === 0 ? 22 : (musicManager.playMode === 1 ? 20 : (musicManager.playMode === 4 ? 15 : 18))
                             // 强制图标为纯白 #FFFFFF
                             layer.enabled: true
                             layer.effect: MultiEffect {
@@ -258,19 +261,40 @@ Window {
                             }
                         }
 
+                        // 轮询检查，鼠标离开按钮和菜单 450ms 后关闭
                         Timer {
-                            id: hideModeTimer
-                            interval: 200
-                            onTriggered: modePopup.close()
+                            id: modeCloseTimer
+                            interval: 150
+                            repeat: true
+                            running: false
+                            property int missCount: 0
+                            onTriggered: {
+                                if (modeBgMA.containsMouse || modeBtnMA.containsMouse) {
+                                    missCount = 0
+                                } else {
+                                    missCount++
+                                    if (missCount >= 3) {
+                                        missCount = 0
+                                        stop()
+                                        modePopup.close()
+                                    }
+                                }
+                            }
                         }
-                        function showModePopup() { hideModeTimer.stop(); modePopup.open() }
-                        function scheduleModeHide() { hideModeTimer.restart() }
 
                         MouseArea {
+                            id: modeBtnMA
                             anchors.fill: parent; anchors.margins: -4
                             hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onEntered: modeItem.showModePopup()
-                            onExited: modeItem.scheduleModeHide()
+                            onEntered: {
+                                modeCloseTimer.stop()
+                                modeCloseTimer.missCount = 0
+                                modeCloseTimer.start()
+                                modePopup.open()
+                            }
+                            onExited: {
+                                // 不立即动作，让轮询定时器判断
+                            }
                         }
 
                         Popup {
@@ -278,30 +302,59 @@ Window {
                             x: parent.width / 2 - width / 2
                             y: -height - 8
                             padding: 4
+                            closePolicy: Popup.CloseOnEscape
 
                             background: Rectangle {
-                                radius: 6; color: "#222222"
-                                border.color: "#3A3A3A"; border.width: 1
+                                radius: 6
+                                color: {
+                                    var cc = (typeof musicManager !== "undefined" && musicManager)
+                                            ? (musicManager.currentCoverColor || "") : ""
+                                    return cc !== "" ? Qt.darker(cc, 3.5) : "#222222"
+                                }
+                                Behavior on color { ColorAnimation { duration: 600 } }
+                                border.color: {
+                                    var cc = (typeof musicManager !== "undefined" && musicManager)
+                                            ? (musicManager.currentCoverColor || "") : ""
+                                    return cc !== "" ? cc : "#3A3A3A"
+                                }
+                                Behavior on border.color { ColorAnimation { duration: 600 } }
+                                border.width: 1
+                                opacity: (typeof musicManager !== "undefined" && musicManager) ? (musicManager.menuOpacity || 0.8) : 0.8
+                                Behavior on opacity { NumberAnimation { duration: 120 } }
+
+                                // 菜单框内任意位置保持打开
+                                MouseArea {
+                                    id: modeBgMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                }
                             }
 
                             contentItem: Row {
                                 spacing: 4
+                                height: 24  // 固定高度，以最大图标为基准
                                 Repeater {
                                     model: 5
                                     Image {
                                         source: "qrc:/qt/qml/JustSolo/data/image/" + modeItem.modeIcons[index]
-                                        sourceSize.width: 18; sourceSize.height: 18
-                                        width: 18; height: 18
+                                        // index 0=顺序播放 最大，1=列表循环 次大，4=关闭循环 最小，2=单曲 3=随机 默认
+                                        sourceSize.width: index === 0 ? 24 : (index === 1 ? 22 : (index === 4 ? 18 : 20))
+                                        sourceSize.height: index === 0 ? 24 : (index === 1 ? 22 : (index === 4 ? 18 : 20))
+                                        width: index === 0 ? 24 : (index === 1 ? 22 : (index === 4 ? 18 : 20))
+                                        height: index === 0 ? 24 : (index === 1 ? 22 : (index === 4 ? 18 : 20))
+                                        y: (24 - height) / 2 - (index === 3 ? 1 : 0)  // 垂直居中，随机播放上移 1px
                                         fillMode: Image.PreserveAspectFit
-                                        opacity: (itemMA.containsMouse || musicManager.playMode === index) ? 1.0 : 0.5
+                                        opacity: (itemMA.containsMouse || musicManager.playMode === index) ? 1.0 : 0.65
+                                        // 选中项加亮度提升
+                                        layer.enabled: musicManager.playMode === index
+                                        layer.effect: MultiEffect { brightness: 0.12 }
                                         Behavior on opacity { NumberAnimation { duration: 120 } }
 
                                         MouseArea {
                                             id: itemMA
                                             anchors.fill: parent; anchors.margins: -3
-                                            hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                            onEntered: modeItem.showModePopup()
-                                            onExited: modeItem.scheduleModeHide()
+                                            cursorShape: Qt.PointingHandCursor
                                             onClicked: {
                                                 if (typeof musicManager !== "undefined" && musicManager)
                                                     musicManager.playMode = index
@@ -390,10 +443,14 @@ Window {
                     Image {
                         anchors.centerIn: parent
                         source: "qrc:/qt/qml/JustSolo/data/image/mini-exit.png"
-                        width: 18; height: 18; opacity: 0.8
+                        width: 18; height: 18
+                        opacity: exitMA.containsMouse ? 1.0 : 1.0
+                        Behavior on opacity { NumberAnimation { duration: 120 } }
                     }
                     MouseArea {
+                        id: exitMA
                         anchors.fill: parent; anchors.margins: -4
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: miniWindow.exitMiniMode()
                     }

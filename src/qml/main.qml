@@ -1513,33 +1513,42 @@ Window {
             // ---- 循环模式按钮 ----
             Item {
                 id: modeBtnBar
-                Layout.preferredWidth: 22
-                Layout.preferredHeight: 22
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
 
                 property var modeIcons: ["mode_sequential.png", "mode_loop.png", "mode_single.png", "mode_shuffle.png", "mode_stop.png"]
 
                 Image {
                     anchors.centerIn: parent
                     source: "qrc:/qt/qml/JustSolo/data/image/" + modeBtnBar.modeIcons[musicManager.playMode]
-                    width: 20; height: 20
+                    // 按钮图标跟随弹窗中对应的尺寸比例
+                    width: musicManager.playMode === 0 ? 24 : (musicManager.playMode === 1 ? 22 : (musicManager.playMode === 4 ? 18 : 20))
+                    height: musicManager.playMode === 0 ? 24 : (musicManager.playMode === 1 ? 22 : (musicManager.playMode === 4 ? 18 : 20))
+                    Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                     opacity: (modeMABar.containsMouse || modePopupBar.visible) ? 1.0 : 0.7
                     Behavior on opacity { NumberAnimation { duration: 120 } }
                 }
 
+                // 轮询检查，鼠标离开按钮和菜单 450ms 后关闭
                 Timer {
-                    id: hideModeTimerBar
-                    interval: 250
-                    repeat: false
-                    onTriggered: modePopupBar.close()
-                }
-
-                function showModePopup() {
-                    hideModeTimerBar.stop()
-                    modePopupBar.open()
-                }
-
-                function scheduleModeHide() {
-                    hideModeTimerBar.restart()
+                    id: modeCloseTimer
+                    interval: 150
+                    repeat: true
+                    running: false
+                    property int missCount: 0
+                    onTriggered: {
+                        if (modeBgMABar.containsMouse || modeMABar.containsMouse) {
+                            missCount = 0
+                        } else {
+                            missCount++
+                            if (missCount >= 3) {
+                                missCount = 0
+                                stop()
+                                modePopupBar.close()
+                            }
+                        }
+                    }
                 }
 
                 MouseArea {
@@ -1548,15 +1557,23 @@ Window {
                     anchors.margins: -8
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onEntered: modeBtnBar.showModePopup()
-                    onExited: modeBtnBar.scheduleModeHide()
+                    onEntered: {
+                        modeCloseTimer.stop()
+                        modeCloseTimer.missCount = 0
+                        modeCloseTimer.start()
+                        modePopupBar.open()
+                    }
+                    onExited: {
+                        // 不立即动作，让轮询定时器判断
+                    }
                 }
 
                 Popup {
                     id: modePopupBar
-                    x: parent.width / 2 - width / 2
-                    y: -height - 12
+                    x: -width - 12
+                    y: parent.height / 2 - height / 2
                     padding: 6
+                    closePolicy: Popup.CloseOnEscape  // 不自动关闭，由定时器管理
 
                     background: Rectangle {
                         radius: 8
@@ -1565,29 +1582,41 @@ Window {
                         border.width: 1
                         opacity: musicManager.menuOpacity || 0.8
                         Behavior on opacity { NumberAnimation { duration: 120 } }
+
+                        // 菜单框内任意位置保持打开
+                        MouseArea {
+                            id: modeBgMABar
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                        }
                     }
 
                     contentItem: Row {
                         spacing: 6
+                        height: 26  // 固定高度，以最大图标为基准
                         Repeater {
                             model: 5
                             Image {
                                 source: "qrc:/qt/qml/JustSolo/data/image/" + modeBtnBar.modeIcons[index]
-                                sourceSize.width: index === 4 ? 21 : 22; sourceSize.height: index === 4 ? 21 : 22
-                                width: index === 4 ? 21 : 22; height: index === 4 ? 21 : 22
+                                // index 0=顺序播放 最大，1=列表循环 次大，4=关闭循环 最小，2=单曲 3=随机 默认
+                                sourceSize.width: index === 0 ? 26 : (index === 1 ? 24 : (index === 4 ? 20 : 22))
+                                sourceSize.height: index === 0 ? 26 : (index === 1 ? 24 : (index === 4 ? 20 : 22))
+                                width: index === 0 ? 26 : (index === 1 ? 24 : (index === 4 ? 20 : 22))
+                                height: index === 0 ? 26 : (index === 1 ? 24 : (index === 4 ? 20 : 22))
+                                y: (26 - height) / 2 - (index === 3 ? 1 : 0)  // 垂直居中，随机播放上移 1px
                                 fillMode: Image.PreserveAspectFit
-                                opacity: (itemMABar.containsMouse || musicManager.playMode === index) ? 1.0 : 0.5
+                                opacity: (itemMABar.containsMouse || musicManager.playMode === index) ? 1.0 : 0.65
+                                // 选中项加亮度提升
+                                layer.enabled: musicManager.playMode === index
+                                layer.effect: MultiEffect { brightness: 0.12 }
                                 Behavior on opacity { NumberAnimation { duration: 120 } }
-                                transform: Translate { y: index === 3 ? -1 : 0 }
 
                                 MouseArea {
                                     id: itemMABar
                                     anchors.fill: parent
                                     anchors.margins: -4
-                                    hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onEntered: modeBtnBar.showModePopup()
-                                    onExited: modeBtnBar.scheduleModeHide()
                                     onClicked: {
                                         musicManager.playMode = index
                                         modePopupBar.close()
@@ -1612,36 +1641,46 @@ Window {
                     Behavior on opacity { NumberAnimation { duration: 120 } }
                 }
 
-                // 1. 防抖延时定时器：给鼠标移动过间隙留出 250ms 缓冲，防止误关
+                // 轮询检查，鼠标离开按钮和弹窗 450ms 后关闭
                 Timer {
-                    id: hideVolumeTimer
-                    interval: 250
-                    repeat: false
-                    onTriggered: volumePopup.close()
+                    id: volCloseTimer
+                    interval: 150
+                    repeat: true
+                    running: false
+                    property int missCount: 0
+                    onTriggered: {
+                        if (popupHoverMA.containsMouse || volumeMA.containsMouse) {
+                            missCount = 0
+                        } else {
+                            missCount++
+                            if (missCount >= 3) {
+                                missCount = 0
+                                stop()
+                                volumePopup.close()
+                            }
+                        }
+                    }
                 }
 
-                function showPopup() {
-                    hideVolumeTimer.stop()
-                    volumePopup.open()
-                }
-
-                function scheduleHide() {
-                    hideVolumeTimer.restart()
-                }
-
-                // 2. 悬浮触发动效
+                // 悬浮触发
                 MouseArea {
                     id: volumeMA
                     anchors.fill: parent
-                    anchors.margins: -8 // 扩大图标捕获热区
+                    anchors.margins: -8
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-
-                    onEntered: volumeBtn.showPopup()
-                    onExited: volumeBtn.scheduleHide()
+                    onEntered: {
+                        volCloseTimer.stop()
+                        volCloseTimer.missCount = 0
+                        volCloseTimer.start()
+                        volumePopup.open()
+                    }
+                    onExited: {
+                        // 不立即动作，让轮询定时器判断
+                    }
                 }
 
-                // 3. 竖向音量悬浮窗
+                // 竖向音量悬浮窗
                 Popup {
                     id: volumePopup
                     x: (parent.width - width) / 2
@@ -1649,7 +1688,8 @@ Window {
                     width: 44
                     height: 160
                     padding: 0
-                    
+                    closePolicy: Popup.CloseOnEscape
+
                     background: Rectangle {
                         radius: 8
                         color: "#222222"
@@ -1661,14 +1701,12 @@ Window {
 
                     contentItem: Item {
                         anchors.fill: parent
-                        
-                        // 捕获悬浮窗内的鼠标进入/移出事件
+
+                        // 捕获悬浮窗内的鼠标事件
                         MouseArea {
                             id: popupHoverMA
                             anchors.fill: parent
                             hoverEnabled: true
-                            onEntered: volumeBtn.showPopup()
-                            onExited: volumeBtn.scheduleHide()
                         }
 
                         ColumnLayout {
@@ -1732,16 +1770,20 @@ Window {
                                     cursorShape: Qt.PointingHandCursor
                                     preventStealing: true
 
-                                    onEntered: volumeBtn.showPopup()
-                                    onExited: volumeBtn.scheduleHide()
-                                    
+                                    onEntered: {
+                                        // 保持弹窗打开，轮询定时器会检测 containsMouse
+                                    }
+                                    onExited: {
+                                        // 不立即动作，让轮询定时器判断
+                                    }
+
                                     function updateVolume(my) {
                                         var ratio = 1.0 - Math.max(0, Math.min(1, my / height))
                                         musicManager.volume = ratio
                                     }
-                                    
-                                    onPressed: function(m) { volumeBtn.showPopup(); updateVolume(m.y) }
-                                    onPositionChanged: function(m) { if (pressed) { volumeBtn.showPopup(); updateVolume(m.y) } }
+
+                                    onPressed: function(m) { volCloseTimer.stop(); volCloseTimer.missCount = 0; volCloseTimer.start(); volumePopup.open(); updateVolume(m.y) }
+                                    onPositionChanged: function(m) { if (pressed) { volCloseTimer.stop(); volCloseTimer.missCount = 0; volCloseTimer.start(); volumePopup.open(); updateVolume(m.y) } }
                                     onClicked: function(m) { updateVolume(m.y) }
                                 }
                             }
