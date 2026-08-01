@@ -430,9 +430,19 @@ void MusicManager::loadSettings() {
             m_audioEngine->setVolume(static_cast<float>(m_volume));
     }
     if (obj.contains("wasapiExclusive")) {
-        m_wasapiExclusive = obj.value("wasapiExclusive").toBool(false);
+        bool requested = obj.value("wasapiExclusive").toBool(false);
+        bool applied = requested;
         if (m_audioEngine)
-            m_audioEngine->setExclusiveMode(m_wasapiExclusive);
+            applied = m_audioEngine->setExclusiveMode(requested);
+        if (applied) {
+            m_wasapiExclusive = requested;
+        } else {
+            // 启动时独占不可用（音频通道被占用）：回退共享并通知 QML 弹窗询问用户
+            m_wasapiExclusive = false;
+            // loadSettings 在 QML 加载前执行，此时 Connections 尚未建立，信号会丢失；
+            // 延迟到事件循环启动后再发，确保弹窗能收到
+            QTimer::singleShot(0, this, [this]() { emit wasapiExclusiveFailed(); });
+        }
         emit wasapiExclusiveChanged();
     }
 }
@@ -533,6 +543,48 @@ void MusicManager::setWasapiExclusive(bool v) {
         m_wasapiExclusive = false;
         emit wasapiExclusiveChanged();
     }
+    saveSettings();
+}
+
+void MusicManager::retryWasapiExclusive() {
+    // 重新检测：再次尝试开启独占
+    bool applied = false;
+    if (m_audioEngine)
+        applied = m_audioEngine->setExclusiveMode(true);
+    if (applied) {
+        m_wasapiExclusive = true;
+        emit wasapiExclusiveChanged();
+        saveSettings();
+    } else {
+        // 仍失败：继续回退共享，并再次通知 QML（弹窗保持/重新弹出）
+        m_wasapiExclusive = false;
+        emit wasapiExclusiveChanged();
+        emit wasapiExclusiveFailed();
+    }
+}
+
+void MusicManager::forceWasapiExclusive() {
+    // 强制开启：跳过探测直接尝试，若真实初始化仍失败则回退共享
+    bool applied = false;
+    if (m_audioEngine)
+        applied = m_audioEngine->setExclusiveMode(true, true);
+    if (applied) {
+        m_wasapiExclusive = true;
+        emit wasapiExclusiveChanged();
+        saveSettings();
+    } else {
+        m_wasapiExclusive = false;
+        emit wasapiExclusiveChanged();
+        emit wasapiExclusiveFailed();
+    }
+}
+
+void MusicManager::disableWasapiExclusive() {
+    // 关闭独占模式：回退共享并持久化，避免每次启动重复弹窗
+    m_wasapiExclusive = false;
+    emit wasapiExclusiveChanged();
+    if (m_audioEngine && m_audioEngine->exclusive())
+        m_audioEngine->setExclusiveMode(false);
     saveSettings();
 }
 

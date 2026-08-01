@@ -161,9 +161,9 @@ target_include_directories(JustSolo PRIVATE
     "${cmark-gfm_BINARY_DIR}/extensions"
 )
 
-# Windows: DWM API + runtimeobject (SMTC) + shell32 (AUMID)
+# Windows: DWM API + runtimeobject (SMTC) + shell32 (AUMID) + ole32 (WASAPI 会话枚举)
 if(WIN32)
-    target_link_libraries(JustSolo PRIVATE dwmapi runtimeobject shlwapi shcore shell32)
+    target_link_libraries(JustSolo PRIVATE dwmapi runtimeobject shlwapi shcore shell32 ole32)
 endif()
 
 # ---- libcurl（用于软件更新检查，替代 Qt 网络栈）----

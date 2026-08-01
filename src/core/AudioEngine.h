@@ -29,9 +29,12 @@ public:
     float volume() const;
     bool isPlaying() const;
 
-    // WASAPI 输出模式：true=独占, false=共享（默认）。切换时重建引擎并保留播放现场
+    // WASAPI 输出模式：true=独占, false=共享（默认）。切换时重建引擎并保留播放现场。
+    // 返回请求的模式是否实际生效（独占失败会自动回退共享并返回 false）
     bool exclusive() const { return m_exclusive; }
-    bool setExclusiveMode(bool exclusive);
+    bool setExclusiveMode(bool exclusive, bool force = false);  // force=true 跳过探测强制尝试开启独占
+    // 探测 WASAPI 独占通道当前是否可用（通道被占用时返回 false），不改变现有设备
+    bool exclusiveModeAvailable() const;
 
 signals:
     void positionChanged(qint64 ms);
@@ -49,6 +52,8 @@ private:
 
     bool initAudioDevice();    // 按 m_exclusive 创建 context/device/engine
     void shutdownAudioDevice(); // 逆序销毁 sound/engine/device/context
+    // 音频通道是否被占用：其他程序正在使用音频（含共享模式）或有其他独占客户端
+    bool audioChannelInUse() const;
 
     ma_context *m_context = nullptr;
     ma_device *m_device = nullptr;

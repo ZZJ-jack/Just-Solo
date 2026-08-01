@@ -8,6 +8,14 @@
 #include <cstring>
 #include <string>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <objbase.h>
+#include <mmdeviceapi.h>
+#include <audiopolicy.h>
+#include <audiosessiontypes.h>
+#endif
+
 AudioEngine::AudioEngine(QObject *parent)
     : QObject(parent)
 {
@@ -132,7 +140,102 @@ void AudioEngine::shutdownAudioDevice()
     }
 }
 
-bool AudioEngine::setExclusiveMode(bool exclusive)
+// ---- WASAPI 会话枚举：统计默认播放端点上除自己外的活跃音频会话数 ----
+// 用于检测"其他程序正在使用音频"（含共享模式），-1 表示检测失败
+#ifdef Q_OS_WIN
+static int countActiveExternalAudioSessions()
+{
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (hr == RPC_E_CHANGED_MODE) hr = S_OK;  // 线程已初始化其他模型，仍可继续使用 MMDevice
+    const bool needUninit = (hr == S_OK);
+    int count = -1;
+
+    IMMDeviceEnumerator *enumerator = nullptr;
+    if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                   IID_PPV_ARGS(&enumerator)))) {
+        IMMDevice *device = nullptr;
+        if (SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &device))) {
+            IAudioSessionManager2 *mgr = nullptr;
+            if (SUCCEEDED(device->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL,
+                                           nullptr, (void **)&mgr))) {
+                IAudioSessionEnumerator *sessions = nullptr;
+                if (SUCCEEDED(mgr->GetSessionEnumerator(&sessions))) {
+                    int sessionCount = 0;
+                    count = 0;
+                    sessions->GetCount(&sessionCount);
+                    const DWORD myPid = GetCurrentProcessId();
+                    for (int i = 0; i < sessionCount; ++i) {
+                        IAudioSessionControl *ctrl = nullptr;
+                        if (FAILED(sessions->GetSession(i, &ctrl))) continue;
+                        AudioSessionState state = AudioSessionStateInactive;
+                        ctrl->GetState(&state);
+                        DWORD pid = 0;
+                        IAudioSessionControl2 *ctrl2 = nullptr;
+                        if (SUCCEEDED(ctrl->QueryInterface(__uuidof(IAudioSessionControl2),
+                                                           (void **)&ctrl2))) {
+                            ctrl2->GetProcessId(&pid);
+                            ctrl2->Release();
+                        }
+                        ctrl->Release();
+                        // 排除自身进程，仅统计活跃（正在出声）的会话
+                        if (pid != myPid && state == AudioSessionStateActive)
+                            ++count;
+                    }
+                    sessions->Release();
+                }
+                mgr->Release();
+            }
+            device->Release();
+        }
+        enumerator->Release();
+    }
+    if (needUninit) CoUninitialize();
+    return count;
+}
+#else
+static int countActiveExternalAudioSessions() { return 0; }
+#endif
+
+// 探测 WASAPI 独占通道是否可用：用独立 context 临时打开独占设备，成功即释放。
+// 独占模式下同一端点只允许一个独占客户端，被其他程序占用时初始化会失败（MA_BUSY/MA_ACCESS_DENIED）。
+bool AudioEngine::exclusiveModeAvailable() const
+{
+    ma_context context;
+    ma_device device;
+    ma_context_config contextConfig = ma_context_config_init();
+    if (ma_context_init(nullptr, 0, &contextConfig, &context) != MA_SUCCESS)
+        return false;
+
+    // 与 initAudioDevice 中一致的设备配置，仅指定独占模式
+    ma_device_config deviceConfig = ma_device_config_init(ma_device_type_playback);
+    deviceConfig.playback.format = ma_format_f32;
+    deviceConfig.playback.channels = 0;                    // 设备原生声道
+    deviceConfig.sampleRate = 0;                           // 设备原生采样率
+    deviceConfig.playback.shareMode = ma_share_mode_exclusive;
+    deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
+    deviceConfig.noClip = MA_TRUE;
+
+    ma_result result = ma_device_init(&context, &deviceConfig, &device);
+    if (result != MA_SUCCESS) {
+        qDebug("AudioEngine: exclusive mode probe failed (result=%d): channel in use or unsupported", result);
+        ma_context_uninit(&context);
+        return false;
+    }
+    ma_device_uninit(&device);
+    ma_context_uninit(&context);
+    return true;
+}
+
+// 音频通道是否被占用：先做无侵入的会话检测（其他程序正在使用音频，含共享模式），
+// 再探测是否有其他独占客户端。会话检测通过时不再打开临时独占设备，避免干扰其他程序。
+bool AudioEngine::audioChannelInUse() const
+{
+    if (countActiveExternalAudioSessions() > 0)
+        return true;
+    return !exclusiveModeAvailable();
+}
+
+bool AudioEngine::setExclusiveMode(bool exclusive, bool force)
 {
     if (exclusive == m_exclusive) return true;
 
@@ -145,14 +248,22 @@ bool AudioEngine::setExclusiveMode(bool exclusive)
     m_retryTimer->stop();
     m_hotplugMode = false;
 
-    // 重建音频引擎（切换共享/独占）
+    // 切换共享/独占必须重建引擎，先释放自身设备
     shutdownAudioDevice();
-    m_exclusive = exclusive;
-    if (!initAudioDevice()) {
-        // 独占不可用（如设备被其他程序独占），回退共享模式
-        qWarning("AudioEngine: exclusive mode unavailable, falling back to shared mode");
+
+    if (exclusive && !force && audioChannelInUse()) {
+        // 通道被占用（其他程序正在使用音频或有独占客户端）：不强制开启，重建共享引擎并恢复现场，由上层弹窗询问
+        qWarning("AudioEngine: audio channel in use, not switching to exclusive mode");
         m_exclusive = false;
         initAudioDevice();
+    } else {
+        // 正常切换（或强制开启跳过探测）：尝试请求的模式，失败则回退共享
+        m_exclusive = exclusive;
+        if (!initAudioDevice()) {
+            qWarning("AudioEngine: failed to init in requested mode, falling back to shared mode");
+            m_exclusive = false;
+            initAudioDevice();
+        }
     }
     if (!m_engine) return false;
 
@@ -160,7 +271,7 @@ bool AudioEngine::setExclusiveMode(bool exclusive)
     emit playbackStateChanged();
 
     // 恢复播放现场
-    if (path.isEmpty()) return true;
+    if (path.isEmpty()) return m_exclusive == exclusive;
     if (!load(path)) {
         // 文件暂不可用（如设备切换期间被拔出）：保留现场进入热插拔重试
         m_hotplugMode = true;
@@ -169,11 +280,11 @@ bool AudioEngine::setExclusiveMode(bool exclusive)
         m_hotplugWasPlaying = wasPlaying;
         m_hotplugDuration = dur;
         m_retryTimer->start();
-        return true;
+        return m_exclusive == exclusive;
     }
     if (pos > 0) seek(pos);
     if (wasPlaying) play();
-    return true;
+    return m_exclusive == exclusive;
 }
 
 bool AudioEngine::load(const QString &filePath)
