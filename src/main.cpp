@@ -9,6 +9,7 @@
 #include <QStringList>
 #include <QTimer>
 #include <QStandardPaths>
+#include <QResource>
 #include <QSystemTrayIcon>
 #include <QMenu>
 #include <QLocalServer>
@@ -302,6 +303,12 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName("Just Solo");
     app.setApplicationDisplayName("Just Solo");
+
+    // 注册内置字体二进制资源（data/font 字体较大，不嵌入 C++ 避免编译器堆不足）
+    // 必须在 MusicManager 注册应用字体、QML FontLoader 加载字体之前完成
+    const QString fontsRcc = QCoreApplication::applicationDirPath() + "/fonts.rcc";
+    if (!QResource::registerResource(fontsRcc))
+        qWarning("Failed to register fonts.rcc: %s", qPrintable(fontsRcc));
 
     // 设置应用程序图标（任务管理器、窗口图标）
     app.setWindowIcon(QIcon(":/qt/qml/JustSolo/data/image/logo.png"));

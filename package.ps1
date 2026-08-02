@@ -39,6 +39,14 @@ if (-not (Test-Path $ExePath)) {
 }
 Copy-Item $ExePath $OutputDir
 
+# 复制内置字体二进制资源（运行时 QResource::registerResource 注册）
+$FontsRcc = "$BuildDir\bin\Release\fonts.rcc"
+if (Test-Path $FontsRcc) {
+    Copy-Item $FontsRcc $OutputDir
+} else {
+    Write-Host "警告：找不到 $FontsRcc，打包产物将缺少内置字体" -ForegroundColor Yellow
+}
+
 # ============================================================
 # 3. windeployqt
 # ============================================================

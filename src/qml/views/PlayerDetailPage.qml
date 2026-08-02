@@ -8,6 +8,13 @@ Item {
 
     required property string fontFamily
 
+    // 歌词字体（外观设置中可选；空时回退到全局字体）
+    property string lyricFontFamily: {
+        if (typeof musicManager === "undefined" || !musicManager) return fontFamily
+        var f = musicManager.lyricFontFamily || ""
+        return f !== "" ? f : fontFamily
+    }
+
     // 歌词布局字号：最大化窗口保持原字号，默认窗口略小
     property real _fontFactor: (typeof mainWindow !== "undefined" && mainWindow && mainWindow.visibility === Window.Maximized) ? 1.0 : 0.85
     property real mainFontSize: 52 * _fontFactor
@@ -509,7 +516,7 @@ Item {
                                     y: (parent.height - height * scale) / 2
                                     width: parent.width
                                     text: modelData.text || ""
-                                    font.family: root.fontFamily
+                                    font.family: root.lyricFontFamily
                                     font.pixelSize: root.mainFontSize // 固定布局字号，换行在加载时即确定
                                     // 单层文本直接切换高亮色，无需 overlay 叠加
                                     color: lyricDelegate.isPast ? "#FFD700"
@@ -538,7 +545,7 @@ Item {
                                     y: (parent.height - height * scale) / 2
                                     width: parent.width
                                     text: modelData.translation || ""
-                                    font.family: root.fontFamily
+                                    font.family: root.lyricFontFamily
                                     font.pixelSize: root.transFontSize // 固定布局字号
                                     color: lyricDelegate.isPast ? "#b8960f"
                                          : (lyricDelegate.isCurrent ? "#FFD700" : "#4a6a8a")

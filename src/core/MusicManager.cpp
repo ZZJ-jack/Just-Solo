@@ -22,6 +22,8 @@
 #include <QTextStream>
 #include <QStringConverter>
 #include <QRegularExpression>
+#include <QFontDatabase>
+#include <QSet>
 #include <algorithm>
 
 // ============================================================
@@ -308,6 +310,9 @@ static QVariantMap buildTrack(const QString &filePath)
 MusicManager::MusicManager(QObject *parent)
     : QObject(parent)
 {
+    // 注册内置歌词字体（data/font），记录真实族名供 QML 选择与渲染
+    registerBuiltinFonts();
+
     m_audioEngine = new AudioEngine(this);
     m_audioEngine->setVolume(static_cast<float>(m_volume));
 
@@ -445,6 +450,10 @@ void MusicManager::loadSettings() {
         }
         emit wasapiExclusiveChanged();
     }
+    if (obj.contains("lyricFont")) {
+        m_lyricFont = obj.value("lyricFont").toString(m_lyricFont);
+        emit lyricFontChanged();
+    }
 }
 
 void MusicManager::saveSettings() {
@@ -460,6 +469,7 @@ void MusicManager::saveSettings() {
     obj["playbackBackground"] = m_playbackBackground;
     obj["volume"] = m_volume;
     obj["wasapiExclusive"] = m_wasapiExclusive;
+    obj["lyricFont"] = m_lyricFont;
     QJsonDocument doc(obj);
     QFile file(m_cacheDir + "/settings.json");
     if (file.open(QIODevice::WriteOnly)) {
@@ -585,6 +595,88 @@ void MusicManager::disableWasapiExclusive() {
     emit wasapiExclusiveChanged();
     if (m_audioEngine && m_audioEngine->exclusive())
         m_audioEngine->setExclusiveMode(false);
+    saveSettings();
+}
+
+// ---- 歌词字体 ----
+
+QString MusicManager::builtinFontPath(const QString &file) {
+    return QStringLiteral(":/qt/qml/JustSolo/data/font/") + file;
+}
+
+void MusicManager::registerBuiltinFonts() {
+    const QStringList files = {
+        QStringLiteral("HarmonyOS_Sans_SC_Regular.ttf"),
+        QStringLiteral("AaZhuNiWoMingMeiXiangChunTian-2.ttf"),
+        QStringLiteral("AaDongQiChangYueYangLouJi-2.ttf"),
+    };
+    for (const QString &file : files) {
+        int id = QFontDatabase::addApplicationFont(builtinFontPath(file));
+        if (id < 0) continue;
+        const QStringList fams = QFontDatabase::applicationFontFamilies(id);
+        if (!fams.isEmpty())
+            m_builtinFontFamilies[builtinFontPath(file)] = fams.first();
+    }
+}
+
+QVariantList MusicManager::builtinLyricFonts() const {
+    struct Entry { const char *file; const char *label; };
+    static const Entry entries[] = {
+        {"HarmonyOS_Sans_SC_Regular.ttf", "鸿蒙字体（默认）"},
+        {"AaZhuNiWoMingMeiXiangChunTian-2.ttf", "Aa筑你我们像春天"},
+        {"AaDongQiChangYueYangLouJi-2.ttf", "Aa冬季长岳楼集"},
+    };
+    QVariantList result;
+    for (const auto &e : entries) {
+        QString file = QString::fromUtf8(e.file);
+        QVariantMap m;
+        m["file"] = file;
+        m["label"] = QString::fromUtf8(e.label);
+        m["family"] = m_builtinFontFamilies.value(builtinFontPath(file));
+        m["key"] = QStringLiteral("builtin:") + file;
+        result << m;
+    }
+    return result;
+}
+
+QVariantList MusicManager::systemLyricFonts() const {
+    // 系统字体列表（排除已注册的内置字体，避免与"内置字体"分组重复）
+    QSet<QString> builtinFams;
+    for (auto it = m_builtinFontFamilies.cbegin(); it != m_builtinFontFamilies.cend(); ++it)
+        builtinFams.insert(it.value());
+    QStringList fams = QFontDatabase().families();
+    fams.erase(std::remove_if(fams.begin(), fams.end(),
+                              [&builtinFams](const QString &f) { return builtinFams.contains(f); }),
+               fams.end());
+    QVariantList result;
+    for (const QString &f : std::as_const(fams)) {
+        QVariantMap m;
+        m["family"] = f;
+        m["key"] = QStringLiteral("system:") + f;
+        result << m;
+    }
+    return result;
+}
+
+QString MusicManager::lyricFontFamily() const {
+    if (m_lyricFont.startsWith(QStringLiteral("builtin:"))) {
+        QString file = m_lyricFont.mid(8);
+        QString family = m_builtinFontFamilies.value(builtinFontPath(file));
+        if (!family.isEmpty()) return family;
+        // 兜底：内置字体注册失败时使用已知族名，保证默认鸿蒙字体始终可用
+        if (file == QLatin1String("HarmonyOS_Sans_SC_Regular.ttf"))
+            return QStringLiteral("HarmonyOS Sans SC");
+        return QString();
+    }
+    if (m_lyricFont.startsWith(QStringLiteral("system:")))
+        return m_lyricFont.mid(7);
+    return QString();
+}
+
+void MusicManager::setLyricFont(const QString &v) {
+    if (v == m_lyricFont) return;
+    m_lyricFont = v;
+    emit lyricFontChanged();
     saveSettings();
 }
 

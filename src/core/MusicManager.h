@@ -6,6 +6,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <QMap>
 #include "AudioEngine.h"
 #include <QFileInfo>
 #include <QDir>
@@ -44,6 +45,8 @@ class MusicManager : public QObject
     Q_PROPERTY(int playbackBackground READ playbackBackground WRITE setPlaybackBackground NOTIFY playbackBackgroundChanged)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool wasapiExclusive READ wasapiExclusive WRITE setWasapiExclusive NOTIFY wasapiExclusiveChanged)
+    Q_PROPERTY(QString lyricFont READ lyricFont WRITE setLyricFont NOTIFY lyricFontChanged)
+    Q_PROPERTY(QString lyricFontFamily READ lyricFontFamily NOTIFY lyricFontChanged)
 
     // ---- 自定义播放列表 ----
     Q_PROPERTY(QVariantList customPlaylists READ customPlaylists NOTIFY customPlaylistsChanged)
@@ -149,6 +152,13 @@ public:
     Q_INVOKABLE void forceWasapiExclusive();   // 跳过探测强制开启独占（弹窗"强制开启"，可能导致其他音视频软件崩溃）
     Q_INVOKABLE void disableWasapiExclusive(); // 关闭独占并持久化（弹窗"关闭独占模式"）
 
+    // ---- 歌词字体 ----
+    QString lyricFont() const { return m_lyricFont; }
+    QString lyricFontFamily() const;             // 解析当前选择为可用字体族名（空串=回退默认）
+    void setLyricFont(const QString &v);
+    Q_INVOKABLE QVariantList builtinLyricFonts() const;  // 内置字体列表 [{file,label,family,key}]
+    Q_INVOKABLE QVariantList systemLyricFonts() const;   // 系统字体列表 [{family,key}]
+
     // ---- 播放列表操作 ----
     Q_INVOKABLE void addToPlaylist(const QVariantMap &track);     // 追加单曲到播放列表
     Q_INVOKABLE void removeFromPlaylist(const QVariantMap &track); // 按路径从播放队列删除
@@ -219,6 +229,7 @@ signals:
     void playbackBackgroundChanged();
     void volumeChanged();
     void wasapiExclusiveChanged();
+    void lyricFontChanged();
     void wasapiExclusiveFailed();  // 启动时开启 WASAPI 独占失败（设备被占用），QML 应弹窗询问用户
     void customPlaylistsChanged();
     void playingListIndexChanged();
@@ -239,6 +250,8 @@ private:
     void updateCurrentTrack();
     void updateCurrentCoverColor();          // 从 m_currentCover 提取主色调
     static QString extractCoverColor(const QString &coverUrl);
+    void registerBuiltinFonts();             // 启动时注册 data/font 内置字体，记录族名
+    static QString builtinFontPath(const QString &file);  // 内置字体 qrc 路径
     void updateLyricIndex();
     void onMetaDataChanged();
     void scanFolder(const QString &path);
@@ -275,6 +288,8 @@ private:
     int m_playbackBackground = 0;   // 播放背景 (0=深色背景, 1=沉浸背景)
     qreal m_volume = 0.9;
     bool m_wasapiExclusive = false; // 音频输出模式: false=共享(默认), true=WASAPI 独占
+    QString m_lyricFont = QStringLiteral("builtin:HarmonyOS_Sans_SC_Regular.ttf"); // 歌词字体选择键
+    QMap<QString, QString> m_builtinFontFamilies;  // 内置字体 qrc 路径 -> 族名
     QVariantList m_customPlaylists;         // 自定义播放列表
     int m_playingListIndex = -1;            // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义
     void loadSettings();

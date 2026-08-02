@@ -132,13 +132,29 @@ qt_add_qml_module(JustSolo
         data/image/creatList.png
         data/image/drag.png
         data/image/volume-logo.png
-        data/font/HarmonyOS_Sans_SC_Regular.ttf
         data/image/setting.png
         data/image/back.png
         data/image/prve.png
         data/image/next.png
         data/image/mini-enter.png
         data/image/mini-exit.png
+)
+
+# ---- 内置字体（大文件）：编译为二进制资源 .rcc，运行时注册 ----
+# 字体总量约 51MB，若嵌入 qrc 会让生成的 C++ 数组超出 MSVC 堆上限（C1060），
+# 因此用 rcc --binary 生成 .rcc 文件，启动时通过 QResource::registerResource 注册。
+qt_add_binary_resources(JustSolo_fonts
+    data/font/fonts.qrc
+    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/fonts.rcc"
+)
+# 保证 rcc 先于 exe 编译完成（POST_BUILD 复制需要该文件）
+add_dependencies(JustSolo JustSolo_fonts)
+# 复制 .rcc 到 exe 输出目录，程序运行时从同目录加载
+add_custom_command(TARGET JustSolo POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_BINARY_DIR}/fonts.rcc"
+        "$<TARGET_FILE_DIR:JustSolo>"
+    COMMENT "Copying fonts.rcc to output directory"
 )
 
 # 链接 Qt 库

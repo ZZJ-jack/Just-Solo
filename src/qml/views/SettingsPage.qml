@@ -17,6 +17,23 @@ Rectangle {
     property string fontFamily: ""
     property string selectedDownloadUrl: ""
 
+    // 当前歌词字体选择键 → 展示名称
+    function lyricFontLabel() {
+        var key = musicManager.lyricFont
+        if (!key) return "鸿蒙字体（默认）"
+        if (key.indexOf("builtin:") === 0) {
+            var file = key.substring(8)
+            var list = musicManager.builtinLyricFonts()
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].file === file) return list[i].label
+            }
+            return "鸿蒙字体（默认）"
+        }
+        if (key.indexOf("system:") === 0)
+            return key.substring(7)
+        return "鸿蒙字体（默认）"
+    }
+
     FontLoader {
         id: updateFont
         source: "qrc:/qt/qml/JustSolo/data/font/HarmonyOS_Sans_SC_Regular.ttf"
@@ -717,10 +734,198 @@ Rectangle {
         Item { Layout.fillHeight: true }
     }
 
-    // ---- 外观 ----
-    ColumnLayout {
-        anchors.fill: parent; spacing: 0
+    // ---- 外观（卡片较多，内容超出时滚动） ----
+    ScrollView {
+        id: appearanceScroll
+        anchors.fill: parent
         visible: settingsSubMenu === "appearance"
+        clip: true
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+        ColumnLayout {
+            width: appearanceScroll.availableWidth
+            spacing: 0
+
+            Item { Layout.preferredHeight: 14 }
+
+        // 歌词字体
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 126; radius: 8
+            color: "#222222"; border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                Label {
+                    text: "歌词字体"
+                    font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                }
+
+                // 字体选择下拉按钮
+                Rectangle {
+                    id: lyricFontBtn
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36; radius: 8
+                    color: lyricFontBtnMA.containsMouse ? "#2A2A2A" : "#1E1E1E"
+                    border.color: lyricFontPopup.visible ? "#3B82F6" : "#3A3A3A"
+                    border.width: 1
+
+                    RowLayout {
+                        anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                        spacing: 8
+                        Label {
+                            Layout.fillWidth: true
+                            text: settingsRoot.lyricFontLabel()
+                            font.family: fontFamily; font.pixelSize: 14; color: "#ffffff"
+                            elide: Text.ElideRight
+                        }
+                        Label { text: "▾"; font.family: fontFamily; font.pixelSize: 12; color: "#888" }
+                    }
+
+                    MouseArea {
+                        id: lyricFontBtnMA
+                        anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: lyricFontPopup.open()
+                    }
+
+                    // 字体选择弹窗：内置字体 + 系统字体
+                    Popup {
+                        id: lyricFontPopup
+                        x: 0
+                        y: parent.height + 6
+                        width: parent.width
+                        padding: 0
+                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                        background: Rectangle {
+                            color: "#222222"; border.color: "#3A3A3A"; radius: 8
+                        }
+
+                        contentItem: Column {
+                            width: lyricFontPopup.width
+                            spacing: 0
+
+                            Label {
+                                text: "内置字体"
+                                font.family: fontFamily; font.pixelSize: 12; color: "#777777"
+                                leftPadding: 12; rightPadding: 12; topPadding: 8; bottomPadding: 4
+                            }
+
+                            Repeater {
+                                model: musicManager.builtinLyricFonts()
+
+                                delegate: Rectangle {
+                                    width: lyricFontPopup.width
+                                    height: 34
+                                    color: builtinItemMA.containsMouse ? "#2C2C2C" : "transparent"
+
+                                    RowLayout {
+                                        anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                                        spacing: 8
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.label
+                                            font.family: fontFamily; font.pixelSize: 13
+                                            color: musicManager.lyricFont === modelData.key ? "#3B82F6" : "#dddddd"
+                                            elide: Text.ElideRight
+                                        }
+                                        Label {
+                                            text: "✓"
+                                            font.family: fontFamily; font.pixelSize: 12; color: "#3B82F6"
+                                            visible: musicManager.lyricFont === modelData.key
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: builtinItemMA
+                                        anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            musicManager.lyricFont = modelData.key
+                                            lyricFontPopup.close()
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle { width: lyricFontPopup.width; height: 1; color: "#3A3A3A" }
+
+                            Label {
+                                text: "系统字体"
+                                font.family: fontFamily; font.pixelSize: 12; color: "#777777"
+                                leftPadding: 12; rightPadding: 12; topPadding: 8; bottomPadding: 4
+                            }
+
+                            ListView {
+                                id: sysFontList
+                                width: lyricFontPopup.width
+                                height: Math.min(216, count * 34)
+                                clip: true
+                                model: musicManager.systemLyricFonts()
+
+                                ScrollBar.vertical: ScrollBar {
+                                    policy: ScrollBar.AsNeeded
+                                    width: 8
+                                    background: Rectangle { implicitWidth: 8; radius: 4; color: "#222222" }
+                                    contentItem: Rectangle {
+                                        implicitWidth: 8; radius: 4
+                                        color: sysFontScrollHover.containsMouse ? "#777777" : "#3A3A3A"
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                        MouseArea {
+                                            id: sysFontScrollHover
+                                            hoverEnabled: true; acceptedButtons: Qt.NoButton
+                                            propagateComposedEvents: true
+                                        }
+                                    }
+                                }
+
+                                delegate: Rectangle {
+                                    width: sysFontList.width
+                                    height: 34
+                                    color: sysFontItemMA.containsMouse ? "#2C2C2C" : "transparent"
+
+                                    RowLayout {
+                                        anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 20
+                                        spacing: 8
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.family
+                                            font.family: fontFamily; font.pixelSize: 13
+                                            color: musicManager.lyricFont === modelData.key ? "#3B82F6" : "#dddddd"
+                                            elide: Text.ElideRight
+                                        }
+                                        Label {
+                                            text: "✓"
+                                            font.family: fontFamily; font.pixelSize: 12; color: "#3B82F6"
+                                            visible: musicManager.lyricFont === modelData.key
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: sysFontItemMA
+                                        anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            musicManager.lyricFont = modelData.key
+                                            lyricFontPopup.close()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Label {
+                    text: "选择歌词显示字体，默认鸿蒙字体，也可从内置字体或系统中选择其他字体，修改后立即生效。"
+                    font.family: fontFamily; font.pixelSize: 11; color: "#777777"
+                    wrapMode: Text.WordWrap; Layout.fillWidth: true
+                }
+            }
+        }
 
         Item { Layout.preferredHeight: 14 }
 
@@ -958,7 +1163,8 @@ Rectangle {
             font.family: fontFamily; font.pixelSize: 12; color: "#777777"
             Layout.topMargin: 8
         }
-        Item { Layout.fillHeight: true }
+        Item { Layout.preferredHeight: 14 }
+        }
     }
     // ---- 关于 ----
     ColumnLayout {
