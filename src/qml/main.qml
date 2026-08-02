@@ -1641,7 +1641,7 @@ Window {
                     Behavior on opacity { NumberAnimation { duration: 120 } }
                 }
 
-                // 轮询检查，鼠标离开按钮和弹窗 450ms 后关闭
+                // 轮询检查，鼠标离开按钮/弹窗/间隙/滑块拖拽区 450ms 后关闭
                 Timer {
                     id: volCloseTimer
                     interval: 150
@@ -1649,7 +1649,8 @@ Window {
                     running: false
                     property int missCount: 0
                     onTriggered: {
-                        if (popupHoverMA.containsMouse || volumeMA.containsMouse) {
+                        if (popupHoverMA.containsMouse || volumeMA.containsMouse
+                                || volBridgeMA.containsMouse || volDragMA.containsMouse) {
                             missCount = 0
                         } else {
                             missCount++
@@ -1678,6 +1679,18 @@ Window {
                     onExited: {
                         // 不立即动作，让轮询定时器判断
                     }
+                }
+
+                // 桥接按钮与弹窗之间的间隙（不拦截点击，仅用于保持弹窗打开判定）
+                MouseArea {
+                    id: volBridgeMA
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.top
+                    width: 44
+                    height: 12
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                    cursorShape: Qt.ArrowCursor
                 }
 
                 // 竖向音量悬浮窗
