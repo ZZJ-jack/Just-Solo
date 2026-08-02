@@ -800,6 +800,22 @@ Rectangle {
                         padding: 0
                         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
+                        // 当前选择为系统字体时，打开后自动滚动到该字体位置
+                        onOpened: {
+                            var key = musicManager.lyricFont
+                            if (!key || key.indexOf("system:") !== 0) return
+                            var fam = key.substring(7)
+                            var list = musicManager.systemLyricFonts()
+                            for (var i = 0; i < list.length; i++) {
+                                if (list[i].family === fam) {
+                                    Qt.callLater(function() {
+                                        sysFontList.positionViewAtIndex(i, ListView.Center)
+                                    })
+                                    break
+                                }
+                            }
+                        }
+
                         background: Rectangle {
                             color: "#222222"; border.color: "#3A3A3A"; radius: 8
                         }
@@ -869,6 +885,7 @@ Rectangle {
                                 ScrollBar.vertical: ScrollBar {
                                     policy: ScrollBar.AsNeeded
                                     width: 8
+                                    minimumSize: 0.15  // 滑块最短长度，防止字体多时滑块过短
                                     background: Rectangle { implicitWidth: 8; radius: 4; color: "#222222" }
                                     contentItem: Rectangle {
                                         implicitWidth: 8; radius: 4

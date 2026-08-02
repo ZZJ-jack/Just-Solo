@@ -608,7 +608,6 @@ void MusicManager::registerBuiltinFonts() {
     const QStringList files = {
         QStringLiteral("HarmonyOS_Sans_SC_Regular.ttf"),
         QStringLiteral("AaZhuNiWoMingMeiXiangChunTian-2.ttf"),
-        QStringLiteral("AaDongQiChangYueYangLouJi-2.ttf"),
     };
     for (const QString &file : files) {
         int id = QFontDatabase::addApplicationFont(builtinFontPath(file));
@@ -624,7 +623,6 @@ QVariantList MusicManager::builtinLyricFonts() const {
     static const Entry entries[] = {
         {"HarmonyOS_Sans_SC_Regular.ttf", "鸿蒙字体（默认）"},
         {"AaZhuNiWoMingMeiXiangChunTian-2.ttf", "Aa筑你我们像春天"},
-        {"AaDongQiChangYueYangLouJi-2.ttf", "Aa冬季长岳楼集"},
     };
     QVariantList result;
     for (const auto &e : entries) {
