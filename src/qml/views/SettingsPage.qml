@@ -494,8 +494,8 @@ Rectangle {
 
                 Label {
                     text: musicManager.wasapiExclusive
-                          ? "已开启：独占音频输出设备，延迟更低、音质更稳定，但其他应用将无法使用该设备发声。若设备被其他程序占用，将自动回退共享模式。"
-                          : "关闭时使用共享模式（默认），可与其他应用同时发声。切换后立即生效并自动恢复播放。"
+                          ? "已开启：独占音频输出设备，延迟更低、音质更稳定，但其他应用将无法使用该设备发声。（热插拔自动暂停/恢复播放）"
+                          : "关闭时使用共享模式（默认），可与其他应用同时发声。切换后立即生效并自动恢复播放。（热插拔不影响播放）"
                     font.family: fontFamily; font.pixelSize: 11; color: "#777777"
                     wrapMode: Text.WordWrap; Layout.fillWidth: true
                 }
