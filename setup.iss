@@ -3,7 +3,7 @@
 ; 仅限非商业用途
 
 #define MyAppName "Just Solo"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.1"
 #define MyAppPublisher "ZZJ-JACK"
 #define MyAppURL "https://justsolo.zzjjack.us.kg"
 #define MyAppExeName "JustSolo.exe"

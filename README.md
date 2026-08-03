@@ -36,9 +36,9 @@
 
 Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++ 高性能核心 + QML 现代界面，无 Electron 依赖，内存占用低，冷启动迅速。
 
-原生支持 Windows SMTC 系统媒体控件和 Just Solo LyricServer 媒体信息传输协议（基于 WebSocket），深度适配 [NSD 灵动岛](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen](https://github.com/GEORGEWWWU) 开发）。
+原生适配 Windows SMTC 系统媒体控件 并支持 Just Solo LyricServer 媒体信息传输协议（基于 WebSocket），深度适配 [NSD 灵动岛](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen](https://github.com/GEORGEWWWU) 开发）。
 
-目前仅支持 Windows 平台，专注于纯本地音乐播放。内置基于 libcurl 的 OTA 在线更新功能，支持检查更新并下载安装最新版本。请前往 [Releases](releases) 下载最新安装包。
+仅对Windows 平台提供支持并深度适配，专注于纯本地音乐播放。内置OTA在线更新功能，支持检查更新并下载安装最新版本。请前往 [Releases](releases) 下载最新安装包。
 
 本项目的知识产权说明、免责声明等详见文末。
 
@@ -63,8 +63,7 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 
 ### 音频引擎
 
-- 基于 **miniaudio** 轻量库，替代 Qt Multimedia，解决 24-bit 重采样无声问题
-- 支持格式：MP3 / FLAC / WAV / OGG / AAC / M4A / WMA / Opus
+- 基于 **miniaudio** 轻量库，替代 Qt Multimedia
 - 支持热插拔：设备插拔不中断音乐播放，插回去自动恢复声音
 - 使用流式播放，大幅降低内存占用，同时确保支持大文件播放无卡顿
 - **原生支持WASAPI 独占 / 共享输出**：播放设置可切换，独占延迟更低、音质更稳定，切换时自动保留播放现场；开启前自动检测音频通道占用情况，被占用时弹窗提示（重新检测 / 关闭独占 / 强制开启）
@@ -118,7 +117,7 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 
 ### 迷你播放器（迷你小窗）
 
-- 全新独立小窗模式，始终置顶显示
+- 独立小窗模式，始终置顶显示
 - 沉浸背景：封面取色 + 模糊，跟随当前歌曲封面变化
 - 展示专辑封面、歌曲标题（居中放大）及歌手信息
 - 支持播放/暂停控制
@@ -282,13 +281,13 @@ cmake --build build --config Release
 ## FAQ
 
 - **这个项目支持哪些平台？**：
-  - 目前仅支持Windows平台，版本为Windows10/11（构建为64位版本）（win7暂未测试）
-  - 我们暂时不计划支持其他平台，即使框架原生支持跨平台，因为开发、测试成本较高。
+  - 仅对Windows平台提供支持并深度适配，版本为Windows10/11（构建为64位版本）（win7暂未测试）
+  - 不计划支持其他平台，仅对Windows平台进行适配。
   - 我们欢迎其他平台的贡献，但是目前没有计划支持其他平台。
 - **这个项目对比AnyListen等其他音乐播放器有什么区别？**：
   - 这个项目的初衷是为了提供一个纯粹、轻量的音乐播放器。
   - 对比AnyListen等其他使用Electron框架的音乐播放器，我们的项目使用的是Qt框架，聚焦高性能、低占用。
-  - 这个项目以本地音乐播放为核心，内置 OTA 在线更新功能（基于 libcurl），不提供音乐下载等网络服务。（推荐使用 LX Music 下载音乐）
+  - 这个项目以本地音乐播放为核心，内置 OTA 在线更新功能，但不提供音乐下载等网络服务。（推荐使用 LX Music 下载音乐）
 - **这个项目会维护多久？**：
   - 我们计划在2026年暑假内完成核心功能，后续大概会进入LTS维护状态。
   - 进入LTS维护状态后，我们不会再有大量新功能同时添加，但我们会继续维护和修复bug。

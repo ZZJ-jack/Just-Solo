@@ -5,7 +5,6 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
-#include <QOpenGLContext>
 #include <QStringList>
 #include <QTimer>
 #include <QStandardPaths>
@@ -19,6 +18,7 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <dwmapi.h>
+#include <dxgi.h>
 
 // SetCurrentProcessExplicitAppUserModelID 在新 SDK 中声明位置不稳定，手动声明
 extern "C" HRESULT WINAPI SetCurrentProcessExplicitAppUserModelID(PCWSTR AppID);
@@ -319,16 +319,38 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    // ---- GPU 可用性探测 ----
-    // 尝试创建 OpenGL 上下文检测 GPU 是否可用；若不可用（无 GPU、驱动故障、远程桌面等），
-    // 回退到软件（CPU）渲染，避免白屏或崩溃
+    // ---- GPU 可用性探测（DXGI）----
+    // 通过 DXGI 枚举显卡判断 GPU 是否可用；若不可用（无 GPU、驱动故障、远程桌面等），
+    // 回退到软件（CPU）渲染，避免白屏或崩溃。
+    // 注意：不能用 QOpenGLContext 探测——它会把 ~100MB 的 OpenGL 驱动
+    // （如 AMD 的 atio6axx.dll/amdxx64.dll）永久加载进进程，白白推高内存。
+#ifdef Q_OS_WIN
     {
-        QOpenGLContext probe;
-        if (!probe.create()) {
+        bool gpuOk = false;
+        IDXGIFactory1 *factory = nullptr;
+        if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) {
+            IDXGIAdapter1 *adapter = nullptr;
+            for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+                DXGI_ADAPTER_DESC1 desc{};
+                adapter->GetDesc1(&desc);
+                adapter->Release();
+                if (!(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) {
+                    gpuOk = true;
+                    break;
+                }
+            }
+            factory->Release();
+        }
+        if (gpuOk) {
+            // 显式指定 D3D11 渲染后端（Qt6 在 Windows 的默认 RHI 后端），确保不触碰 OpenGL
+            QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D11);
+        } else {
             qWarning("GPU rendering unavailable, falling back to software (CPU) rendering");
-            qputenv("QSG_RENDERER_BACKEND", "software");
+            // Qt6 RHI 用 QSG_RHI_BACKEND（Qt5 的 QSG_RENDERER_BACKEND 已失效）
+            qputenv("QSG_RHI_BACKEND", "software");
         }
     }
+#endif
 
     QQmlApplicationEngine engine;
     QQuickStyle::setStyle("Basic");
