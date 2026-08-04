@@ -549,9 +549,10 @@ void MusicManager::setWasapiExclusive(bool v) {
     if (m_audioEngine)
         applied = m_audioEngine->setExclusiveMode(v);
     if (!applied) {
-        // 独占模式不可用（如设备被占用），回退共享并同步 UI
+        // 独占模式不可用（如设备被占用）：回退共享并同步 UI，与启动时一致弹窗询问用户
         m_wasapiExclusive = false;
         emit wasapiExclusiveChanged();
+        emit wasapiExclusiveFailed();
     }
     saveSettings();
 }

@@ -52,7 +52,9 @@ private:
 
     bool initAudioDevice();    // 按 m_exclusive 创建 context/device/engine
     void shutdownAudioDevice(); // 逆序销毁 sound/engine/device/context
-    // 音频通道是否被占用：其他程序正在使用音频（含共享模式）或有其他独占客户端
+    // 音频通道是否被占用：有其他进程正在播放且设备确实在出声（Active 会话 + 峰值），
+    // 或被其他独占客户端占用（MA_BUSY/MA_ACCESS_DENIED）时为 true；
+    // 已暂停/静默或"流运行但无声"的会话不视为占用
     bool audioChannelInUse() const;
 
     ma_context *m_context = nullptr;

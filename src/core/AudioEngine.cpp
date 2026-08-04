@@ -14,6 +14,7 @@
 #include <mmdeviceapi.h>
 #include <audiopolicy.h>
 #include <audiosessiontypes.h>
+#include <endpointvolume.h>   // IAudioMeterInformation：设备级峰值检测
 #endif
 
 AudioEngine::AudioEngine(QObject *parent)
@@ -140,12 +141,12 @@ void AudioEngine::shutdownAudioDevice()
     }
 }
 
-// ---- WASAPI 会话枚举：统计默认播放端点上除自己外的外部音频会话数 ----
-// 会话存在即视为占用端点：播放中（Active）与已暂停（Inactive）的音视频软件都持有会话，
-// 切换独占会静音它们，因此暂停中的程序同样应判定为占用；已过期（Expired）会话除外。
-// 用于检测"其他程序正在使用音频"（含共享模式），-1 表示检测失败
+// ---- WASAPI 会话枚举：统计默认播放端点上除自己外"正在播放"的外部会话数 ----
+// 仅统计 Active（流正在运行）会话：这类会话正占用端点，开启独占会抢占并打断它们，
+// 甚至导致程序异常（已实测崩溃）；已暂停（Inactive）/已过期（Expired）会话不阻塞独占，
+// 不应误判为占用。返回 -1 表示检测失败
 #ifdef Q_OS_WIN
-static int countExternalAudioSessions()
+static int countActiveExternalAudioSessions()
 {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (hr == RPC_E_CHANGED_MODE) hr = S_OK;  // 线程已初始化其他模型，仍可继续使用 MMDevice
@@ -181,13 +182,13 @@ static int countExternalAudioSessions()
                         // 仅统计可归因于现存外部进程的会话：
                         // pid 为 0 或进程已退出的会话无法确认来源，不应视为占用
                         bool attributed = false;
+                        HANDLE hProc = nullptr;
                         if (pid != 0 && pid != myPid) {
-                            HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-                            if (hProc) { CloseHandle(hProc); attributed = true; }
+                            hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+                            if (hProc) attributed = true;
                         }
-                        // 计入 Active（正在播放）与 Inactive（已暂停）会话，排除 Expired（已过期、不再使用端点）会话；
-                        // 被静音的程序并未实际占用音频，不计入
-                        if (attributed && state != AudioSessionStateExpired) {
+                        // 仅计入 Active（正在播放）且未静音的会话；被静音的程序并未实际占用音频
+                        if (attributed && state == AudioSessionStateActive) {
                             BOOL muted = FALSE;
                             ISimpleAudioVolume *vol = nullptr;
                             if (SUCCEEDED(ctrl->QueryInterface(__uuidof(ISimpleAudioVolume),
@@ -195,9 +196,17 @@ static int countExternalAudioSessions()
                                 vol->GetMute(&muted);
                                 vol->Release();
                             }
-                            if (!muted)
+                            if (!muted) {
                                 ++count;
+                                // 诊断：打印占用方进程名，便于定位"总是被占用"的来源
+                                WCHAR exePath[MAX_PATH] = {};
+                                DWORD size = MAX_PATH;
+                                if (QueryFullProcessImageNameW(hProc, 0, exePath, &size))
+                                    qDebug("AudioEngine: active external session: pid=%lu name=%ls",
+                                           pid, exePath);
+                            }
                         }
+                        if (hProc) CloseHandle(hProc);
                         ctrl->Release();
                     }
                     sessions->Release();
@@ -212,7 +221,49 @@ static int countExternalAudioSessions()
     return count;
 }
 #else
-static int countExternalAudioSessions() { return 0; }
+static int countActiveExternalAudioSessions() { return 0; }
+#endif
+
+// 设备级峰值采样：默认播放端点当前是否真的在出声（调用前自身设备已关闭，峰值只反映其他程序）。
+// 通过 IAudioMeterInformation 多次采样确认，把"流在运行但无声"（Active 却静默）的
+// 常驻会话与真正正在播放的程序区分开。先短暂等待自身设备关闭后的残留输出淡出。
+#ifdef Q_OS_WIN
+static bool deviceAudiblyActive()
+{
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (hr == RPC_E_CHANGED_MODE) hr = S_OK;  // 线程已初始化其他模型，仍可继续使用 MMDevice
+    const bool needUninit = (hr == S_OK);
+    bool audible = false;
+
+    // 等待自身设备关闭后的残留音频淡出（约 30ms），避免把本程序刚停止的尾音误判为其他程序在出声
+    Sleep(30);
+
+    IMMDeviceEnumerator *enumerator = nullptr;
+    if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                   IID_PPV_ARGS(&enumerator)))) {
+        IMMDevice *device = nullptr;
+        if (SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &device))) {
+            IAudioMeterInformation *meter = nullptr;
+            if (SUCCEEDED(device->Activate(__uuidof(IAudioMeterInformation), CLSCTX_ALL,
+                                           nullptr, (void **)&meter))) {
+                // 采样约 100ms：任一时刻测得有效峰值即视为正在出声
+                for (int i = 0; i < 5 && !audible; ++i) {
+                    float peak = 0.0f;
+                    if (SUCCEEDED(meter->GetPeakValue(&peak)) && peak > 0.0005f)
+                        audible = true;
+                    if (!audible) Sleep(20);
+                }
+                meter->Release();
+            }
+            device->Release();
+        }
+        enumerator->Release();
+    }
+    if (needUninit) CoUninitialize();
+    return audible;
+}
+#else
+static bool deviceAudiblyActive() { return false; }
 #endif
 
 // 探测 WASAPI 独占通道是否可用：用独立 context 临时打开独占设备，成功即释放。
@@ -250,15 +301,16 @@ int AudioEngine::exclusiveModeProbe() const
     return 0;
 }
 
-// 音频通道是否被占用：其他程序正在使用音频（含共享模式）或有其他独占客户端。
-// 注意：不要求对方当前正在出声——暂停中的音视频软件同样持有音频会话，
-// 开启独占会静音它们，因此也应判定为占用。
+// 音频通道是否被占用：
+// 1) 有其他进程正在播放且设备确实在出声（Active 会话 + 设备峰值）即判定占用——
+//    开启独占会抢占端点，打断其播放甚至导致程序异常（已实测崩溃），仅靠探测不可靠；
+//    仅"流在运行但无声"（Active 却静默，如后台常驻流）不判定占用；
+// 2) 无出声会话时，再探测是否被其他独占客户端占用（MA_BUSY/MA_ACCESS_DENIED）。
+// 已暂停/静默（Inactive/Expired）的会话不阻塞独占通道，不视为占用。
 bool AudioEngine::audioChannelInUse() const
 {
-    // 无侵入检测：存在外部进程持有的有效音频会话（播放中或已暂停）即判定占用
-    if (countExternalAudioSessions() > 0)
+    if (countActiveExternalAudioSessions() > 0 && deviceAudiblyActive())
         return true;
-    // 无会话时再探测独占通道（仅探测到其他独占客户端占用才判定占用）
     return exclusiveModeProbe() == 1;
 }
 
@@ -279,7 +331,7 @@ bool AudioEngine::setExclusiveMode(bool exclusive, bool force)
     shutdownAudioDevice();
 
     if (exclusive && !force && audioChannelInUse()) {
-        // 通道被占用（其他程序正在使用音频或有独占客户端）：不强制开启，重建共享引擎并恢复现场，由上层弹窗询问
+        // 独占通道被其他客户端实际占用：不强制开启，重建共享引擎并恢复现场，由上层弹窗询问
         qWarning("AudioEngine: audio channel in use, not switching to exclusive mode");
         m_exclusive = false;
         initAudioDevice();
