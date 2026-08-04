@@ -436,19 +436,18 @@ void MusicManager::loadSettings() {
     }
     if (obj.contains("wasapiExclusive")) {
         bool requested = obj.value("wasapiExclusive").toBool(false);
-        bool applied = requested;
-        if (m_audioEngine)
-            applied = m_audioEngine->setExclusiveMode(requested);
-        if (applied) {
-            m_wasapiExclusive = requested;
-        } else {
-            // 启动时独占不可用（音频通道被占用）：回退共享并通知 QML 弹窗询问用户
+        if (requested) {
+            // 启动时保存了开启独占：不在加载阶段直接开启，而是延迟通知 QML 先弹窗提示
+            // （识别精确度有限，请确认已关闭全部音频设备），用户确认后再真正开启。
+            // loadSettings 在 QML 加载前执行，此时 Connections 尚未建立，信号会丢失，
+            // 因此延迟到事件循环启动后再发
             m_wasapiExclusive = false;
-            // loadSettings 在 QML 加载前执行，此时 Connections 尚未建立，信号会丢失；
-            // 延迟到事件循环启动后再发，确保弹窗能收到
-            QTimer::singleShot(0, this, [this]() { emit wasapiExclusiveFailed(); });
+            emit wasapiExclusiveChanged();
+            QTimer::singleShot(0, this, [this]() { emit exclusiveConfirmRequested(); });
+        } else {
+            m_wasapiExclusive = false;
+            emit wasapiExclusiveChanged();
         }
-        emit wasapiExclusiveChanged();
     }
     if (obj.contains("lyricFont")) {
         m_lyricFont = obj.value("lyricFont").toString(m_lyricFont);

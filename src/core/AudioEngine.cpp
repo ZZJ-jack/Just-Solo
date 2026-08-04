@@ -146,6 +146,17 @@ void AudioEngine::shutdownAudioDevice()
 // 甚至导致程序异常（已实测崩溃）；已暂停（Inactive）/已过期（Expired）会话不阻塞独占，
 // 不应误判为占用。返回 -1 表示检测失败
 #ifdef Q_OS_WIN
+// 忽略名单：常驻"静默但流运行"音频会话的桌面工具（如 Rainmeter），
+// 其会话并不代表真的在播放，不应判定为占用
+static bool isIgnoredAudioProcess(const WCHAR *exePath)
+{
+    if (!exePath || !exePath[0]) return false;
+    const WCHAR *name = wcsrchr(exePath, L'\\');
+    name = name ? name + 1 : exePath;
+    return QString::fromWCharArray(name).compare(QStringLiteral("rainmeter.exe"),
+                                                 Qt::CaseInsensitive) == 0;
+}
+
 static int countActiveExternalAudioSessions()
 {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -197,13 +208,20 @@ static int countActiveExternalAudioSessions()
                                 vol->Release();
                             }
                             if (!muted) {
-                                ++count;
-                                // 诊断：打印占用方进程名，便于定位"总是被占用"的来源
                                 WCHAR exePath[MAX_PATH] = {};
                                 DWORD size = MAX_PATH;
-                                if (QueryFullProcessImageNameW(hProc, 0, exePath, &size))
+                                if (QueryFullProcessImageNameW(hProc, 0, exePath, &size)) {
+                                    // 忽略名单内的常驻会话（如 Rainmeter），不判定为占用
+                                    if (isIgnoredAudioProcess(exePath)) {
+                                        if (hProc) CloseHandle(hProc);
+                                        ctrl->Release();
+                                        continue;
+                                    }
+                                    // 诊断：打印占用方进程名，便于定位"总是被占用"的来源
                                     qDebug("AudioEngine: active external session: pid=%lu name=%ls",
                                            pid, exePath);
+                                }
+                                ++count;
                             }
                         }
                         if (hProc) CloseHandle(hProc);

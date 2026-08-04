@@ -2365,6 +2365,19 @@ Window {
         }
     }
 
+    // ---- WASAPI 独占开启前提示（启动时保存了开启独占：先弹窗提示，确认后再开启） ----
+    Connections {
+        target: musicManager
+        function onExclusiveConfirmRequested() {
+            mainWindow.openExclusiveWarnDialog(function(ok) {
+                if (ok)
+                    musicManager.wasapiExclusive = true
+                else
+                    musicManager.disableWasapiExclusive()
+            })
+        }
+    }
+
     Dialog {
         id: exclusiveDialog
         modal: true
@@ -2457,6 +2470,94 @@ Window {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // ---- WASAPI 独占开启前提示 ----
+    property var exclusiveWarnCallback: null
+    function openExclusiveWarnDialog(callback) {
+        exclusiveWarnCallback = callback
+        exclusiveWarnDialog.open()
+    }
+
+    Dialog {
+        id: exclusiveWarnDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 460
+        padding: 26
+
+        Overlay.modal: Rectangle { color: "transparent" }
+
+        background: Rectangle {
+            color: "#222222"
+            radius: 10
+            border.color: "#3A3A3A"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            Label {
+                text: "开启 WASAPI 独占模式"
+                font.family: appFont.name
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+            }
+
+            Label {
+                text: "本软件仅检测正在播放音频的软件，识别精确度有限，请确保已关闭全部音频设备。"
+                font.family: appFont.name
+                font.pixelSize: 13
+                color: "#aaaaaa"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                spacing: 10
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 88; radius: 6
+                    color: exclWarnCancelMA.containsMouse ? "#333333" : "#1E1E1E"
+                    border.color: "#3A3A3A"; border.width: 1
+                    Label { text: "取消"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: exclWarnCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: exclusiveWarnDialog.close()
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 88; radius: 6
+                    color: exclWarnOkMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                    Label { text: "确定开启"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#fff" }
+                    MouseArea {
+                        id: exclWarnOkMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            var cb = mainWindow.exclusiveWarnCallback
+                            mainWindow.exclusiveWarnCallback = null
+                            exclusiveWarnDialog.close()
+                            if (cb) cb(true)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 任何方式关闭（取消按钮/点击空白/Esc）都视为取消
+        onClosed: {
+            if (mainWindow.exclusiveWarnCallback) {
+                var cb = mainWindow.exclusiveWarnCallback
+                mainWindow.exclusiveWarnCallback = null
+                cb(false)
             }
         }
     }

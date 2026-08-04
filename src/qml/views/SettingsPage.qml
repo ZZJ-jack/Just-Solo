@@ -467,9 +467,21 @@ Rectangle {
                     Label { text: "WASAPI 独占模式"; font.family: fontFamily; font.pixelSize: 15; color: "#ffffff" }
                     Item { Layout.fillWidth: true }
                     Switch {
+                        id: wasapiSwitch
                         Layout.alignment: Qt.AlignVCenter
                         checked: musicManager.wasapiExclusive || false
-                        onToggled: musicManager.wasapiExclusive = checked
+                        onToggled: {
+                            if (checked) {
+                                // 开启独占前先弹窗提示检测限制，确认后再真正开启
+                                mainWindow.openExclusiveWarnDialog(function(ok) {
+                                    wasapiSwitch.checked = musicManager.wasapiExclusive || false
+                                    if (ok)
+                                        musicManager.wasapiExclusive = true
+                                })
+                            } else {
+                                musicManager.wasapiExclusive = false
+                            }
+                        }
 
                         indicator: Rectangle {
                             implicitWidth: 38
@@ -489,6 +501,14 @@ Rectangle {
                                 Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                             }
                         }
+                    }
+                }
+
+                // 用户点击开关会断开 checked 绑定，这里始终跟随实际模式状态同步
+                Connections {
+                    target: musicManager
+                    function onWasapiExclusiveChanged() {
+                        wasapiSwitch.checked = musicManager.wasapiExclusive || false
                     }
                 }
 

@@ -231,6 +231,7 @@ signals:
     void wasapiExclusiveChanged();
     void lyricFontChanged();
     void wasapiExclusiveFailed();  // 启动时开启 WASAPI 独占失败（设备被占用），QML 应弹窗询问用户
+    void exclusiveConfirmRequested();  // 启动时保存了开启独占：QML 先弹窗提示（识别精度有限），用户确认后再真正开启
     void customPlaylistsChanged();
     void playingListIndexChanged();
     void positionChanged(qint64 ms);
