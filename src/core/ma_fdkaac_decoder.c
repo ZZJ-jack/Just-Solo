@@ -15,6 +15,7 @@
  */
 #include "miniaudio.h"
 #include "decoder_backends.h"
+#include "alac_wrapper.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -45,10 +46,12 @@ typedef struct
     ma_allocation_callbacks alloc;
 
     int isMP4;                  /* 0=ADTS, 1=MP4 容器 */
+    int isAlac;                 /* 1=ALAC（Apple Lossless），0=AAC */
     ma_uint64 fileSize;
     ma_uint64 startOffset;      /* ADTS 数据起点（跳过 ID3 等） */
 
     /* 输出格式（首帧解码后确定，可能随流更新） */
+    ma_format format;           /* s16 或 s32（ALAC >16 位时为 s32） */
     ma_uint32 channels;
     ma_uint32 sampleRate;
     ma_uint64 lengthInFrames;   /* 输出 PCM 帧总数 */
@@ -57,6 +60,7 @@ typedef struct
 #if !defined(MA_NO_FDKAAC)
     HANDLE_AACDECODER decoder;
 #endif
+    void* pAlac;                /* ALACDecoder*（isAlac 时使用） */
 
     /* 采样表 */
     ma_fdkaac_sample* pSamples;
@@ -67,7 +71,9 @@ typedef struct
     /* 解码缓冲 */
     ma_uint8* pSampleData;      /* 单帧数据缓冲 */
     size_t sampleDataCap;
-    short* pPcm;                /* FDK 输出缓冲（交错） */
+    short* pPcm;                /* s16 输出缓冲（FDK / ALAC 16 位） */
+    int32_t* pPcm32;            /* s32 输出缓冲（ALAC >16 位） */
+    unsigned char* pAlacRaw;    /* ALAC 20/24 位 3 字节打包输出缓冲 */
     ma_uint32 pcmCap;           /* shorts */
     ma_uint32 pcmCount;         /* 有效帧数 */
     ma_uint32 pcmPos;           /* 已消费帧数 */
@@ -302,6 +308,23 @@ static ma_result ma_fdkaac_parse_esds(ma_fdkaac* pF, const char* type, ma_uint64
     return MA_NOT_IMPLEMENTED;   /* 提取完成，继续遍历（可能还有别的音轨） */
 }
 
+/* 解析 alac 采样条目内的 'alac' 盒 → ALACSpecificConfig（24 字节）
+ * 盒载荷布局：version(4) + ALACSpecificConfig(24) [+ channel layout] */
+static ma_result ma_fdkaac_parse_alac(ma_fdkaac* pF, const char* type, ma_uint64 dataPos, ma_uint64 dataSize)
+{
+    if (strcmp(type, "alac") != 0) return MA_NOT_IMPLEMENTED;
+    if (dataSize < 4 + 24) return MA_INVALID_FILE;
+    ma_uint8* pBuf = (ma_uint8*)ma_malloc(24, &pF->alloc);
+    if (pBuf == NULL) return MA_OUT_OF_MEMORY;
+    ma_result result = ma_fdkaac_read_at(pF, dataPos + 4, pBuf, 24);   /* 跳过 4 字节 version */
+    if (result != MA_SUCCESS) { ma_free(pBuf, &pF->alloc); return result; }
+    if (pF->pAsc != NULL) ma_free(pF->pAsc, &pF->alloc);
+    pF->pAsc = pBuf;
+    pF->ascSize = 24;
+    pF->isAlac = 1;
+    return MA_NOT_IMPLEMENTED;   /* 继续遍历 */
+}
+
 /* 解析 stsd：从 'mp4a' 采样条目中提取 esds → ASC */
 static ma_result ma_fdkaac_parse_stsd(ma_fdkaac* pF, ma_uint64 dataPos, ma_uint64 dataSize)
 {
@@ -319,10 +342,10 @@ static ma_result ma_fdkaac_parse_stsd(ma_fdkaac* pF, ma_uint64 dataPos, ma_uint6
         ma_uint64 entrySize = ma_fdkaac_be32(hdr);
         char fmt[5] = { (char)hdr[4], (char)hdr[5], (char)hdr[6], (char)hdr[7], 0 };
         if (entrySize < 16 || pos + entrySize > end) return MA_INVALID_FILE;
-        if (strcmp(fmt, "mp4a") == 0) {
+        if (strcmp(fmt, "mp4a") == 0 || strcmp(fmt, "alac") == 0) {
             /* AudioSampleEntry：SampleEntry(16) + 音频特定字段(20: version/revision/
              * vendor/channelcount/samplesize/predefined/reserved/samplerate)，
-             * version>=1 时还有额外字段，esds 等子盒在其后 */
+             * version>=1 时还有额外字段，esds/alac 等子盒在其后 */
             ma_uint64 childPos = pos + 16 + 20;
             ma_uint64 childEnd = pos + entrySize;
             if (pos + 16 + 20 <= childEnd) {
@@ -336,7 +359,10 @@ static ma_result ma_fdkaac_parse_stsd(ma_fdkaac* pF, ma_uint64 dataPos, ma_uint6
                 childPos = childEnd;
             }
             if (childPos < childEnd) {
-                ma_fdkaac_walk_boxes(pF, childPos, childEnd, (ma_fdkaac_box_cb)ma_fdkaac_parse_esds);
+                if (strcmp(fmt, "mp4a") == 0)
+                    ma_fdkaac_walk_boxes(pF, childPos, childEnd, (ma_fdkaac_box_cb)ma_fdkaac_parse_esds);
+                else
+                    ma_fdkaac_walk_boxes(pF, childPos, childEnd, (ma_fdkaac_box_cb)ma_fdkaac_parse_alac);
             }
         }
         pos += entrySize;
@@ -615,6 +641,15 @@ static ma_result ma_fdkaac_build_mp4_sample_table(ma_fdkaac* pF)
 #if !defined(MA_NO_FDKAAC)
 static ma_result ma_fdkaac_open_decoder(ma_fdkaac* pF)
 {
+    if (pF->isAlac) {
+        /* ALAC：通过 C 包装创建 Apple 参考解码器 */
+        pF->pAlac = alac_decoder_create(pF->pAsc, pF->ascSize);
+        if (pF->pAlac == NULL) return MA_INVALID_FILE;
+        pF->channels = alac_decoder_channels(pF->pAlac);
+        pF->sampleRate = alac_decoder_sample_rate(pF->pAlac);
+        pF->format = (alac_decoder_bit_depth(pF->pAlac) <= 16) ? ma_format_s16 : ma_format_s32;
+        return MA_SUCCESS;
+    }
     TRANSPORT_TYPE tp = pF->isMP4 ? TT_MP4_RAW : TT_MP4_ADTS;
     pF->decoder = aacDecoder_Open(tp, 1);
     if (pF->decoder == NULL) return MA_OUT_OF_MEMORY;
@@ -628,6 +663,7 @@ static ma_result ma_fdkaac_open_decoder(ma_fdkaac* pF)
             return MA_INVALID_FILE;
         }
     }
+    pF->format = ma_format_s16;
     return MA_SUCCESS;
 }
 #endif
@@ -649,6 +685,29 @@ static ma_result ma_fdkaac_decode_sample(ma_fdkaac* pF, ma_uint64 sampleIndex, m
     }
     ma_result result = ma_fdkaac_read_at(pF, s->offset, pF->pSampleData, s->size);
     if (result != MA_SUCCESS) return result;
+
+    if (pF->isAlac) {
+        /* ---- ALAC：每采样 = 一帧，输出位深 16→int16 / 20,24→3字节 / 32→int32 ---- */
+        unsigned int frames = MA_FDKAAC_MAX_FRAMESIZE;
+        unsigned int outBytes = 0;
+        if (alac_decoder_bit_depth(pF->pAlac) <= 16) {
+            int r = alac_decoder_decode(pF->pAlac, pF->pSampleData, s->size,
+                                        (unsigned char*)pF->pPcm, &frames, &outBytes);
+            if (r != 0 && frames == 0) return MA_SUCCESS;
+        } else if (alac_decoder_bit_depth(pF->pAlac) <= 24) {
+            int r = alac_decoder_decode(pF->pAlac, pF->pSampleData, s->size,
+                                        pF->pAlacRaw, &frames, &outBytes);
+            if (r != 0 && frames == 0) return MA_SUCCESS;
+            alac_decoder_convert_3byte_to_s32(pF->pAlac, pF->pAlacRaw, pF->pPcm32,
+                                              frames, pF->channels);
+        } else {
+            int r = alac_decoder_decode(pF->pAlac, pF->pSampleData, s->size,
+                                        (unsigned char*)pF->pPcm32, &frames, &outBytes);
+            if (r != 0 && frames == 0) return MA_SUCCESS;
+        }
+        *pOutFrames = frames;
+        return MA_SUCCESS;
+    }
 
 #if !defined(MA_NO_FDKAAC)
     UCHAR* pBuf[1] = { pF->pSampleData };
@@ -681,7 +740,8 @@ static ma_result ma_fdkaac_decode_sample(ma_fdkaac* pF, ma_uint64 sampleIndex, m
 /* ------------------------------------------------------------------ */
 static ma_result ma_fdkaac_read_pcm_frames(ma_fdkaac* pF, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead)
 {
-    short* pOut = (short*)pFramesOut;
+    short* pOut16 = (short*)pFramesOut;
+    int32_t* pOut32 = (int32_t*)pFramesOut;
     ma_uint64 written = 0;
     if (pFramesRead != NULL) *pFramesRead = 0;
 
@@ -689,9 +749,14 @@ static ma_result ma_fdkaac_read_pcm_frames(ma_fdkaac* pF, void* pFramesOut, ma_u
         if (pF->pcmPos < pF->pcmCount) {
             ma_uint32 avail = pF->pcmCount - pF->pcmPos;
             ma_uint32 want = (ma_uint32)MA_FDKAAC_MIN(frameCount - written, avail);
-            if (pOut != NULL) {
-                memcpy(pOut + written * pF->channels, pF->pPcm + pF->pcmPos * pF->channels,
-                       (size_t)want * pF->channels * sizeof(short));
+            if (pFramesOut != NULL) {
+                if (pF->format == ma_format_s32) {
+                    memcpy(pOut32 + written * pF->channels, pF->pPcm32 + pF->pcmPos * pF->channels,
+                           (size_t)want * pF->channels * sizeof(int32_t));
+                } else {
+                    memcpy(pOut16 + written * pF->channels, pF->pPcm + pF->pcmPos * pF->channels,
+                           (size_t)want * pF->channels * sizeof(short));
+                }
             }
             pF->pcmPos += want;
             written += want;
@@ -750,6 +815,10 @@ static ma_result ma_fdkaac_seek_to_pcm_frame(ma_fdkaac* pF, ma_uint64 frameIndex
         aacDecoder_Close(pF->decoder);
         pF->decoder = NULL;
     }
+    if (pF->pAlac != NULL) {
+        alac_decoder_destroy(pF->pAlac);
+        pF->pAlac = NULL;
+    }
     return ma_fdkaac_open_decoder(pF);
 #else
     return MA_NOT_IMPLEMENTED;
@@ -763,7 +832,7 @@ static ma_result ma_fdkaac_ds_seek(ma_data_source* pDataSource, ma_uint64 frameI
 
 static ma_result ma_fdkaac_get_data_format(ma_fdkaac* pF, ma_format* pFormat, ma_uint32* pChannels, ma_uint32* pSampleRate, ma_channel* pChannelMap, size_t channelMapCap)
 {
-    if (pFormat != NULL) *pFormat = ma_format_s16;
+    if (pFormat != NULL) *pFormat = pF->format;
     if (pChannels != NULL) *pChannels = pF->channels;
     if (pSampleRate != NULL) *pSampleRate = pF->sampleRate;
     if (pChannelMap != NULL) {
@@ -817,10 +886,16 @@ static void ma_fdkaac_uninit(ma_fdkaac* pF)
         pF->decoder = NULL;
     }
 #endif
+    if (pF->pAlac != NULL) {
+        alac_decoder_destroy(pF->pAlac);
+        pF->pAlac = NULL;
+    }
     if (pF->pSamples != NULL) { ma_free(pF->pSamples, &pF->alloc); pF->pSamples = NULL; }
     if (pF->pCumDurations != NULL) { ma_free(pF->pCumDurations, &pF->alloc); pF->pCumDurations = NULL; }
     if (pF->pSampleData != NULL) { ma_free(pF->pSampleData, &pF->alloc); pF->pSampleData = NULL; }
     if (pF->pPcm != NULL) { ma_free(pF->pPcm, &pF->alloc); pF->pPcm = NULL; }
+    if (pF->pPcm32 != NULL) { ma_free(pF->pPcm32, &pF->alloc); pF->pPcm32 = NULL; }
+    if (pF->pAlacRaw != NULL) { ma_free(pF->pAlacRaw, &pF->alloc); pF->pAlacRaw = NULL; }
     if (pF->mp4ChunkOffsets != NULL) { ma_free(pF->mp4ChunkOffsets, &pF->alloc); pF->mp4ChunkOffsets = NULL; }
     if (pF->mp4StscFirst != NULL) { ma_free(pF->mp4StscFirst, &pF->alloc); pF->mp4StscFirst = NULL; }
     if (pF->mp4StscSamples != NULL) { ma_free(pF->mp4StscSamples, &pF->alloc); pF->mp4StscSamples = NULL; }
@@ -871,6 +946,10 @@ static ma_result ma_fdkaac_init(ma_read_proc onRead, ma_seek_proc onSeek, ma_tel
     pF->pcmCap = MA_FDKAAC_PCM_CAP;
     pF->pPcm = (short*)ma_malloc((size_t)pF->pcmCap * sizeof(short), &pF->alloc);
     if (pF->pPcm == NULL) { result = MA_OUT_OF_MEMORY; goto on_fail; }
+    pF->pPcm32 = (int32_t*)ma_malloc((size_t)pF->pcmCap * sizeof(int32_t), &pF->alloc);
+    if (pF->pPcm32 == NULL) { result = MA_OUT_OF_MEMORY; goto on_fail; }
+    pF->pAlacRaw = (unsigned char*)ma_malloc((size_t)pF->pcmCap * 3, &pF->alloc);
+    if (pF->pAlacRaw == NULL) { result = MA_OUT_OF_MEMORY; goto on_fail; }
     pF->sampleDataCap = 64 * 1024;
     pF->pSampleData = (ma_uint8*)ma_malloc(pF->sampleDataCap, &pF->alloc);
     if (pF->pSampleData == NULL) { result = MA_OUT_OF_MEMORY; goto on_fail; }
@@ -879,6 +958,23 @@ static ma_result ma_fdkaac_init(ma_read_proc onRead, ma_seek_proc onSeek, ma_tel
     /* 打开解码器并试解码若干帧，确定输出格式（采样率/声道/每帧输出数） */
     result = ma_fdkaac_open_decoder(pF);
     if (result != MA_SUCCESS) goto on_fail;
+    if (pF->isAlac) {
+        /* ALAC 帧长可能大于 4096，按需扩容输出缓冲 */
+        ma_uint32 frameLen = alac_decoder_frame_length(pF->pAlac);
+        ma_uint32 channels = pF->channels;
+        size_t needShorts = (size_t)frameLen * channels;
+        if (needShorts > pF->pcmCap) {
+            short* pNew = (short*)ma_realloc(pF->pPcm, needShorts * sizeof(short), &pF->alloc);
+            if (pNew == NULL) { result = MA_OUT_OF_MEMORY; goto on_fail; }
+            pF->pPcm = pNew;
+            int32_t* pNew32 = (int32_t*)ma_realloc(pF->pPcm32, needShorts * sizeof(int32_t), &pF->alloc);
+            if (pNew32 == NULL) { result = MA_OUT_OF_MEMORY; goto on_fail; }
+            pF->pPcm32 = pNew32;
+            unsigned char* pNewRaw = (unsigned char*)ma_realloc(pF->pAlacRaw, needShorts * 3, &pF->alloc);
+            if (pNewRaw == NULL) { result = MA_OUT_OF_MEMORY; goto on_fail; }
+            pF->pAlacRaw = pNewRaw;
+        }
+    }
     {
         ma_uint64 probe = 0;
         while (probe < pF->sampleCount) {
@@ -921,6 +1017,10 @@ static ma_result ma_fdkaac_init(ma_read_proc onRead, ma_seek_proc onSeek, ma_tel
     if (pF->decoder != NULL) {
         aacDecoder_Close(pF->decoder);
         pF->decoder = NULL;
+    }
+    if (pF->pAlac != NULL) {
+        alac_decoder_destroy(pF->pAlac);
+        pF->pAlac = NULL;
     }
     result = ma_fdkaac_open_decoder(pF);   /* 干净状态开始播放 */
     if (result != MA_SUCCESS) goto on_fail;

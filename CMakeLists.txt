@@ -110,12 +110,24 @@ target_link_libraries(opusfile PUBLIC ogg opus)
 # fdk-aac：官方 CMake 构建（目标名 fdk-aac），含 AAC 解码库
 add_subdirectory(third_party/fdk-aac)
 
+# ALAC（Apple Lossless）：苹果参考解码器（Apache 2.0），.m4a 无损格式
+add_library(alac STATIC
+    third_party/alac/codec/ALACDecoder.cpp
+    third_party/alac/codec/ALACBitUtilities.c
+    third_party/alac/codec/ag_dec.c
+    third_party/alac/codec/dp_dec.c
+    third_party/alac/codec/matrix_dec.c
+    third_party/alac/codec/EndianPortable.c
+)
+target_include_directories(alac PUBLIC third_party/alac/codec)
+
 # 抑制第三方音频库的 C4819 警告（UTF-8 注释）
 if(MSVC)
     target_compile_options(ogg PRIVATE /wd4819)
     target_compile_options(opusfile PRIVATE /wd4819)
     target_compile_options(opus PRIVATE /wd4819)
     target_compile_options(fdk-aac PRIVATE /wd4819)
+    target_compile_options(alac PRIVATE /wd4819)
 endif()
 
 # 可执行文件
@@ -124,6 +136,7 @@ qt_add_executable(JustSolo WIN32
     src/core/AudioEngine.cpp
     src/core/ma_opus_decoder.c
     src/core/ma_fdkaac_decoder.c
+    src/core/alac_wrapper.cpp
     src/core/MusicManager.cpp
     src/core/MetadataReader.cpp
     src/core/SMTCManager.cpp
@@ -216,6 +229,7 @@ target_link_libraries(JustSolo PRIVATE
     libcmark-gfm-extensions_static
     opusfile        # libopusfile（Opus 解码，PUBLIC 传递 ogg + opus）
     fdk-aac         # fdk-aac（AAC 解码）
+    alac            # 苹果 ALAC 参考解码器（.m4a 无损）
 )
 target_include_directories(JustSolo PRIVATE
     "${cmark-gfm_SOURCE_DIR}/src"
