@@ -1,5 +1,6 @@
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
+#include "decoder_backends.h"   // 自定义解码后端（Opus / AAC）
 
 #include "AudioEngine.h"
 #include <QDebug>
@@ -61,6 +62,7 @@ bool AudioEngine::initAudioDevice()
     m_engine = new ma_engine;
     m_context = new ma_context;
     m_device = new ma_device;
+    m_resourceManager = new ma_resource_manager;
 
     ma_context_config contextConfig = ma_context_config_init();
     if (ma_context_init(nullptr, 0, &contextConfig, m_context) != MA_SUCCESS) {
@@ -88,14 +90,41 @@ bool AudioEngine::initAudioDevice()
         }
     }
 
+    // 资源管理器：注册自定义解码后端（Opus / AAC），引擎加载的所有音频文件
+    // 都经由它解码（ma_sound_init_from_file → resource manager → 后端）
+    {
+        ma_decoding_backend_vtable *pCustomBackends[] = {
+            ma_decoding_backend_libopus,
+            ma_decoding_backend_fdkaac
+        };
+        ma_resource_manager_config rmConfig = ma_resource_manager_config_init();
+        rmConfig.ppCustomDecodingBackendVTables = pCustomBackends;
+        rmConfig.customDecodingBackendCount =
+            sizeof(pCustomBackends) / sizeof(pCustomBackends[0]);
+        if (ma_resource_manager_init(&rmConfig, m_resourceManager) != MA_SUCCESS) {
+            qWarning("AudioEngine: Failed to initialize resource manager");
+            ma_device_uninit(m_device);
+            ma_context_uninit(m_context);
+            delete m_resourceManager;
+            m_resourceManager = nullptr;
+            goto on_fail;
+        }
+        m_resourceManagerInited = true;
+    }
+
     {
         ma_engine_config config = ma_engine_config_init();
         config.pContext = m_context;
         config.pDevice = m_device;
+        config.pResourceManager = m_resourceManager;
         if (ma_engine_init(&config, m_engine) != MA_SUCCESS) {
             qWarning("AudioEngine: Failed to initialize miniaudio engine");
             ma_device_uninit(m_device);
             ma_context_uninit(m_context);
+            ma_resource_manager_uninit(m_resourceManager);
+            m_resourceManagerInited = false;
+            delete m_resourceManager;
+            m_resourceManager = nullptr;
             goto on_fail;
         }
     }
@@ -128,6 +157,15 @@ void AudioEngine::shutdownAudioDevice()
         ma_engine_uninit(m_engine);
         delete m_engine;
         m_engine = nullptr;
+    }
+    // 资源管理器由本类持有（引擎不接管所有权），须在引擎之后释放
+    if (m_resourceManager) {
+        if (m_resourceManagerInited) {
+            ma_resource_manager_uninit(m_resourceManager);
+            m_resourceManagerInited = false;
+        }
+        delete m_resourceManager;
+        m_resourceManager = nullptr;
     }
     if (m_device) {
         ma_device_uninit(m_device);

@@ -10,7 +10,6 @@
 #include <QRandomGenerator>
 #include <QEventLoop>
 #include <QMediaPlayer>
-#include <QAudioOutput>
 #include <QMediaMetaData>
 #include <algorithm>
 #include <QCoreApplication>
@@ -172,10 +171,10 @@ static QVariantMap buildTrack(const QString &filePath)
                 cover = QUrl::fromLocalFile(meta.coverPath).toString();
 
             // 统一用 QMediaPlayer 提取时长 + 兜底封面
+            // 注意：不绑定 QAudioOutput——仅读取时长/元数据无需初始化音频引擎，
+            // 否则在 WASAPI 独占模式下会与 miniaudio 争抢设备而报初始化失败
             {
                 QMediaPlayer player;
-                QAudioOutput audioOut;
-                player.setAudioOutput(&audioOut);
                 QEventLoop loop;
                 QTimer t; t.setSingleShot(true);
                 QObject::connect(&player, &QMediaPlayer::mediaStatusChanged, [&](QMediaPlayer::MediaStatus s) {
@@ -228,9 +227,8 @@ static QVariantMap buildTrack(const QString &filePath)
     }
 
     // ---- 慢路径：QMediaPlayer 回退（.ogg/.wav/.opus 等或快路径失败） ----
+    // 仅读取元数据/时长，不绑定 QAudioOutput（避免 WASAPI 独占模式下争抢设备）
     QMediaPlayer player;
-    QAudioOutput audioOut;
-    player.setAudioOutput(&audioOut);
 
     QEventLoop loop;
     QTimer debounce;

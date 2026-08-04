@@ -64,6 +64,9 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 ### 音频引擎
 
 - 基于 **miniaudio** 轻量库，替代 Qt Multimedia
+- **支持格式**：MP3 / FLAC / WAV / OGG (Vorbis) / M4A (AAC) / AAC (ADTS) / Opus
+  - 内置解码器：MP3 / FLAC / WAV / OGG
+  - 自定义解码后端：**Opus**（libopus + libopusfile）、**AAC**（fdk-aac，含 .m4a MP4 容器解封装与 .aac 裸流），全部静态链接，支持精确 seek 与中文路径
 - **支持热插拔（应用不会崩溃**：
   - WASAPI共享模式下：设备热插拔不中断音乐播放，插回去自动恢复声音（不影响播放）
   - WASAPI独占模式下：设备热插拔自动暂停/恢复播放，会中断音乐播放（自动暂停/恢复播放）
@@ -148,6 +151,7 @@ Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++
 
 - **UI**: Qt Quick (QML), Qt QuickControls2, Qt QuickLayouts
 - **后端**: C++17, Qt 6.8.3
+- **音频解码**: miniaudio + libopus/libopusfile（Opus）+ fdk-aac（AAC/M4A）
 - **网络**: libcurl (OTA 在线更新)
 - **Markdown**: cmark-gfm (Markdown → 富文本 HTML 转换)
 - **构建**: CMake 3.16+, Visual Studio 2026 (MSVC)
@@ -178,6 +182,9 @@ Just-Solo/
 │   ├── main.cpp                # 程序入口（单实例检测、DWM 标题栏、Tray、SMTC、HotkeyManager）
 │   ├── core/
 │   │   ├── AudioEngine.h/cpp       # 音频引擎（基于 miniaudio）
+│   │   ├── decoder_backends.h      # 自定义解码后端注册接口（Opus/AAC）
+│   │   ├── ma_opus_decoder.c       # Opus 解码后端（libopus + libopusfile）
+│   │   ├── ma_fdkaac_decoder.c     # AAC 解码后端（fdk-aac，含 ADTS 与 MP4 解封装）
 │   │   ├── MusicManager.h/cpp      # 音乐管理器（播放/列表/收藏/历史/设置/播放模式）
 │   │   ├── MetadataReader.h/cpp    # 元数据快速解析（MP3/FLAC/M4A）
 │   │   ├── SMTCManager.h/cpp       # Windows 系统媒体控件（SMTC）
@@ -219,7 +226,11 @@ Just-Solo/
 │       └── fonts.qrc                        # 字体资源注册表
 ├── third_party/
 │   ├── curl/                   # libcurl 依赖（bin/include/lib）
-│   └── cmark-gfm-0.29.0.gfm.13/ # cmark-gfm 源码（Markdown 解析）
+│   ├── cmark-gfm-0.29.0.gfm.13/ # cmark-gfm 源码（Markdown 解析）
+│   ├── ogg/                    # libogg 源码（Opus 容器依赖）
+│   ├── opus/                   # libopus 源码（Opus 解码）
+│   ├── opusfile/               # libopusfile 源码（.opus 文件解码）
+│   └── fdk-aac/                # fdk-aac 源码（AAC 解码）
 ├── resources/
 │   └── app.rc                  # Windows 资源文件（嵌入 ico）
 └── release/                    # 打包输出目录（由 package.ps1 生成）
@@ -307,7 +318,8 @@ cmake --build build --config Release
 
 1. **版权与许可**  
    - 本项目及相关代码的著作权受中华人民共和国法律保护，以 **MIT 协议** 开源（详见 `LICENSE` 文件）。  
-   在遵守 MIT 协议的前提下，任何人可以**自由使用、修改、复制、分发**本软件，**包括商业用途**，但必须在分发时保留原始版权声明及本许可声明。我们仅要求您在合适的显著位置标注原作者信息（例如 `ZZJ-JACK`），这是您唯一的署名义务。
+   - 本项目所使用的第三方库，均按各自协议开源，请在使用时遵守各自协议。
+   - 在遵守 MIT 协议的前提下，任何人可以**自由使用、修改、复制、分发**本软件，**包括商业用途**，但必须在分发时保留原始版权声明及本许可声明。我们仅要求您在合适的显著位置标注原作者信息（例如 `ZZJ-JACK`），这是您唯一的署名义务。
    - 本项目所使用的图标（除软件图标外），均来自阿里矢量图标库等网络图标，我们将严格遵守相关法律，不用于任何商业用途，对于下载本仓库内图标并用于商业用途的情况，我们将不承担任何责任。
    - 本项目内置的字体文件均来自 **华为开发者联盟** 及 **字体天下字体库** ，我们将严格遵守相关法律，不用于任何商业用途。对于下载本仓库内字体文件并用于商业用途的情况，我们将不承担任何责任。
 

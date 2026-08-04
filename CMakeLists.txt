@@ -4,8 +4,8 @@ project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 # ---- 软件版本号 ----
 set(APP_VERSION_MAJOR 1)
 set(APP_VERSION_MINOR 2)
-set(APP_VERSION_PATCH 1)
-set(APP_VERSION_PRE   0)   # 0=正式版, >0=beta.N
+set(APP_VERSION_PATCH 2)
+set(APP_VERSION_PRE   1)   # 0=正式版, >0=beta.N
 
 # 格式化显示版本: vX.Y.Z 或 vX.Y.Z-beta.N
 if(APP_VERSION_PRE GREATER 0)
@@ -75,10 +75,55 @@ if(MSVC)
     target_compile_options(libcmark-gfm-extensions_static PRIVATE /wd4819)
 endif()
 
+# ---- 音频解码扩展：Opus（libogg/libopus/libopusfile）与 AAC（fdk-aac） ----
+# 全部编译为静态库，作为 miniaudio 自定义解码后端（见 src/core/decoder_backends.h，
+# 由 AudioEngine 注册到引擎的 resource manager）。库源码位于 third_party/。
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+set(FDK_AAC_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+set(FDK_AAC_INSTALL_PKGCONFIG_MODULE OFF CACHE BOOL "" FORCE)
+
+# libopus：官方 CMake 构建（目标名 opus），内部自行生成配置头
+add_subdirectory(third_party/opus)
+
+# libogg：仅两个源文件，直接编译，避免外部包查找
+add_library(ogg STATIC
+    third_party/ogg/src/bitwise.c
+    third_party/ogg/src/framing.c
+)
+target_include_directories(ogg PUBLIC third_party/ogg/include)
+
+# libopusfile：直接编译源码（OP_DISABLE_HTTP 关闭网络功能，仅需本地文件解码）
+add_library(opusfile STATIC
+    third_party/opusfile/src/info.c
+    third_party/opusfile/src/internal.c
+    third_party/opusfile/src/opusfile.c
+    third_party/opusfile/src/stream.c
+)
+target_include_directories(opusfile PUBLIC third_party/opusfile/include)
+target_compile_definitions(opusfile PRIVATE OP_DISABLE_HTTP)
+target_compile_options(opusfile PRIVATE $<$<C_COMPILER_ID:MSVC>:/wd4267> $<$<C_COMPILER_ID:MSVC>:/wd4244> $<$<C_COMPILER_ID:MSVC>:/wd4090>)
+target_link_libraries(opusfile PUBLIC ogg opus)
+
+# fdk-aac：官方 CMake 构建（目标名 fdk-aac），含 AAC 解码库
+add_subdirectory(third_party/fdk-aac)
+
+# 抑制第三方音频库的 C4819 警告（UTF-8 注释）
+if(MSVC)
+    target_compile_options(ogg PRIVATE /wd4819)
+    target_compile_options(opusfile PRIVATE /wd4819)
+    target_compile_options(opus PRIVATE /wd4819)
+    target_compile_options(fdk-aac PRIVATE /wd4819)
+endif()
+
 # 可执行文件
 qt_add_executable(JustSolo WIN32
     src/main.cpp
     src/core/AudioEngine.cpp
+    src/core/ma_opus_decoder.c
+    src/core/ma_fdkaac_decoder.c
     src/core/MusicManager.cpp
     src/core/MetadataReader.cpp
     src/core/SMTCManager.cpp
@@ -169,6 +214,8 @@ target_link_libraries(JustSolo PRIVATE
     Qt6::Widgets
     libcmark-gfm_static
     libcmark-gfm-extensions_static
+    opusfile        # libopusfile（Opus 解码，PUBLIC 传递 ogg + opus）
+    fdk-aac         # fdk-aac（AAC 解码）
 )
 target_include_directories(JustSolo PRIVATE
     "${cmark-gfm_SOURCE_DIR}/src"

@@ -9,6 +9,7 @@ struct ma_engine;
 struct ma_sound;
 struct ma_context;
 struct ma_device;
+struct ma_resource_manager;
 
 class AudioEngine : public QObject
 {
@@ -60,6 +61,8 @@ private:
     ma_context *m_context = nullptr;
     ma_device *m_device = nullptr;
     ma_engine *m_engine = nullptr;
+    ma_resource_manager *m_resourceManager = nullptr;  // 注册自定义解码后端（Opus/AAC）
+    bool m_resourceManagerInited = false;
     ma_sound *m_sound = nullptr;
     bool m_soundInitialized = false;
     bool m_exclusive = false;  // true=WASAPI 独占, false=共享
