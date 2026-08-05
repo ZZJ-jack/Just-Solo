@@ -52,7 +52,10 @@ AudioMetadata MetadataReader::read(const QString &filePath, const QString &cache
         meta.artist = tags.value("ARTIST");
         meta.album  = tags.value("ALBUM");
     } else if (ext == "m4a" || ext == "mp4") {
-        embeddedCover = readMP4Cover(filePath);
+        QMap<QString, QString> tags = readMP4TextTags(filePath, &embeddedCover);
+        meta.title  = tags.value("TITLE");
+        meta.artist = tags.value("ARTIST");
+        meta.album  = tags.value("ALBUM");
     }
 
     // 封面处理
@@ -351,65 +354,124 @@ QMap<QString, QString> MetadataReader::readFlacComments(const QString &filePath,
 }
 
 // ============================================================
-// MP4/M4A - 简易 covr 提取
+// MP4/M4A - ilst 元数据（标题/歌手/专辑/歌词）+ covr 封面
 // ============================================================
 
-QImage MetadataReader::readMP4Cover(const QString &filePath)
+static quint32 mp4BE32(const QByteArray &data, int off)
 {
+    return ((quint8)data[off] << 24) | ((quint8)data[off+1] << 16)
+         | ((quint8)data[off+2] << 8) | (quint8)data[off+3];
+}
+
+// 解析 ilst 容器内的条目：©nam/©ART/©alb/©lyr/covr/----(freeform)
+static void parseMp4Ilst(const QByteArray &data, int off, int len,
+                         QMap<QString, QString> *tags, QImage *outCover)
+{
+    int p = off;
+    int end = off + len;
+    while (p + 8 <= end) {
+        quint32 sz = mp4BE32(data, p);
+        QString type = QString::fromLatin1(data.mid(p + 4, 4));
+        if (sz < 8 || p + (int)sz > end) break;
+        int childOff = p + 8;
+        int childEnd = p + (int)sz;
+
+        if (type == "----") {
+            // 自由格式条目：mean(域) + name(键) + data(值)，歌词常用 "LYRICS"
+            QString name;
+            int q = childOff;
+            while (q + 8 <= childEnd) {
+                quint32 cs = mp4BE32(data, q);
+                QString ct = QString::fromLatin1(data.mid(q + 4, 4));
+                if (cs < 8 || q + (int)cs > childEnd) break;
+                if (ct == "name")
+                    name = QString::fromUtf8(data.mid(q + 8, cs - 8));
+                else if (ct == "data" && tags && name.compare(QStringLiteral("LYRICS"), Qt::CaseInsensitive) == 0)
+                    (*tags)[QStringLiteral("LYRICS")] = QString::fromUtf8(data.mid(q + 16, cs - 16)).trimmed();
+                q += cs;
+            }
+        } else if (type == "covr") {
+            int q = childOff;
+            while (q + 12 <= childEnd && outCover && outCover->isNull()) {
+                quint32 cs = mp4BE32(data, q);
+                QString ct = QString::fromLatin1(data.mid(q + 4, 4));
+                if (cs < 12 || q + (int)cs > childEnd) break;
+                if (ct == "data") {
+                    QImage img;
+                    img.loadFromData(data.mid(q + 16, cs - 16));
+                    if (!img.isNull()) *outCover = img;
+                }
+                q += cs;
+            }
+        } else {
+            // 常规文本条目；注意 © 在 MP4 原子类型中是单字节 0xA9
+            QString key;
+            if (type == QString::fromLatin1("\xA9""nam")) key = "TITLE";
+            else if (type == QString::fromLatin1("\xA9""ART") || type == QString::fromLatin1("aART")) key = "ARTIST";
+            else if (type == QString::fromLatin1("\xA9""alb")) key = "ALBUM";
+            else if (type == QString::fromLatin1("\xA9""lyr")) key = "LYRICS";
+
+            if (!key.isEmpty() && tags) {
+                int q = childOff;
+                while (q + 8 <= childEnd) {
+                    quint32 cs = mp4BE32(data, q);
+                    QString ct = QString::fromLatin1(data.mid(q + 4, 4));
+                    if (cs < 8 || q + (int)cs > childEnd) break;
+                    if (ct == "data") {
+                        // data: size(4) + "data"(4) + version/flags(4) + locale(4) + payload
+                        QByteArray payload = data.mid(q + 16, cs - 16);
+                        QString text = QString::fromUtf8(payload);
+                        // 非法 UTF-8 时尝试 UTF-16BE
+                        if (text.contains(QChar::ReplacementCharacter) && payload.size() >= 2)
+                            text = QString::fromUtf16(reinterpret_cast<const char16_t*>(payload.constData()), payload.size() / 2);
+                        (*tags)[key] = text.trimmed();
+                        break;
+                    }
+                    q += cs;
+                }
+            }
+        }
+        p += sz;
+    }
+}
+
+// 递归查找 ilst（moov→udta→meta→ilst）
+static void walkMp4Atoms(const QByteArray &data, int off, int len,
+                         QMap<QString, QString> *tags, QImage *outCover, int depth)
+{
+    if (depth > 8) return;
+    int p = off;
+    int end = off + len;
+    while (p + 8 <= end) {
+        quint32 sz = mp4BE32(data, p);
+        QString type = QString::fromLatin1(data.mid(p + 4, 4));
+        if (sz < 8 || p + (int)sz > end) break;
+
+        if (type == "ilst") {
+            parseMp4Ilst(data, p + 8, sz - 8, tags, outCover);
+            return;
+        }
+        if (type == "moov" || type == "udta" || type == "trak" || type == "mdia"
+            || type == "minf" || type == "stbl") {
+            walkMp4Atoms(data, p + 8, sz - 8, tags, outCover, depth + 1);
+        } else if (type == "meta") {
+            // meta 原子头部后紧跟 4 字节 version/flags
+            walkMp4Atoms(data, p + 12, sz - 12, tags, outCover, depth + 1);
+        }
+        p += sz;
+    }
+}
+
+QMap<QString, QString> MetadataReader::readMP4TextTags(const QString &filePath, QImage *outCover)
+{
+    QMap<QString, QString> tags;
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly))
-        return QImage();
-
+        return tags;
     QByteArray data = file.readAll();
     file.close();
-    int size = data.size();
-
-    std::function<QImage(const QByteArray&, int, int)> findCovr;
-    findCovr = [&](const QByteArray &buf, int off, int len) -> QImage {
-        int p = off;
-        int end = off + len;
-        while (p + 8 <= end) {
-            quint32 atomSize = ((quint8)buf[p] << 24) | ((quint8)buf[p+1] << 16) | ((quint8)buf[p+2] << 8) | (quint8)buf[p+3];
-            QString type = QString::fromLatin1(buf.mid(p + 4, 4));
-            if (atomSize < 8 || p + (int)atomSize > end) break;
-
-            if (type == "covr") {
-                // data atom starts at p+8 (skipping size+type of covr)
-                // Inside covr: usually "data" atom
-                int dp = p + 8;
-                int dEnd = p + atomSize;
-                while (dp + 12 <= dEnd) {
-                    quint32 dSize = ((quint8)buf[dp] << 24) | ((quint8)buf[dp+1] << 16) | ((quint8)buf[dp+2] << 8) | (quint8)buf[dp+3];
-                    QString dType = QString::fromLatin1(buf.mid(dp + 4, 4));
-                    if (dSize < 12 || dp + (int)dSize > dEnd) break;
-                    if (dType == "data") {
-                        int imgOff = dp + 12; // skip size+type+reserved(4)
-                        int imgLen = dSize - 12;
-                        QImage img;
-                        img.loadFromData(buf.mid(imgOff, imgLen));
-                        return img;
-                    }
-                    dp += dSize;
-                }
-                return QImage();
-            }
-
-            // Recurse into container atoms
-            static QStringList containers = {"moov", "udta", "meta", "ilst"};
-            if (containers.contains(type)) {
-                int childOff = p + 8;
-                if (type == "meta")
-                    childOff = p + 12;
-                QImage result = findCovr(buf, childOff, atomSize - (childOff - p));
-                if (!result.isNull()) return result;
-            }
-
-            p += atomSize;
-        }
-        return QImage();
-    };
-
-    return findCovr(data, 0, size);
+    walkMp4Atoms(data, 0, data.size(), &tags, outCover, 0);
+    return tags;
 }
 
 // ============================================================

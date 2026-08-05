@@ -18,14 +18,14 @@ class MetadataReader
 public:
     // 一站式提取所有元数据，封面自动缓存
     static AudioMetadata read(const QString &filePath, const QString &cacheDir);
+    // MP4/M4A - 解析 ilst 文本标签（©nam/©ART/©alb/©lyr/----:LYRICS）+ covr 封面
+    static QMap<QString, QString> readMP4TextTags(const QString &filePath, QImage *outCover);
 
 private:
     // ID3v2 (MP3) - 返回 text frame 字典 + 封面 + TLEN 时长
     static QMap<QString, QString> readID3v2TextFrames(const QString &filePath, QImage *outCover);
     // FLAC Vorbis comment + STREAMINFO 时长
     static QMap<QString, QString> readFlacComments(const QString &filePath, QImage *outCover, int *outDuration);
-    // MP4/M4A
-    static QImage readMP4Cover(const QString &filePath);
     // 同目录外部封面
     static QString findExternalCover(const QString &filePath);
     // MP3 估算时长（读首个帧头 bitrate → file_size*8/bitrate）

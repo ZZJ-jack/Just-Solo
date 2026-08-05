@@ -1707,6 +1707,33 @@ void MusicManager::rebuildLyricCache() {
 }
 
 // ---- 从音频文件二进制数据中提取嵌入式歌词 ----
+
+// 解析 Vorbis Comment / OpusTags 注释区（vendor + 条目列表），取 LYRICS=
+static QString extractVorbisLyrics(const QByteArray &commentData) {
+    int p = 0;
+    if (p + 4 > commentData.size()) return {};
+    quint32 vendorLen = (quint8)commentData[p] | ((quint8)commentData[p+1] << 8)
+                      | ((quint8)commentData[p+2] << 16) | ((quint8)commentData[p+3] << 24);
+    p += 4 + vendorLen;
+    if (p + 4 > commentData.size()) return {};
+    quint32 count = (quint8)commentData[p] | ((quint8)commentData[p+1] << 8)
+                  | ((quint8)commentData[p+2] << 16) | ((quint8)commentData[p+3] << 24);
+    p += 4;
+    for (quint32 i = 0; i < count && p + 4 <= commentData.size(); ++i) {
+        quint32 len = (quint8)commentData[p] | ((quint8)commentData[p+1] << 8)
+                    | ((quint8)commentData[p+2] << 16) | ((quint8)commentData[p+3] << 24);
+        p += 4;
+        if (p + (int)len > commentData.size()) break;
+        QByteArray comment = commentData.mid(p, len);
+        p += len;
+        if (comment.toUpper().startsWith("LYRICS=")) {
+            QString lyrics = QString::fromUtf8(comment.mid(7)).trimmed();
+            if (!lyrics.isEmpty()) return lyrics;
+        }
+    }
+    return {};
+}
+
 static QString extractEmbeddedLyricsFromFile(const QString &filePath) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return {};
@@ -1821,14 +1848,69 @@ static QString extractEmbeddedLyricsFromFile(const QString &filePath) {
         }
     }
 
+    // === Ogg/Opus (OpusTags) 与 Ogg/Vorbis（注释头）中的 LYRICS= 注释 ===
+    if (data.startsWith("OggS")) {
+        QByteArray curPacket;   // 跨页累积的 packet（lacing=255 表示分片未结束）
+        bool commentChecked = false;
+        int pos = 0;
+        while (!commentChecked && pos + 27 <= data.size() && data.mid(pos, 4) == "OggS") {
+            int segCount = (quint8)data[pos + 26];
+            int segTableEnd = pos + 27 + segCount;
+            if (segTableEnd > data.size()) break;
+            int payloadLen = 0;
+            for (int i = 0; i < segCount; ++i)
+                payloadLen += (quint8)data[pos + 27 + i];
+            int payloadStart = segTableEnd;
+            int payloadEnd = payloadStart + payloadLen;
+            if (payloadEnd > data.size()) break;
+
+            int p = payloadStart;
+            for (int i = 0; i < segCount; ++i) {
+                int segLen = (quint8)data[pos + 27 + i];
+                curPacket.append(data.mid(p, segLen));
+                p += segLen;
+                if (segLen < 255) {
+                    // packet 结束：检查是否为 OpusTags / Vorbis 注释头
+                    QByteArray commentData;
+                    if (curPacket.startsWith("OpusTags"))
+                        commentData = curPacket.mid(8);      // 跳过 "OpusTags"
+                    else if (curPacket.size() >= 7 && (quint8)curPacket[0] == 0x03
+                             && curPacket.mid(1, 6) == "vorbis")
+                        commentData = curPacket.mid(7);      // 跳过 0x03+"vorbis"
+                    if (!commentData.isEmpty()) {
+                        QString lyrics = extractVorbisLyrics(commentData);
+                        if (!lyrics.isEmpty()) return lyrics;
+                        commentChecked = true;  // 已检查注释头（无歌词），停止扫描
+                        break;
+                    }
+                    curPacket.clear();
+                }
+            }
+            pos = payloadEnd;
+        }
+    }
+
+    // === MP4/M4A (iTunes ilst: ©lyr 或 ----:com.apple.iTunes:LYRICS) ===
+    // 注意：MP4 首原子 = 4字节 size + 4字节类型（通常 "ftyp"，位于 offset 4），
+    // 不能用 startsWith("ftyp") 判断（MP3 的 "ID3"/FLAC 的 "fLaC" 才是真正的文件头）。
+    QString mp4Ext = QFileInfo(filePath).suffix().toLower();
+    bool isMp4 = (mp4Ext == "m4a" || mp4Ext == "mp4");
+    if (!isMp4 && data.size() >= 8) {
+        const QByteArray atomType = data.mid(4, 4);
+        isMp4 = (atomType == "ftyp" || atomType == "moov" || atomType == "styp");
+    }
+    if (isMp4) {
+        QMap<QString, QString> tags = MetadataReader::readMP4TextTags(filePath, nullptr);
+        QString lyrics = tags.value(QStringLiteral("LYRICS")).trimmed();
+        if (!lyrics.isEmpty()) return lyrics;
+    }
+
     return {};
 }
 
 // ---- 从媒体元数据中提取嵌入式歌词 ----
 void MusicManager::onMetaDataChanged() {
     if (m_embeddedLyricsLoaded) return;
-
-    // 优先使用外部 .lrc 文件
     if (!m_currentLyrics.isEmpty()) {
         m_embeddedLyricsLoaded = true;
         return;

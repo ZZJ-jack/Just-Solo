@@ -462,7 +462,6 @@ bool AudioEngine::load(const QString &filePath)
 
     if (result != MA_SUCCESS) {
         qWarning() << "AudioEngine: Failed to load file:" << filePath << "error:" << result;
-
         // 进入热插拔重试模式：冻结旧状态，定时尝试重新加载
         if (!m_currentFilePath.isEmpty()) {
             m_hotplugMode = true;
