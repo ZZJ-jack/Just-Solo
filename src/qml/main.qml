@@ -541,7 +541,7 @@ Window {
                 // ---- 自定义播放列表 ----
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 200
+                    Layout.fillHeight: true
                     visible: currentMenu !== "settings"
                     clip: true
                     spacing: 5
@@ -745,7 +745,7 @@ Window {
                 // ---- 歌手列表 ----
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 200
+                    Layout.fillHeight: true
                     visible: currentMenu !== "settings"
                     clip: true
                     spacing: 5
@@ -869,8 +869,8 @@ Window {
                     }
                 }
 
-                // ---- 弹性撑满（吸收剩余空间） ----
-                Item { Layout.fillHeight: true }
+                // ---- 设置页填充 ----
+                Item { Layout.fillHeight: true; visible: currentMenu === "settings" }
             }
         }
 
@@ -2480,8 +2480,9 @@ Window {
 
             // 底部按钮
             Rectangle {
-                Layout.fillWidth: true; Layout.preferredHeight: 52
+                Layout.fillWidth: true; Layout.preferredHeight: 52; radius: 10
                 color: "#222222"
+                Rectangle { width: parent.width; height: 10; color: "#222222"; anchors.top: parent.top }
                 Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.top: parent.top }
 
                 RowLayout {
@@ -2727,8 +2728,9 @@ Window {
 
             // 底部按钮
             Rectangle {
-                Layout.fillWidth: true; Layout.preferredHeight: 52
+                Layout.fillWidth: true; Layout.preferredHeight: 52; radius: 10
                 color: "#222222"
+                Rectangle { width: parent.width; height: 10; color: "#222222"; anchors.top: parent.top }
                 Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.top: parent.top }
 
                 RowLayout {
