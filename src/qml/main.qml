@@ -722,14 +722,13 @@ Window {
                     visible: currentMenu !== "settings"
                     spacing: 6
 
-                    Rectangle {
-                        Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 4; color: "transparent"
-                        Image {
-                            anchors.centerIn: parent
-                            source: "qrc:/qt/qml/JustSolo/data/image/mylike.png"
-                            sourceSize.width: 20; sourceSize.height: 20
-                            fillMode: Image.PreserveAspectFit
-                        }
+                    Label {
+                        Layout.preferredWidth: 28; Layout.preferredHeight: 28
+                        text: "🎤"
+                        font.family: appFont.name
+                        font.pixelSize: 16
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
 
                     Label {

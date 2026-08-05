@@ -1169,68 +1169,6 @@ Rectangle {
         Label { text: "运行环境: " + (typeof OS_VERSION !== "undefined" ? OS_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#777777" }
         Item { Layout.preferredHeight: 8 }
 
-        // ---- Just Solo LyricServer 协议状态 ----
-        Rectangle {
-            Layout.fillWidth: true; Layout.maximumWidth: 520
-            Layout.preferredHeight: 120; radius: 10
-            color: "#222222"; border.color: "#3A3A3A"
-
-            ColumnLayout {
-                anchors.fill: parent; anchors.margins: 18; spacing: 8
-
-                // 标题行：协议名称 + 状态徽章
-                RowLayout {
-                    Layout.fillWidth: true
-                    Label {
-                        text: "Just Solo LyricServer"
-                        font.family: fontFamily; font.pixelSize: 15; font.bold: true; color: "#ffffff"
-                    }
-                    Item { Layout.fillWidth: true }
-                    Rectangle {
-                        Layout.preferredWidth: 58; Layout.preferredHeight: 22; radius: 11
-                        color: "#222222"
-                        border.color: "#3A3A3A"
-                        RowLayout {
-                            anchors.centerIn: parent; spacing: 4
-                            Rectangle {
-                                width: 7; height: 7; radius: 3.5
-                                color: (typeof lyricServer !== "undefined" && lyricServer && lyricServer.running) ? "#3B82F6" : "#3B82F6"
-                            }
-                            Label {
-                                text: (typeof lyricServer !== "undefined" && lyricServer && lyricServer.running) ? "已启用" : "未启用"
-                                font.family: fontFamily; font.pixelSize: 11; color: (typeof lyricServer !== "undefined" && lyricServer && lyricServer.running) ? "#3B82F6" : "#3B82F6"
-                            }
-                        }
-                    }
-                }
-
-                // 版本 + 端点
-                RowLayout {
-                    Layout.fillWidth: true; spacing: 12
-                    Rectangle {
-                        Layout.preferredWidth: 68; Layout.preferredHeight: 22; radius: 6
-                        color: "#3A3A3A"
-                        Label {
-                            anchors.centerIn: parent
-                            text: LYRICSERVER_VERSION || "v1.0.0"
-                            font.family: fontFamily; font.pixelSize: 11; font.bold: true; color: "#3B82F6"
-                        }
-                    }
-                    Label {
-                        text: "ws://127.0.0.1:47290"
-                        font.family: "Cascadia Code, Consolas, monospace"; font.pixelSize: 12; color: "#777777"
-                    }
-                }
-
-                // 协议简述
-                Label {
-                    text: "单向实时歌词推送：初始化(init) · 进度(progress) · 状态(playback)"
-                    font.family: fontFamily; font.pixelSize: 11; color: "#777777"
-                    elide: Text.ElideRight; Layout.fillWidth: true
-                }
-            }
-        }
-
         Item { Layout.preferredHeight: 12 }
         Label { text: "项目地址"; font.family: fontFamily; font.pixelSize: 13; color: "#ffffff" }
         Label { text: `<a href="https://gitcode.com/ZZJ-JACK/Just-Solo">https://gitcode.com/ZZJ-JACK/Just-Solo</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#3B82F6"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
