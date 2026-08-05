@@ -91,9 +91,18 @@ void LyricServer::onNewConnection()
         connect(client, &QWebSocket::disconnected,
                 this, &LyricServer::onClientDisconnected);
 
-        // v1.2.0: 监听客户端 hello 消息（声明客户端名称）
+        // v1.1.0: 监听客户端 hello 消息（声明客户端名称）
         connect(client, &QWebSocket::textMessageReceived,
                 this, &LyricServer::onTextMessageReceived);
+
+        // 记录客户端信息
+        ClientInfo info;
+        info.name = QStringLiteral("未知客户端");
+        info.address = client->peerAddress().toString();
+        info.port = client->peerPort();
+        info.connectTime = QDateTime::currentDateTime();
+        m_clientInfo[client] = info;
+        emit connectedClientsChanged();
 
         // 超时定时器：500ms 内未收到 hello → 按未知客户端通知
         QTimer *helloTimer = new QTimer(client);
@@ -145,6 +154,9 @@ void LyricServer::onClientDisconnected()
             m_helloTimers[client]->stop();
             m_helloTimers.remove(client);
         }
+        // 清理客户端信息
+        m_clientInfo.remove(client);
+        emit connectedClientsChanged();
         client->deleteLater();
     }
 }
@@ -165,6 +177,10 @@ void LyricServer::onTextMessageReceived(const QString &message)
         QString name = obj.value("client").toString().trimmed();
         if (name.isEmpty()) name = QStringLiteral("未知客户端");
 
+        // 更新客户端名称
+        if (m_clientInfo.contains(client))
+            m_clientInfo[client].name = name;
+
         // 取消超时定时器
         if (m_helloTimers.contains(client)) {
             m_helloTimers[client]->stop();
@@ -174,6 +190,7 @@ void LyricServer::onTextMessageReceived(const QString &message)
         if (m_devMode)
             qDebug("JustSolo LyricServer: 客户端 hello — %s", qPrintable(name));
 
+        emit connectedClientsChanged();
         emit clientConnected(name);
     }
     // 非 hello 消息：忽略（向下兼容，旧客户端不发送任何消息）
@@ -266,4 +283,20 @@ QByteArray LyricServer::buildInitPayload() const
     msg["lyrics"] = arr;
 
     return QJsonDocument(msg).toJson(QJsonDocument::Compact);
+}
+
+// 返回已连接客户端列表（供 QML 显示）
+QVariantList LyricServer::connectedClients() const
+{
+    QVariantList list;
+    for (auto it = m_clientInfo.constBegin(); it != m_clientInfo.constEnd(); ++it) {
+        const ClientInfo &info = it.value();
+        QVariantMap map;
+        map["name"] = info.name;
+        map["address"] = info.address;
+        map["port"] = info.port;
+        map["connectTime"] = info.connectTime.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+        list.append(map);
+    }
+    return list;
 }

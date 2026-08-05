@@ -1241,6 +1241,131 @@ Rectangle {
         Item { Layout.fillHeight: true }
     }
 
+    // ---- LyricServer 管理页 ----
+    ColumnLayout {
+        anchors.fill: parent; spacing: 0
+        visible: settingsSubMenu === "lyricserver"
+
+        Item { Layout.preferredHeight: 8 }
+
+        // 服务状态卡片
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 80; radius: 8
+            color: "#222222"; border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.leftMargin: 20; anchors.rightMargin: 20
+                anchors.topMargin: 14; anchors.bottomMargin: 14; spacing: 6
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "LyricServer 服务状态"
+                        font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        width: 10; height: 10; radius: 5
+                        color: lyricServer && lyricServer.running ? "#4ade80" : "#ef4444"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Label {
+                        text: lyricServer && lyricServer.running ? "运行中" : "未启用"
+                        font.family: fontFamily; font.pixelSize: 13
+                        color: lyricServer && lyricServer.running ? "#4ade80" : "#f87171"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                }
+
+                Label {
+                    text: lyricServer && lyricServer.running
+                          ? "地址: ws://127.0.0.1:47290  |  协议版本: " + LYRICSERVER_VERSION
+                          : "端口 47290 被占用或启动失败"
+                    font.family: fontFamily; font.pixelSize: 12; color: "#777777"
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 16 }
+
+        // 已连接客户端列表
+        Label {
+            text: "已连接客户端（" + (lyricServer ? lyricServer.connectedClients.length : 0) + "）"
+            font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+        }
+
+        Item { Layout.preferredHeight: 8 }
+
+        // 客户端列表区域
+        ListView {
+            Layout.fillWidth: true; Layout.fillHeight: true
+            Layout.maximumWidth: 520
+            clip: true
+            spacing: 1
+            model: lyricServer ? lyricServer.connectedClients : []
+
+            // 空状态
+            Label {
+                anchors.centerIn: parent
+                text: "暂无客户端连接"
+                font.family: fontFamily; font.pixelSize: 14; color: "#666"
+                visible: lyricServer && lyricServer.connectedClients.length === 0
+            }
+
+            delegate: Rectangle {
+                width: ListView.view.width
+                height: 72
+                color: "#1E1E1E"
+                radius: 6
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 16; anchors.rightMargin: 16
+                    anchors.topMargin: 10; anchors.bottomMargin: 10
+                    spacing: 4
+
+                    RowLayout {
+                        Layout.fillWidth: true
+
+                        // 客户端名称
+                        Label {
+                            text: modelData.name
+                            font.family: fontFamily; font.pixelSize: 14; color: "#ddd"
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        // 连接时间
+                        Label {
+                            text: modelData.connectTime
+                            font.family: fontFamily; font.pixelSize: 11; color: "#666"
+                        }
+                    }
+
+                    // 地址和端口
+                    Label {
+                        text: "地址: " + modelData.address + ":" + modelData.port
+                        font.family: fontFamily; font.pixelSize: 12; color: "#888"
+                    }
+                }
+            }
+
+            // 滚动条
+            ScrollBar.vertical: ScrollBar {
+                policy: ScrollBar.AsNeeded
+                contentItem: Rectangle {
+                    implicitWidth: 4; radius: 2
+                    visible: parent.size < 1.0
+                    color: parent.pressed ? "#888" : "#555"
+                }
+            }
+        }
+
+        Item { Layout.fillHeight: true }
+    }
+
     // ---- 文件夹选择对话框（下载用） ----
     FolderDialog {
         id: folderDialog

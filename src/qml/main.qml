@@ -446,6 +446,12 @@ Window {
                         onClicked: settingsSubMenu = "update"
                     }
                     SubNavItem {
+                        label: "LyricServer管理"
+                        active: settingsSubMenu === "lyricserver"
+                        fontFamily: appFont.name
+                        onClicked: settingsSubMenu = "lyricserver"
+                    }
+                    SubNavItem {
                         label: "关于JustSolo"
                         active: settingsSubMenu === "about"
                         fontFamily: appFont.name
@@ -1162,7 +1168,8 @@ Window {
                               : (settingsSubMenu === "playback" ? "播放设置"
                               : (settingsSubMenu === "hotkeys" ? "快捷键设置"
                               : (settingsSubMenu === "update" ? "软件更新"
-                              : (settingsSubMenu === "appearance" ? "外观设置" : "关于JustSolo"))))
+                              : (settingsSubMenu === "lyricserver" ? "LyricServer管理"
+                              : (settingsSubMenu === "appearance" ? "外观设置" : "关于JustSolo")))))
                         font.family: appFont.name
                         font.pixelSize: 24
                         font.bold: true

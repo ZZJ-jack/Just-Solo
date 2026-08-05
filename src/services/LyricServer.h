@@ -5,6 +5,9 @@
 #include <QList>
 #include <QTimer>
 #include <QHash>
+#include <QVariantList>
+#include <QVariantMap>
+#include <QDateTime>
 
 class MusicManager;
 class QWebSocketServer;
@@ -12,18 +15,12 @@ class QWebSocket;
 
 /**
  * 实时歌词推送服务端（WebSocket）
- *
- * 单向推送三个接口（详见《Just Solo LyricServer 协议 v1.0.0》）：
- *   - init      切歌时推送完整歌词时间轴
- *   - progress  播放中每 300ms 推送当前进度（毫秒）
- *   - playback  播放/暂停状态变化时推送
- *
- * v1.2.0 新增：客户端可发送 hello 消息声明名称（向下兼容）
  */
 class LyricServer : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool running READ isRunning NOTIFY runningChanged)
+    Q_PROPERTY(QVariantList connectedClients READ connectedClients NOTIFY connectedClientsChanged)
 
 public:
     explicit LyricServer(MusicManager *mgr, bool devMode = false, QObject *parent = nullptr);
@@ -34,9 +31,13 @@ public:
     bool isRunning() const;
     static QString protocolVersion();
 
+    // 已连接客户端列表（供 QML 显示）
+    QVariantList connectedClients() const;
+
 signals:
     void runningChanged();
     void clientConnected(const QString &clientName);   // 第三方客户端连接
+    void connectedClientsChanged();
 
 private slots:
     void onNewConnection();
@@ -51,12 +52,20 @@ private:
     QByteArray buildInitPayload() const;
     void sendProgress();         // 构建并广播一帧 progress
 
+    struct ClientInfo {
+        QString name;
+        QString address;
+        quint16 port = 0;
+        QDateTime connectTime;
+    };
+
     MusicManager *m_mgr;
     QWebSocketServer *m_server;
     QList<QWebSocket *> m_clients;
     QTimer *m_progressTimer;
-    bool m_devMode = false;      // 开发者模式（--develop）：输出客户端连接日志
+    bool m_devMode = false;
     QHash<QWebSocket *, QTimer *> m_helloTimers;  // hello 超时定时器
+    QHash<QWebSocket *, ClientInfo> m_clientInfo;  // 客户端详细信息
 };
 
 #endif // LYRICSERVER_H
