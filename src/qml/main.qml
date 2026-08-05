@@ -229,8 +229,9 @@ Window {
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.bottom: createListBtn.top
+                anchors.bottom: parent.bottom
                 anchors.topMargin: 10
+                anchors.bottomMargin: 8
                 anchors.leftMargin: 16
                 anchors.rightMargin: 16
                 spacing: 0
@@ -461,8 +462,49 @@ Window {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
                     Layout.topMargin: 12
-                    Layout.bottomMargin: 12
+                    Layout.bottomMargin: 8
                     color: "#3A3A3A2B"
+                }
+
+                // ---- 自定义列表板块标题 + 新建按钮 ----
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 28
+                    Layout.bottomMargin: 6
+                    visible: currentMenu !== "settings"
+                    spacing: 6
+
+                    Label {
+                        text: "自定义列表"
+                        font.family: appFont.name
+                        font.pixelSize: 12
+                        color: "#999"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Rectangle {
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                        Layout.alignment: Qt.AlignVCenter
+                        radius: 4
+                        color: sidebarCreateMA.containsMouse ? "#222222" : "transparent"
+
+                        Image {
+                            anchors.centerIn: parent
+                            source: "qrc:/qt/qml/JustSolo/data/image/creatList.png"
+                            sourceSize.width: 18
+                            sourceSize.height: 18
+                        }
+
+                        MouseArea {
+                            id: sidebarCreateMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: createListDialog.open()
+                        }
+                    }
                 }
 
                 // ---- 自定义播放列表 ----
@@ -473,6 +515,16 @@ Window {
                     clip: true
                     spacing: 5
                     model: musicManager.customPlaylists
+
+                    ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AsNeeded
+                        contentItem: Rectangle {
+                            implicitWidth: 4
+                            radius: 2
+                            visible: parent.size < 1.0
+                            color: parent.pressed ? "#888" : "#555"
+                        }
+                    }
 
                     delegate: Rectangle {
                         width: ListView.view.width
@@ -606,55 +658,6 @@ Window {
 
                 // ---- 弹性撑满 ----
                 Item { Layout.fillHeight: true }
-            }
-
-            // ---- 创建新列表（参照 NavItem 样式） ----
-            Rectangle {
-                id: createListBtn
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottomMargin: 8
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                height: 36
-                radius: 6
-                z: 10
-                visible: currentMenu !== "settings"
-                color: sidebarCreateMA.containsMouse ? "#222222" : "transparent"
-
-                Row {
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.left: parent.left
-                    anchors.leftMargin: 12
-                    spacing: 10
-
-                    Rectangle {
-                        width: 28; height: 28; radius: 4; color: "transparent"
-
-                        Image {
-                            anchors.centerIn: parent
-                            source: "qrc:/qt/qml/JustSolo/data/image/creatList.png"
-                            sourceSize.width: 22
-                            sourceSize.height: 22
-                        }
-                    }
-
-                    Label {
-                        text: "创建新列表"
-                        font.family: appFont.name
-                        font.pixelSize: 15
-                        color: sidebarCreateMA.containsMouse ? "#cccccc" : "#888"
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-                }
-
-                MouseArea {
-                    id: sidebarCreateMA
-                    anchors.fill: parent; hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: createListDialog.open()
-                }
             }
         }
 
