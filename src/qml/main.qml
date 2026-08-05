@@ -1164,7 +1164,7 @@ Window {
         id: importOverlayComp
         Rectangle {
             anchors.fill: parent
-            color: "#1e1e2e"
+            color: "#181818"
 
             ColumnLayout {
                 anchors.centerIn: parent
@@ -1188,7 +1188,7 @@ Window {
                     width: 320; height: 6; radius: 3; color: "#1E1E1E"
                     Layout.alignment: Qt.AlignHCenter
                     Rectangle {
-                        height: parent.height; radius: 3; color: "#00d4ff"
+                        height: parent.height; radius: 3; color: "#3B82F6"
                         width: parent.width * musicManager.importProgress
                         Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
                     }

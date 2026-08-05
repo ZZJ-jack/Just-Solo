@@ -312,6 +312,10 @@ private:
     // 嵌入式歌词异步加载
     bool m_embeddedLyricsLoaded = false;
 
+    // 导入时未识别到歌手 → 阻塞弹窗（QDialog）：返回 0=应用, 1=跳过, 2=取消
+    int promptMissingInfo(const QString &filePath, const QString &defaultTitle,
+                          QString *outTitle, QString *outArtist, QString *outAlbum);
+
     AudioEngine *m_audioEngine = nullptr;
 };
 

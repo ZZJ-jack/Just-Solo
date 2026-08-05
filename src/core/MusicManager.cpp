@@ -23,7 +23,15 @@
 #include <QRegularExpression>
 #include <QFontDatabase>
 #include <QSet>
-#include <algorithm>
+#include <QApplication>
+#include <QDialog>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QRadioButton>
+#include <QButtonGroup>
+#include <QPushButton>
 
 // ============================================================
 // 工具函数
@@ -1004,6 +1012,24 @@ void MusicManager::processNextPending() {
     while (!m_pendingPaths.isEmpty() && processed < BATCH_SIZE) {
         QString path = m_pendingPaths.takeFirst();
         QVariantMap track = buildTrack(path);
+
+        // 未识别到歌手 → 弹窗让用户从文件名识别或手动输入
+        if (track["artist"].toString().isEmpty()) {
+            QString infoTitle, infoArtist, infoAlbum;
+            int infoResult = promptMissingInfo(track["path"].toString(),
+                                               track["name"].toString(),
+                                               &infoTitle, &infoArtist, &infoAlbum);
+            if (infoResult == 0) {
+                if (!infoTitle.isEmpty())  track["name"]   = infoTitle;
+                if (!infoArtist.isEmpty()) track["artist"] = normalizeArtist(infoArtist);
+                if (!infoAlbum.isEmpty())  track["album"]  = infoAlbum;
+            } else if (infoResult == 2) {
+                // 取消：清空剩余待处理文件，终止本次导入
+                m_pendingPaths.clear();
+                break;
+            }
+            // infoResult == 1（跳过）：保持原解析结果
+        }
 
         QString filePath = track["path"].toString();
         QString songKey = track["name"].toString() + "|||" + track["artist"].toString();
@@ -2263,4 +2289,266 @@ QVariantList MusicManager::loadLyricsForFile(const QString &filePath) {
     });
 
     return result;
+}
+
+// ============================================================
+// 导入信息缺失弹窗（未识别到歌手/歌名）
+// ============================================================
+
+// 从文件名解析歌手/歌名：order 0=歌手在前,1=歌名在前；sep 0='-',1=空格
+static void parseFileNameParts(const QString &fileName, int order, int sep,
+                               QString *outTitle, QString *outArtist) {
+    QString base = QFileInfo(fileName).completeBaseName().trimmed();
+    if (base.isEmpty()) return;
+
+    QString a, b;
+    if (sep == 0) {
+        static const QRegularExpression reDash(R"(^(.+?)\s*[-–—]\s*(.+)$)");
+        QRegularExpressionMatch m = reDash.match(base);
+        if (!m.hasMatch()) return;
+        a = m.captured(1).trimmed();
+        b = m.captured(2).trimmed();
+    } else {
+        static const QRegularExpression reSpace(R"(^(.+?)\s+(\S.*)$)");
+        QRegularExpressionMatch m = reSpace.match(base);
+        if (!m.hasMatch()) return;
+        a = m.captured(1).trimmed();
+        b = m.captured(2).trimmed();
+    }
+    if (a.isEmpty() || b.isEmpty()) return;
+
+    if (order == 0) {           // 歌手 - 歌名
+        if (outArtist) *outArtist = a;
+        if (outTitle)  *outTitle  = b;
+    } else {                    // 歌名 - 歌手
+        if (outTitle)  *outTitle  = a;
+        if (outArtist) *outArtist = b;
+    }
+}
+
+// 信息缺失弹窗（QDialog，深色主题与主界面一致）。
+// action: 0=应用, 1=跳过, 2=取消（关闭窗口/Esc 视为取消）
+class TrackInfoDialog : public QDialog
+{
+public:
+    int action = 2;
+
+    TrackInfoDialog(const QString &fileName, const QString &defaultTitle, QWidget *parent = nullptr)
+        : QDialog(parent)
+        , m_fileName(fileName)
+    {
+        setWindowTitle(QStringLiteral("未识别到歌曲信息"));
+        setModal(true);
+        setMinimumWidth(430);
+
+        setStyleSheet(QStringLiteral(
+            "QDialog { background-color: #222222; }"
+            "QLabel { color: #dddddd; font-size: 13px; }"
+            "QLabel#hint { color: #888888; }"
+            "QLabel#preview { background-color: #1E1E1E; color: #dddddd;"
+            "  border: 1px solid #3A3A3A; border-radius: 4px; padding: 8px; }"
+            "QLineEdit { background-color: #333333; color: #dddddd;"
+            "  border: 1px solid #3A3A3A; border-radius: 4px; padding: 5px 8px; font-size: 13px; }"
+            "QRadioButton { color: #dddddd; font-size: 13px; spacing: 6px; }"
+            "QPushButton { background-color: #1E1E1E; color: #cccccc;"
+            "  border: 1px solid #3A3A3A; border-radius: 4px; padding: 6px 16px; font-size: 13px; }"
+            "QPushButton:hover { background-color: #333333; }"
+            "QPushButton:default { background-color: #3B82F6; color: #ffffff; }"
+            "QPushButton:default:hover { background-color: #5B9EF6; }"
+        ));
+
+        auto *mainLayout = new QVBoxLayout(this);
+        mainLayout->setContentsMargins(18, 16, 18, 14);
+        mainLayout->setSpacing(10);
+
+        auto *fileLabel = new QLabel(QStringLiteral("文件名：%1").arg(fileName), this);
+        fileLabel->setObjectName("hint");
+        fileLabel->setWordWrap(true);
+        mainLayout->addWidget(fileLabel);
+
+        // 识别方式
+        m_autoRadio = new QRadioButton(QStringLiteral("自动识别文件名"), this);
+        m_manualRadio = new QRadioButton(QStringLiteral("手动输入"), this);
+        m_autoRadio->setChecked(true);
+        auto *modeRow = new QHBoxLayout;
+        modeRow->addWidget(m_autoRadio);
+        modeRow->addWidget(m_manualRadio);
+        modeRow->addStretch();
+        mainLayout->addLayout(modeRow);
+
+        // 自动识别：顺序 + 分隔符 + 预览
+        m_autoBox = new QWidget(this);
+        auto *autoLayout = new QVBoxLayout(m_autoBox);
+        autoLayout->setContentsMargins(0, 0, 0, 0);
+        autoLayout->setSpacing(8);
+
+        auto *orderRow = new QHBoxLayout;
+        orderRow->setSpacing(6);
+        orderRow->addWidget(new QLabel(QStringLiteral("顺序："), m_autoBox));
+        m_artistFirstRadio = new QRadioButton(QStringLiteral("歌手 - 歌名"), m_autoBox);
+        m_titleFirstRadio  = new QRadioButton(QStringLiteral("歌名 - 歌手"), m_autoBox);
+        m_artistFirstRadio->setChecked(true);
+        auto *orderGroup = new QButtonGroup(this);
+        orderGroup->addButton(m_artistFirstRadio, 0);
+        orderGroup->addButton(m_titleFirstRadio, 1);
+        orderRow->addWidget(m_artistFirstRadio);
+        orderRow->addWidget(m_titleFirstRadio);
+        orderRow->addSpacing(14);
+        orderRow->addWidget(new QLabel(QStringLiteral("分隔："), m_autoBox));
+        m_dashRadio  = new QRadioButton(QStringLiteral("-"), m_autoBox);
+        m_spaceRadio = new QRadioButton(QStringLiteral("空格"), m_autoBox);
+        m_dashRadio->setChecked(true);
+        auto *sepGroup = new QButtonGroup(this);
+        sepGroup->addButton(m_dashRadio, 0);
+        sepGroup->addButton(m_spaceRadio, 1);
+        orderRow->addWidget(m_dashRadio);
+        orderRow->addWidget(m_spaceRadio);
+        orderRow->addStretch();
+        autoLayout->addLayout(orderRow);
+
+        m_previewLabel = new QLabel(m_autoBox);
+        m_previewLabel->setObjectName("preview");
+        autoLayout->addWidget(m_previewLabel);
+        m_autoBox->setLayout(autoLayout);
+        mainLayout->addWidget(m_autoBox);
+
+        // 手动输入
+        m_manualBox = new QWidget(this);
+        auto *manualLayout = new QVBoxLayout(m_manualBox);
+        manualLayout->setContentsMargins(0, 0, 0, 0);
+        manualLayout->setSpacing(8);
+        m_artistEdit = new QLineEdit(m_manualBox);
+        m_artistEdit->setPlaceholderText(QStringLiteral("歌手（必填）"));
+        m_titleEdit = new QLineEdit(m_manualBox);
+        m_titleEdit->setPlaceholderText(QStringLiteral("歌名（必填）"));
+        m_titleEdit->setText(defaultTitle);
+        manualLayout->addWidget(m_artistEdit);
+        manualLayout->addWidget(m_titleEdit);
+        m_manualBox->setLayout(manualLayout);
+        m_manualBox->hide();
+        mainLayout->addWidget(m_manualBox);
+
+        // 专辑（可选）
+        m_albumEdit = new QLineEdit(this);
+        m_albumEdit->setPlaceholderText(QStringLiteral("专辑（可选，不填则留空）"));
+        mainLayout->addWidget(m_albumEdit);
+
+        // 按钮
+        auto *btnRow = new QHBoxLayout;
+        btnRow->addStretch();
+        m_cancelBtn = new QPushButton(QStringLiteral("取消导入"), this);
+        m_skipBtn   = new QPushButton(QStringLiteral("跳过"), this);
+        m_okBtn     = new QPushButton(QStringLiteral("确定"), this);
+        m_okBtn->setDefault(true);
+        btnRow->addWidget(m_cancelBtn);
+        btnRow->addWidget(m_skipBtn);
+        btnRow->addWidget(m_okBtn);
+        mainLayout->addLayout(btnRow);
+
+        // 自动选择能成功解析的分隔符：先试 '-', 不行再试空格
+        {
+            QString t, a;
+            parseFileNameParts(m_fileName, 0, 0, &t, &a);
+            if (t.isEmpty() || a.isEmpty()) {
+                parseFileNameParts(m_fileName, 0, 1, &t, &a);
+                if (!t.isEmpty() && !a.isEmpty())
+                    m_spaceRadio->setChecked(true);
+            }
+        }
+
+        auto updateMode = [this](bool) {
+            const bool autoMode = m_autoRadio->isChecked();
+            m_autoBox->setVisible(autoMode);
+            m_manualBox->setVisible(!autoMode);
+            updatePreview();
+            updateOk();
+        };
+        connect(m_autoRadio, &QRadioButton::toggled, this, updateMode);
+        connect(m_manualRadio, &QRadioButton::toggled, this, updateMode);
+        connect(m_artistFirstRadio, &QRadioButton::toggled, this, [this]() { updatePreview(); updateOk(); });
+        connect(m_titleFirstRadio,  &QRadioButton::toggled, this, [this]() { updatePreview(); updateOk(); });
+        connect(m_dashRadio,        &QRadioButton::toggled, this, [this]() { updatePreview(); updateOk(); });
+        connect(m_spaceRadio,       &QRadioButton::toggled, this, [this]() { updatePreview(); updateOk(); });
+        connect(m_artistEdit, &QLineEdit::textChanged, this, [this]() { updateOk(); });
+        connect(m_titleEdit,  &QLineEdit::textChanged, this, [this]() { updateOk(); });
+        connect(m_cancelBtn, &QPushButton::clicked, this, [this]() { action = 2; reject(); });
+        connect(m_skipBtn,   &QPushButton::clicked, this, [this]() { action = 1; reject(); });
+        connect(m_okBtn,     &QPushButton::clicked, this, [this]() { action = 0; accept(); });
+
+        updatePreview();
+        updateOk();
+
+        // 锁定窗口尺寸（以较高的“自动识别”模式为准），切换自动/手动时窗口大小不再跳动
+        adjustSize();
+        setFixedSize(sizeHint());
+    }
+
+    QString title() const  { return m_titleEdit->text().trimmed(); }
+    QString artist() const { return m_artistEdit->text().trimmed(); }
+    QString album() const  { return m_albumEdit->text().trimmed(); }
+
+private:
+    void currentAuto(QString *outTitle, QString *outArtist) const {
+        const int order = m_artistFirstRadio->isChecked() ? 0 : 1;
+        const int sep   = m_dashRadio->isChecked() ? 0 : 1;
+        parseFileNameParts(m_fileName, order, sep, outTitle, outArtist);
+    }
+
+    void updatePreview() {
+        if (!m_autoRadio->isChecked()) return;
+        QString t, a;
+        currentAuto(&t, &a);
+        if (t.isEmpty() && a.isEmpty()) {
+            m_previewLabel->setText(QStringLiteral("歌手：（无法识别）\n歌名：（无法识别）"));
+        } else {
+            m_previewLabel->setText(QStringLiteral("歌手：%1\n歌名：%2")
+                .arg(a.isEmpty() ? QStringLiteral("（无法识别）") : a,
+                     t.isEmpty() ? QStringLiteral("（无法识别）") : t));
+        }
+        // 同步到手动输入框，便于切换方式后直接确认
+        m_titleEdit->setText(t);
+        m_artistEdit->setText(a);
+    }
+
+    void updateOk() {
+        if (m_autoRadio->isChecked()) {
+            QString t, a;
+            currentAuto(&t, &a);
+            m_okBtn->setEnabled(!t.isEmpty() && !a.isEmpty());
+        } else {
+            m_okBtn->setEnabled(!m_titleEdit->text().trimmed().isEmpty()
+                             && !m_artistEdit->text().trimmed().isEmpty());
+        }
+    }
+
+    QString m_fileName;
+    QRadioButton *m_autoRadio = nullptr;
+    QRadioButton *m_manualRadio = nullptr;
+    QRadioButton *m_artistFirstRadio = nullptr;
+    QRadioButton *m_titleFirstRadio = nullptr;
+    QRadioButton *m_dashRadio = nullptr;
+    QRadioButton *m_spaceRadio = nullptr;
+    QLabel *m_previewLabel = nullptr;
+    QWidget *m_autoBox = nullptr;
+    QWidget *m_manualBox = nullptr;
+    QLineEdit *m_artistEdit = nullptr;
+    QLineEdit *m_titleEdit = nullptr;
+    QLineEdit *m_albumEdit = nullptr;
+    QPushButton *m_cancelBtn = nullptr;
+    QPushButton *m_skipBtn = nullptr;
+    QPushButton *m_okBtn = nullptr;
+};
+
+// 阻塞弹窗（QDialog::exec）：返回 0=应用, 1=跳过, 2=取消
+int MusicManager::promptMissingInfo(const QString &filePath, const QString &defaultTitle,
+                                    QString *outTitle, QString *outArtist, QString *outAlbum) {
+    TrackInfoDialog dlg(QFileInfo(filePath).completeBaseName(), defaultTitle,
+                        QApplication::activeWindow());
+    if (dlg.exec() == QDialog::Accepted) {
+        if (outTitle)  *outTitle  = dlg.title();
+        if (outArtist) *outArtist = dlg.artist();
+        if (outAlbum)  *outAlbum  = dlg.album();
+        return 0;
+    }
+    return dlg.action;  // 1=跳过, 2=取消
 }
