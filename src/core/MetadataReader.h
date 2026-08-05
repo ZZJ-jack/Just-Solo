@@ -11,6 +11,7 @@ struct AudioMetadata {
     QString album;
     QString coverPath;   // 已缓存的 file:/// 格式路径，空=无封面
     int     durationSecs = 0;  // 0=未知
+    bool    tagFound = false;  // 是否从文件内读取到标题/歌手/专辑标签
 };
 
 class MetadataReader
@@ -20,6 +21,8 @@ public:
     static AudioMetadata read(const QString &filePath, const QString &cacheDir);
     // MP4/M4A - 解析 ilst 文本标签（©nam/©ART/©alb/©lyr/----:LYRICS）+ covr 封面
     static QMap<QString, QString> readMP4TextTags(const QString &filePath, QImage *outCover);
+    // Ogg/Opus - 解析 OpusTags / Vorbis 注释头，返回 TITLE/ARTIST/ALBUM/LYRICS
+    static QMap<QString, QString> readOggTags(const QString &filePath, QImage *outCover);
 
 private:
     // ID3v2 (MP3) - 返回 text frame 字典 + 封面 + TLEN 时长

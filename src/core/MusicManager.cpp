@@ -23,7 +23,6 @@
 #include <QRegularExpression>
 #include <QFontDatabase>
 #include <QSet>
-#include <QApplication>
 #include <QDialog>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -165,7 +164,8 @@ static QVariantMap buildTrack(const QString &filePath)
 
     // ---- 快路径：MetadataReader 二进制解析（无 QMediaPlayer 开销） ----
     QString ext = fi.suffix().toLower();
-    bool fastPath = (ext == "mp3" || ext == "flac" || ext == "m4a" || ext == "mp4");
+    bool fastPath = (ext == "mp3" || ext == "flac" || ext == "m4a" || ext == "mp4"
+                     || ext == "ogg" || ext == "opus");
 
     if (fastPath) {
         AudioMetadata meta = MetadataReader::read(filePath, coverDir());
@@ -195,6 +195,8 @@ static QVariantMap buildTrack(const QString &filePath)
                 player.setSource(QUrl::fromLocalFile(filePath));
                 fb.start(2000);
                 loop.exec();
+                qDebug() << "[ImportDebug] fastpath QMediaPlayer duration done for" << filePath
+                         << "dur=" << player.duration();
 
                 dur = (int)(player.duration() / 1000);
                 if (dur > 0 && dur <= 3600)
@@ -230,6 +232,7 @@ static QVariantMap buildTrack(const QString &filePath)
             track["durationText"] = durText;
             track["cover"]        = cover;
             track["quality"]      = guessQualityFromExtension(fi);
+            track["_infoInferred"] = !meta.tagFound;  // 无标签 → 歌手/歌名来自文件名推断
             return track;
         }
     }
@@ -253,6 +256,7 @@ static QVariantMap buildTrack(const QString &filePath)
     player.setSource(QUrl::fromLocalFile(filePath));
     fallbackTimer.start(1000);
     loop.exec();
+    qDebug() << "[ImportDebug] slowpath QMediaPlayer loop done for" << filePath;
 
     QString title  = player.metaData().value(QMediaMetaData::Title).toString();
     QString artist = player.metaData().value(QMediaMetaData::ContributingArtist).toString();
@@ -260,6 +264,7 @@ static QVariantMap buildTrack(const QString &filePath)
         artist = player.metaData().value(QMediaMetaData::Author).toString();
     QString album  = player.metaData().value(QMediaMetaData::AlbumTitle).toString();
     int duration   = (int)(player.duration() / 1000);
+    bool hadTags = !title.isEmpty() || !artist.isEmpty() || !album.isEmpty();
 
     if (title.isEmpty() && artist.isEmpty()) {
         int sep = fi.baseName().indexOf(" - ");
@@ -282,6 +287,7 @@ static QVariantMap buildTrack(const QString &filePath)
     track["duration"] = duration;
     track["durationText"] = durText;
     track["quality"]  = detectQualityLabel(filePath, player);
+    track["_infoInferred"] = !hadTags;  // 无标签 → 歌手/歌名来自文件名推断
 
     QImage coverImg;
     QMediaMetaData md = player.metaData();
@@ -1011,14 +1017,20 @@ void MusicManager::processNextPending() {
 
     while (!m_pendingPaths.isEmpty() && processed < BATCH_SIZE) {
         QString path = m_pendingPaths.takeFirst();
+        qDebug() << "[ImportDebug] buildTrack start" << path;
         QVariantMap track = buildTrack(path);
+        qDebug() << "[ImportDebug] buildTrack done artist=" << track["artist"]
+                 << "name=" << track["name"];
 
-        // 未识别到歌手 → 弹窗让用户从文件名识别或手动输入
-        if (track["artist"].toString().isEmpty()) {
+        // 未识别到歌手，或歌手/歌名是从文件名推断的（可能有顺序错误）→ 弹窗确认
+        bool infoInferred = track.take("_infoInferred").toBool();
+        if (track["artist"].toString().isEmpty() || infoInferred) {
             QString infoTitle, infoArtist, infoAlbum;
             int infoResult = promptMissingInfo(track["path"].toString(),
                                                track["name"].toString(),
                                                &infoTitle, &infoArtist, &infoAlbum);
+            qDebug() << "[ImportDebug] prompt result=" << infoResult
+                     << "title=" << infoTitle << "artist=" << infoArtist;
             if (infoResult == 0) {
                 if (!infoTitle.isEmpty())  track["name"]   = infoTitle;
                 if (!infoArtist.isEmpty()) track["artist"] = normalizeArtist(infoArtist);
@@ -2385,14 +2397,14 @@ public:
         auto *orderRow = new QHBoxLayout;
         orderRow->setSpacing(6);
         orderRow->addWidget(new QLabel(QStringLiteral("顺序："), m_autoBox));
-        m_artistFirstRadio = new QRadioButton(QStringLiteral("歌手 - 歌名"), m_autoBox);
         m_titleFirstRadio  = new QRadioButton(QStringLiteral("歌名 - 歌手"), m_autoBox);
-        m_artistFirstRadio->setChecked(true);
+        m_artistFirstRadio = new QRadioButton(QStringLiteral("歌手 - 歌名"), m_autoBox);
+        m_titleFirstRadio->setChecked(true);   // 默认“歌名 - 歌手”（常见下载命名）
         auto *orderGroup = new QButtonGroup(this);
         orderGroup->addButton(m_artistFirstRadio, 0);
         orderGroup->addButton(m_titleFirstRadio, 1);
-        orderRow->addWidget(m_artistFirstRadio);
         orderRow->addWidget(m_titleFirstRadio);
+        orderRow->addWidget(m_artistFirstRadio);
         orderRow->addSpacing(14);
         orderRow->addWidget(new QLabel(QStringLiteral("分隔："), m_autoBox));
         m_dashRadio  = new QRadioButton(QStringLiteral("-"), m_autoBox);
@@ -2446,11 +2458,12 @@ public:
         mainLayout->addLayout(btnRow);
 
         // 自动选择能成功解析的分隔符：先试 '-', 不行再试空格
+        // （使用默认顺序“歌名 - 歌手”）
         {
             QString t, a;
-            parseFileNameParts(m_fileName, 0, 0, &t, &a);
+            parseFileNameParts(m_fileName, 1, 0, &t, &a);
             if (t.isEmpty() || a.isEmpty()) {
-                parseFileNameParts(m_fileName, 0, 1, &t, &a);
+                parseFileNameParts(m_fileName, 1, 1, &t, &a);
                 if (!t.isEmpty() && !a.isEmpty())
                     m_spaceRadio->setChecked(true);
             }
@@ -2499,11 +2512,11 @@ private:
         QString t, a;
         currentAuto(&t, &a);
         if (t.isEmpty() && a.isEmpty()) {
-            m_previewLabel->setText(QStringLiteral("歌手：（无法识别）\n歌名：（无法识别）"));
+            m_previewLabel->setText(QStringLiteral("歌名：（无法识别）\n歌手：（无法识别）"));
         } else {
-            m_previewLabel->setText(QStringLiteral("歌手：%1\n歌名：%2")
-                .arg(a.isEmpty() ? QStringLiteral("（无法识别）") : a,
-                     t.isEmpty() ? QStringLiteral("（无法识别）") : t));
+            m_previewLabel->setText(QStringLiteral("歌名：%1\n歌手：%2")
+                .arg(t.isEmpty() ? QStringLiteral("（无法识别）") : t,
+                     a.isEmpty() ? QStringLiteral("（无法识别）") : a));
         }
         // 同步到手动输入框，便于切换方式后直接确认
         m_titleEdit->setText(t);
@@ -2542,9 +2555,16 @@ private:
 // 阻塞弹窗（QDialog::exec）：返回 0=应用, 1=跳过, 2=取消
 int MusicManager::promptMissingInfo(const QString &filePath, const QString &defaultTitle,
                                     QString *outTitle, QString *outArtist, QString *outAlbum) {
-    TrackInfoDialog dlg(QFileInfo(filePath).completeBaseName(), defaultTitle,
-                        QApplication::activeWindow());
-    if (dlg.exec() == QDialog::Accepted) {
+    TrackInfoDialog dlg(QFileInfo(filePath).completeBaseName(), defaultTitle);
+    // 确保弹窗显示在 QML 主窗口之上（QWidget 弹窗与 QQuickWindow 可能存在层级问题）
+    QTimer::singleShot(0, &dlg, [&dlg]() {
+        dlg.raise();
+        dlg.activateWindow();
+    });
+    qDebug() << "[ImportDebug] promptMissingInfo exec start" << filePath;
+    const int rc = dlg.exec();
+    qDebug() << "[ImportDebug] promptMissingInfo exec done rc=" << rc;
+    if (rc == QDialog::Accepted) {
         if (outTitle)  *outTitle  = dlg.title();
         if (outArtist) *outArtist = dlg.artist();
         if (outAlbum)  *outAlbum  = dlg.album();

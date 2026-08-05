@@ -27,6 +27,7 @@ AudioMetadata MetadataReader::read(const QString &filePath, const QString &cache
         meta.title  = tags.value("TIT2");
         meta.artist = tags.value("TPE1");
         meta.album  = tags.value("TALB");
+        meta.tagFound = !tags.isEmpty();
         // TLEN 帧 → 毫秒
         if (tags.contains("TLEN")) {
             bool ok = false;
@@ -51,11 +52,19 @@ AudioMetadata MetadataReader::read(const QString &filePath, const QString &cache
         meta.title  = tags.value("TITLE");
         meta.artist = tags.value("ARTIST");
         meta.album  = tags.value("ALBUM");
+        meta.tagFound = !tags.isEmpty();
     } else if (ext == "m4a" || ext == "mp4") {
         QMap<QString, QString> tags = readMP4TextTags(filePath, &embeddedCover);
         meta.title  = tags.value("TITLE");
         meta.artist = tags.value("ARTIST");
         meta.album  = tags.value("ALBUM");
+        meta.tagFound = !tags.isEmpty();
+    } else if (ext == "ogg" || ext == "opus") {
+        QMap<QString, QString> tags = readOggTags(filePath, &embeddedCover);
+        meta.title  = tags.value("TITLE");
+        meta.artist = tags.value("ARTIST");
+        meta.album  = tags.value("ALBUM");
+        meta.tagFound = !tags.isEmpty();
     }
 
     // 封面处理
@@ -471,6 +480,89 @@ QMap<QString, QString> MetadataReader::readMP4TextTags(const QString &filePath, 
     QByteArray data = file.readAll();
     file.close();
     walkMp4Atoms(data, 0, data.size(), &tags, outCover, 0);
+    return tags;
+}
+
+// ============================================================
+// Ogg/Opus - OpusTags / Vorbis 注释头（TITLE/ARTIST/ALBUM/LYRICS）
+// ============================================================
+
+QMap<QString, QString> MetadataReader::readOggTags(const QString &filePath, QImage *outCover)
+{
+    QMap<QString, QString> tags;
+    Q_UNUSED(outCover);  // Ogg 封面极少见，暂不解析
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly))
+        return tags;
+    QByteArray data = file.readAll();
+    file.close();
+    if (!data.startsWith("OggS"))
+        return tags;
+
+    // 跨页重组 packet（lacing=255 表示分片未结束），找到注释头即停止
+    QByteArray curPacket;
+    bool commentChecked = false;
+    int pos = 0;
+    while (!commentChecked && pos + 27 <= data.size() && data.mid(pos, 4) == "OggS") {
+        int segCount = (quint8)data[pos + 26];
+        int segTableEnd = pos + 27 + segCount;
+        if (segTableEnd > data.size()) break;
+        int payloadLen = 0;
+        for (int i = 0; i < segCount; ++i)
+            payloadLen += (quint8)data[pos + 27 + i];
+        int payloadStart = segTableEnd;
+        int payloadEnd = payloadStart + payloadLen;
+        if (payloadEnd > data.size()) break;
+
+        int p = payloadStart;
+        for (int i = 0; i < segCount; ++i) {
+            int segLen = (quint8)data[pos + 27 + i];
+            curPacket.append(data.mid(p, segLen));
+            p += segLen;
+            if (segLen < 255) {
+                QByteArray commentData;
+                if (curPacket.startsWith("OpusTags"))
+                    commentData = curPacket.mid(8);      // 跳过 "OpusTags"
+                else if (curPacket.size() >= 7 && (quint8)curPacket[0] == 0x03
+                         && curPacket.mid(1, 6) == "vorbis")
+                    commentData = curPacket.mid(7);      // 跳过 0x03+"vorbis"
+                if (!commentData.isEmpty()) {
+                    // vendor + count + 每条 "KEY=value"
+                    int cp = 0;
+                    if (cp + 4 <= commentData.size()) {
+                        quint32 vendorLen = (quint8)commentData[cp] | ((quint8)commentData[cp+1] << 8)
+                                          | ((quint8)commentData[cp+2] << 16) | ((quint8)commentData[cp+3] << 24);
+                        cp += 4 + vendorLen;
+                        if (cp + 4 <= commentData.size()) {
+                            quint32 count = (quint8)commentData[cp] | ((quint8)commentData[cp+1] << 8)
+                                          | ((quint8)commentData[cp+2] << 16) | ((quint8)commentData[cp+3] << 24);
+                            cp += 4;
+                            for (quint32 j = 0; j < count && cp + 4 <= commentData.size(); ++j) {
+                                quint32 len = (quint8)commentData[cp] | ((quint8)commentData[cp+1] << 8)
+                                            | ((quint8)commentData[cp+2] << 16) | ((quint8)commentData[cp+3] << 24);
+                                cp += 4;
+                                if (cp + (int)len > commentData.size()) break;
+                                QByteArray comment = commentData.mid(cp, len);
+                                cp += len;
+                                int eq = comment.indexOf('=');
+                                if (eq < 0) continue;
+                                QString key = QString::fromUtf8(comment.left(eq)).toUpper();
+                                QString val = QString::fromUtf8(comment.mid(eq + 1)).trimmed();
+                                if (key == "TITLE" || key == "ARTIST" || key == "ALBUM" || key == "LYRICS")
+                                    if (!tags.contains(key))
+                                        tags[key] = val;
+                            }
+                        }
+                    }
+                    commentChecked = true;
+                    break;
+                }
+                curPacket.clear();
+            }
+        }
+        pos = payloadEnd;
+    }
     return tags;
 }
 
