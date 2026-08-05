@@ -85,7 +85,6 @@ ColumnLayout {
     }
 
     // 当前正在播放的歌曲路径（跨来源匹配）
-    // 不受 trackCrossSource 影响，始终返回当前播放歌曲路径
     property string playingPath: {
         try {
             var ci = musicManager.currentIndex
@@ -328,9 +327,6 @@ ColumnLayout {
                     } else {
                         musicManager.playIndex(index)
                     }
-                } else if (musicManager.trackCrossSource) {
-                    musicManager.playlistSource = 0
-                    musicManager.playIndex(index)
                 } else {
                     // 没有正在播放 → 直接播放，否则弹窗确认
                     if (musicManager.currentIndex < 0) {
@@ -606,9 +602,7 @@ ColumnLayout {
             spacing: 14
 
             Label {
-                text: root.dialogMode === "custom" ? "切换自定义列表"
-                     : root.dialogMode === "switch" ? "切换播放来源"
-                     : "切换播放列表"
+                text: "切换播放来源"
                 font.family: fontFamily
                 font.pixelSize: 17
                 font.bold: true
@@ -618,10 +612,10 @@ ColumnLayout {
 
             Label {
                 text: root.dialogMode === "custom"
-                      ? "当前播放列表不是此列表，\n点击确定将改变播放列表并播放选定的歌曲。"
+                      ? "当前播放来源不是本列表，\n点击确定将改变播放列表并播放选定的歌曲。"
                       : root.dialogMode === "switch"
-                      ? "当前播放来源不是此页面，\n点击确定将切换播放来源并播放选定的歌曲。"
-                      : "当前播放来源不是首页，\n点击确定将从头播放选定的歌曲。"
+                      ? "当前播放来源不是本列表，\n点击确定将切换播放来源并播放选定的歌曲。"
+                      : "当前播放来源不是本列表，\n点击确定将从头播放选定的歌曲。"
                 font.family: fontFamily
                 font.pixelSize: 15
                 lineHeight: 1.4

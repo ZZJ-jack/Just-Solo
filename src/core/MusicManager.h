@@ -40,7 +40,6 @@ class MusicManager : public QObject
     Q_PROPERTY(qreal menuOpacity READ menuOpacity WRITE setMenuOpacity NOTIFY menuOpacityChanged)
     Q_PROPERTY(qreal volumeMenuOpacity READ volumeMenuOpacity WRITE setVolumeMenuOpacity NOTIFY volumeMenuOpacityChanged)
     Q_PROPERTY(int playlistSource READ playlistSource WRITE setPlaylistSource NOTIFY playlistSourceChanged)
-    Q_PROPERTY(bool trackCrossSource READ trackCrossSource WRITE setTrackCrossSource NOTIFY trackCrossSourceChanged)
     Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY minimizeToTrayChanged)
     Q_PROPERTY(int playbackBackground READ playbackBackground WRITE setPlaybackBackground NOTIFY playbackBackgroundChanged)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
@@ -128,10 +127,6 @@ public:
     int playlistSource() const { return m_playlistSource; }
     void setPlaylistSource(int source);
     QVariantList &currentPlaylist();  // 根据来源返回对应列表
-
-    // ---- 跨来源跟踪 ----
-    bool trackCrossSource() const { return m_trackCrossSource; }
-    void setTrackCrossSource(bool v);
 
     // ---- 音量 ----
     qreal volume() const { return m_volume; }
@@ -229,7 +224,6 @@ signals:
     void menuOpacityChanged();
     void volumeMenuOpacityChanged();
     void playlistSourceChanged();
-    void trackCrossSourceChanged();
     void minimizeToTrayChanged();
     void playbackBackgroundChanged();
     void volumeChanged();
@@ -289,7 +283,6 @@ private:
     qreal m_menuOpacity = 0.80;     // 模式菜单透明度 (0.3-1.0)
     qreal m_volumeMenuOpacity = 0.80; // 音量控制条透明度 (0.3-1.0)
     int m_playlistSource = 0;       // 活跃播放列表来源 (SourcePlaylist=0)
-    bool m_trackCrossSource = false; // 跨来源播放跟踪（默认关闭）
     bool m_minimizeToTray = false;
     int m_playbackBackground = 0;   // 播放背景 (0=深色背景, 1=沉浸背景)
     qreal m_volume = 0.9;

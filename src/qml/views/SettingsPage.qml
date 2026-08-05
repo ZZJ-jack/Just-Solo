@@ -523,55 +523,6 @@ Rectangle {
         }
 
         Item { Layout.preferredHeight: 14 }
-
-        // 跨来源跟踪开关
-        Rectangle {
-            Layout.fillWidth: true; Layout.maximumWidth: 520
-            Layout.preferredHeight: 110; radius: 8
-            color: "#222222"; border.color: "#3A3A3A"
-
-            ColumnLayout {
-                anchors.fill: parent; anchors.leftMargin: 20; anchors.rightMargin: 20; anchors.topMargin: 12; anchors.bottomMargin: 20; spacing: 10
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Label { text: "其他列表播放时首页是否显示对应歌曲"; font.family: fontFamily; font.pixelSize: 15; color: "#ffffff" }
-                    Item { Layout.fillWidth: true }
-                    Switch {
-                        Layout.alignment: Qt.AlignVCenter
-                        checked: musicManager.trackCrossSource || false
-                        onToggled: musicManager.trackCrossSource = checked
-
-                        indicator: Rectangle {
-                            implicitWidth: 38
-                            implicitHeight: 22
-                            x: parent.leftPadding
-                            y: parent.topPadding + (parent.availableHeight - height) / 2
-                            radius: 11
-                            color: parent.checked ? "#3B82F6" : "#555"
-                            border.color: parent.checked ? "#3B82F6" : "#444"
-                            Behavior on color { ColorAnimation { duration: 150 } }
-
-                            Rectangle {
-                                x: parent.checked ? parent.width - width - 2 : 2
-                                y: (parent.height - height) / 2
-                                width: 18; height: 18; radius: 9
-                                color: "#fff"
-                                Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                            }
-                        }
-                    }
-                }
-
-                Label {
-                    text: musicManager.trackCrossSource
-                          ? "开启后，在其他列表播放时首页将同步显示当前歌曲。"
-                          : "关闭后，在其他列表播放时首页将不再高亮当前曲目。\n点击首页任意歌曲将从首页列表从头播放（含确认弹窗）。"
-                    font.family: fontFamily; font.pixelSize: 11; color: "#777777"
-                    wrapMode: Text.WordWrap; Layout.fillWidth: true
-                }
-            }
-        }
     }
 
     // ---- 快捷键设置 ----

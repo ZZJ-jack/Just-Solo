@@ -505,6 +505,16 @@ Window {
                     visible: currentMenu !== "settings"
                     spacing: 6
 
+                    Rectangle {
+                        Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 4; color: "transparent"
+                        Image {
+                            anchors.centerIn: parent
+                            source: "qrc:/qt/qml/JustSolo/data/image/PlayList.png"
+                            sourceSize.width: 20; sourceSize.height: 20
+                            fillMode: Image.PreserveAspectFit
+                        }
+                    }
+
                     Label {
                         text: "自定义列表"
                         font.family: appFont.name
@@ -704,6 +714,16 @@ Window {
                     Layout.bottomMargin: 6
                     visible: currentMenu !== "settings"
                     spacing: 6
+
+                    Rectangle {
+                        Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 4; color: "transparent"
+                        Image {
+                            anchors.centerIn: parent
+                            source: "qrc:/qt/qml/JustSolo/data/image/mylike.png"
+                            sourceSize.width: 20; sourceSize.height: 20
+                            fillMode: Image.PreserveAspectFit
+                        }
+                    }
 
                     Label {
                         text: "歌手列表"
