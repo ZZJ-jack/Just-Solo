@@ -440,16 +440,16 @@ Window {
                         onClicked: settingsSubMenu = "hotkeys"
                     }
                     SubNavItem {
-                        label: "软件更新"
-                        active: settingsSubMenu === "update"
-                        fontFamily: appFont.name
-                        onClicked: settingsSubMenu = "update"
-                    }
-                    SubNavItem {
                         label: "LyricServer管理"
                         active: settingsSubMenu === "lyricserver"
                         fontFamily: appFont.name
                         onClicked: settingsSubMenu = "lyricserver"
+                    }
+                    SubNavItem {
+                        label: "软件更新"
+                        active: settingsSubMenu === "update"
+                        fontFamily: appFont.name
+                        onClicked: settingsSubMenu = "update"
                     }
                     SubNavItem {
                         label: "关于JustSolo"
@@ -726,7 +726,7 @@ Window {
                         Layout.preferredWidth: 28; Layout.preferredHeight: 28
                         text: "🎤"
                         font.family: appFont.name
-                        font.pixelSize: 16
+                        font.pixelSize: 13
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }

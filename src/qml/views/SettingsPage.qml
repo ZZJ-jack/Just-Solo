@@ -1161,6 +1161,9 @@ Rectangle {
         Item { Layout.preferredHeight: 8 }
         Label { text: "Just Solo - 轻量级桌面音乐播放器"; font.family: fontFamily; font.pixelSize: 15; color: "#ffffff" }
         Item { Layout.preferredHeight: 4 }
+        Label { text: "软件版本: " + (typeof APP_VERSION !== "undefined" ? APP_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#777777" }
+        Label { text: "构建版本: " + (typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#777777" }
+        Item { Layout.preferredHeight: 4 }
         Label { text: "作者: ZZJ-JACK"; font.family: fontFamily; font.pixelSize: 13; color: "#777777" }
         Label { text: `<a href="https://zzjjack.us.kg">https://zzjjack.us.kg</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#3B82F6"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
         Label { text: `<a href="https://justsolo.zzjjack.us.kg">官方网站: https://justsolo.zzjjack.us.kg</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#3B82F6"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
