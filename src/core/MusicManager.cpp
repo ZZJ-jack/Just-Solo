@@ -2434,8 +2434,8 @@ public:
         m_titleEdit = new QLineEdit(m_manualBox);
         m_titleEdit->setPlaceholderText(QStringLiteral("歌名（必填）"));
         m_titleEdit->setText(defaultTitle);
-        manualLayout->addWidget(m_artistEdit);
         manualLayout->addWidget(m_titleEdit);
+        manualLayout->addWidget(m_artistEdit);
         m_manualBox->setLayout(manualLayout);
         m_manualBox->hide();
         mainLayout->addWidget(m_manualBox);
@@ -2490,6 +2490,14 @@ public:
 
         updatePreview();
         updateOk();
+
+        // 自动/手动两个内容区固定等高：切换模式时上方的“文件名/模式选择”
+        // 与下方的专辑/按钮位置均保持不变
+        {
+            const int contentH = m_autoBox->sizeHint().height();
+            m_autoBox->setFixedHeight(contentH);
+            m_manualBox->setFixedHeight(contentH);
+        }
 
         // 锁定窗口尺寸（以较高的“自动识别”模式为准），切换自动/手动时窗口大小不再跳动
         adjustSize();
