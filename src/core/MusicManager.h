@@ -173,6 +173,11 @@ public:
     int playingListIndex() const { return m_playingListIndex; }
     QVariantList customPlaylists() const { return m_customPlaylists; }
 
+    // ---- 歌手列表（复用自定义列表基础设施，type="artist"） ----
+    Q_INVOKABLE QVariantList availableArtists() const;              // 从音乐库扫描去重后的歌手名列表
+    Q_INVOKABLE void createArtistPlaylist(const QString &artist);   // 以歌手名创建列表并归类歌曲
+    Q_INVOKABLE void refreshArtistPlaylist(int index);              // 重新扫描音乐库刷新歌手列表歌曲
+
     Q_INVOKABLE qint64 position() const { return m_audioEngine ? m_audioEngine->position() : 0; }
     Q_INVOKABLE qint64 duration() const { return m_audioEngine ? m_audioEngine->duration() : 0; }
     Q_INVOKABLE void seek(qint64 ms);

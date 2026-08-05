@@ -60,6 +60,36 @@ Window {
     property int _pendingAddToPlaylistIndex: -1   // 右键添加音乐的待定列表
     property int _rightClickedPlaylistIndex: -1   // 右键菜单的列表索引
 
+    // ---- 歌手列表（复用 customPlaylists，type="artist"） ----
+    property var _manualPlaylistIndices: []    // 普通自定义列表在 customPlaylists 中的索引
+    property var _artistPlaylistIndices: []    // 歌手列表在 customPlaylists 中的索引
+    property var _artistDialogFilter: []       // 歌手选择对话框的过滤后列表
+    property var _existingArtistNames: ({})    // 已创建歌手列表的歌手名集合（去重标记）
+
+    function _rebuildPlaylistIndices() {
+        var manual = []
+        var artist = []
+        var existingArtists = ({})
+        var all = musicManager.customPlaylists
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].type === "artist") {
+                artist.push(i)
+                existingArtists[all[i].artist || all[i].name || ""] = true
+            } else {
+                manual.push(i)
+            }
+        }
+        _manualPlaylistIndices = manual
+        _artistPlaylistIndices = artist
+        _existingArtistNames = existingArtists
+    }
+
+    function _isCurrentArtistList() {
+        if (currentMenu !== "customPlaylist" || currentCustomPlaylistIndex < 0) return false
+        if (currentCustomPlaylistIndex >= musicManager.customPlaylists.length) return false
+        return musicManager.customPlaylists[currentCustomPlaylistIndex].type === "artist"
+    }
+
     // ---- 搜索 ----
     property string searchText: ""
     property var searchResults: []
@@ -464,6 +494,7 @@ Window {
                     Layout.topMargin: 12
                     Layout.bottomMargin: 8
                     color: "#3A3A3A2B"
+                    visible: currentMenu !== "settings"
                 }
 
                 // ---- 自定义列表板块标题 + 新建按钮 ----
@@ -477,7 +508,7 @@ Window {
                     Label {
                         text: "自定义列表"
                         font.family: appFont.name
-                        font.pixelSize: 12
+                        font.pixelSize: 15
                         color: "#999"
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -510,11 +541,11 @@ Window {
                 // ---- 自定义播放列表 ----
                 ListView {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    visible: currentMenu !== "settings" && musicManager.customPlaylists.length > 0
+                    Layout.preferredHeight: 200
+                    visible: currentMenu !== "settings"
                     clip: true
                     spacing: 5
-                    model: musicManager.customPlaylists
+                    model: _manualPlaylistIndices
 
                     ScrollBar.vertical: ScrollBar {
                         policy: ScrollBar.AsNeeded
@@ -530,7 +561,7 @@ Window {
                         width: ListView.view.width
                         height: 36 
                         radius: 6
-                        color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === index ? "#2C2C2C" : (plMA.containsMouse ? "#222222" : "transparent")
+                        color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === modelData ? "#2C2C2C" : (plMA.containsMouse ? "#222222" : "transparent")
 
                         RowLayout {
                             anchors.verticalCenter: parent.verticalCenter
@@ -553,10 +584,10 @@ Window {
                             Label {
                                 Layout.fillWidth: true
                                 Layout.alignment: Qt.AlignVCenter
-                                text: modelData.name || "未命名"
+                                text: musicManager.customPlaylists[modelData].name || "未命名"
                                 font.family: appFont.name
                                 font.pixelSize: 15
-                                color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === index ? "#cccccc" : (plMA.containsMouse ? "#cccccc" : "#888")
+                                color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === modelData ? "#cccccc" : (plMA.containsMouse ? "#cccccc" : "#888")
                                 elide: Text.ElideRight
                             }
                         }
@@ -568,12 +599,12 @@ Window {
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                             onClicked: function(mouse) {
                                 if (mouse.button === Qt.RightButton) {
-                                    mainWindow._pendingAddToPlaylistIndex = index
-                                    mainWindow._rightClickedPlaylistIndex = index
+                                    mainWindow._pendingAddToPlaylistIndex = modelData
+                                    mainWindow._rightClickedPlaylistIndex = modelData
                                     plContextMenu.popup()
                                 } else {
                                     mainWindow.currentMenu = "customPlaylist"
-                                    mainWindow.currentCustomPlaylistIndex = index
+                                    mainWindow.currentCustomPlaylistIndex = modelData
                                 }
                             }
                         }
@@ -656,7 +687,189 @@ Window {
                     }
                 }
 
-                // ---- 弹性撑满 ----
+                // ---- 歌手板块分割线 ----
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    Layout.topMargin: 8
+                    Layout.bottomMargin: 8
+                    color: "#3A3A3A2B"
+                    visible: currentMenu !== "settings"
+                }
+
+                // ---- 歌手板块标题 + 添加按钮 ----
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 28
+                    Layout.bottomMargin: 6
+                    visible: currentMenu !== "settings"
+                    spacing: 6
+
+                    Label {
+                        text: "歌手列表"
+                        font.family: appFont.name
+                        font.pixelSize: 15
+                        color: "#999"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Rectangle {
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                        Layout.alignment: Qt.AlignVCenter
+                        radius: 4
+                        color: sidebarArtistAddMA.containsMouse ? "#222222" : "transparent"
+
+                        Image {
+                            anchors.centerIn: parent
+                            source: "qrc:/qt/qml/JustSolo/data/image/creatList.png"
+                            sourceSize.width: 18
+                            sourceSize.height: 18
+                        }
+
+                        MouseArea {
+                            id: sidebarArtistAddMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                _artistDialogFilter = musicManager.availableArtists()
+                                artistSearchField.text = ""
+                                artistSelectDialog.open()
+                            }
+                        }
+                    }
+                }
+
+                // ---- 歌手列表 ----
+                ListView {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 200
+                    visible: currentMenu !== "settings"
+                    clip: true
+                    spacing: 5
+                    model: _artistPlaylistIndices
+
+                    ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AsNeeded
+                        contentItem: Rectangle {
+                            implicitWidth: 4
+                            radius: 2
+                            visible: parent.size < 1.0
+                            color: parent.pressed ? "#888" : "#555"
+                        }
+                    }
+
+                    delegate: Rectangle {
+                        width: ListView.view.width
+                        height: 36
+                        radius: 6
+                        color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === modelData ? "#2C2C2C" : (arMA.containsMouse ? "#222222" : "transparent")
+
+                        RowLayout {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            spacing: 10
+
+                            Rectangle {
+                                Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 4; color: "transparent"
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "🎤"
+                                    font.pixelSize: 16
+                                }
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                text: musicManager.customPlaylists[modelData].name || "未知歌手"
+                                font.family: appFont.name
+                                font.pixelSize: 15
+                                color: mainWindow.currentMenu === "customPlaylist" && mainWindow.currentCustomPlaylistIndex === modelData ? "#cccccc" : (arMA.containsMouse ? "#cccccc" : "#888")
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        MouseArea {
+                            id: arMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: function(mouse) {
+                                if (mouse.button === Qt.RightButton) {
+                                    mainWindow._rightClickedPlaylistIndex = modelData
+                                    arContextMenu.popup()
+                                } else {
+                                    mainWindow.currentMenu = "customPlaylist"
+                                    mainWindow.currentCustomPlaylistIndex = modelData
+                                }
+                            }
+                        }
+
+                        Menu {
+                            id: arContextMenu
+                            property QtObject win: mainWindow
+                            background: Rectangle { color: "#222222"; border.color: "#3A3A3A"; radius: 6; implicitWidth: 150 }
+
+                            MenuItem {
+                                text: "刷新歌曲"
+                                font.family: appFont.name; font.pixelSize: 15
+                                contentItem: Label {
+                                    text: "刷新歌曲"
+                                    font.family: appFont.name; font.pixelSize: 15; color: "#cccccc"
+                                    verticalAlignment: Text.AlignVCenter; leftPadding: 12
+                                }
+                                background: Rectangle { color: parent.hovered ? "#333333" : "transparent"; radius: 4 }
+                                onClicked: {
+                                    musicManager.refreshArtistPlaylist(arContextMenu.win._rightClickedPlaylistIndex)
+                                }
+                            }
+
+                            MenuItem {
+                                text: "重命名"
+                                font.family: appFont.name; font.pixelSize: 15
+                                contentItem: Label {
+                                    text: "重命名"
+                                    font.family: appFont.name; font.pixelSize: 15; color: "#cccccc"
+                                    verticalAlignment: Text.AlignVCenter; leftPadding: 12
+                                }
+                                background: Rectangle { color: parent.hovered ? "#333333" : "transparent"; radius: 4 }
+                                onClicked: {
+                                    renameField.text = musicManager.customPlaylists[arContextMenu.win._rightClickedPlaylistIndex]?.name || ""
+                                    renameDialog.open()
+                                }
+                            }
+
+                            MenuItem {
+                                text: "删除"
+                                font.family: appFont.name; font.pixelSize: 15
+                                contentItem: Label {
+                                    text: "删除"
+                                    font.family: appFont.name; font.pixelSize: 15; color: "#cc5555"
+                                    verticalAlignment: Text.AlignVCenter; leftPadding: 12
+                                }
+                                background: Rectangle { color: parent.hovered ? "#333333" : "transparent"; radius: 4 }
+                                onClicked: {
+                                    if (arContextMenu.win._rightClickedPlaylistIndex >= 0) {
+                                        musicManager.deleteCustomPlaylist(arContextMenu.win._rightClickedPlaylistIndex)
+                                        if (arContextMenu.win.currentMenu === "customPlaylist"
+                                            && arContextMenu.win.currentCustomPlaylistIndex === arContextMenu.win._rightClickedPlaylistIndex) {
+                                            arContextMenu.win.currentMenu = "home"
+                                            arContextMenu.win.currentCustomPlaylistIndex = -1
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ---- 弹性撑满（吸收剩余空间） ----
                 Item { Layout.fillHeight: true }
             }
         }
@@ -1004,7 +1217,7 @@ Window {
                         radius: 6
                         color: importLibBtnMA.containsMouse ? "#5B9EF6" : "#3B82F6"
                         Behavior on color { ColorAnimation { duration: 120 } }
-                        visible: currentMenu === "customPlaylist" && musicManager.library.length > 0
+                        visible: currentMenu === "customPlaylist" && musicManager.library.length > 0 && !_isCurrentArtistList()
                         Label {
                             id: importLibBtnText
                             anchors.centerIn: parent
@@ -1058,8 +1271,8 @@ Window {
                         scrollToIndex: currentMenu === "home" ? mainWindow.searchScrollIndex : -1
                         customPlaylistIndex: currentMenu === "customPlaylist" ? currentCustomPlaylistIndex : -1
                         pageListIndex: currentMenu === "customPlaylist" ? 3 + currentCustomPlaylistIndex : 0
-                        emptyHint: currentMenu === "customPlaylist" ? "此列表还没有歌曲" : "还没有音乐"
-                        emptySubHint: currentMenu === "customPlaylist" ? "请到侧边栏右键本列表添加音乐" : "点击上方「添加音乐」导入本地文件"
+                        emptyHint: currentMenu === "customPlaylist" ? (_isCurrentArtistList() ? "此歌手暂无歌曲" : "此列表还没有歌曲") : "还没有音乐"
+                        emptySubHint: currentMenu === "customPlaylist" ? (_isCurrentArtistList() ? "右键侧边栏列表可刷新歌曲" : "请到侧边栏右键本列表添加音乐") : "点击上方「添加音乐」导入本地文件"
                         songList: {
                             if (currentMenu === "customPlaylist" && currentCustomPlaylistIndex >= 0
                                 && currentCustomPlaylistIndex < musicManager.customPlaylists.length) {
@@ -2098,6 +2311,199 @@ Window {
     }
 
     // ============================================================
+    // 歌手选择对话框
+    // ============================================================
+    Dialog {
+        id: artistSelectDialog
+        parent: Overlay.overlay
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: Math.min(parent.width * 0.8, 540)
+        height: Math.min(parent.height * 0.8, 460)
+        padding: 0
+
+        Overlay.modal: Rectangle { color: "#80000000" }
+
+        background: Rectangle { color: "#222222"; radius: 10 }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            // 标题栏
+            Rectangle {
+                Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 10
+                color: "#2C2C2C"
+                Rectangle { width: parent.width; height: 10; color: "#2C2C2C"; anchors.bottom: parent.bottom }
+                Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.bottom: parent.bottom }
+
+                RowLayout {
+                    anchors.fill: parent; anchors.margins: 16; spacing: 8
+                    Label {
+                        text: "选择歌手"
+                        font.family: appFont.name; font.pixelSize: 16; font.bold: true; color: "#ddd"
+                        Layout.fillWidth: true
+                    }
+                    Label {
+                        text: {
+                            var _ = mainWindow._artistPlaylistIndices
+                            return mainWindow._artistPlaylistIndices.length > 0 ? "已添加 " + mainWindow._artistPlaylistIndices.length + " 个" : ""
+                        }
+                        font.family: appFont.name; font.pixelSize: 12; color: "#00d4ff"
+                        visible: mainWindow._artistPlaylistIndices.length > 0
+                    }
+                }
+            }
+
+            // 搜索栏
+            Rectangle {
+                Layout.fillWidth: true; Layout.preferredHeight: 52
+                color: "#1E1E1E"
+                RowLayout {
+                    anchors.fill: parent; anchors.margins: 8; spacing: 8
+                    TextField {
+                        id: artistSearchField
+                        Layout.fillWidth: true; Layout.preferredHeight: 36
+                        placeholderText: "搜索歌手..."
+                        placeholderTextColor: "#888"
+                        font.family: appFont.name; font.pixelSize: 13; color: "#ddd"
+                        leftPadding: 10; rightPadding: 10
+                        verticalAlignment: TextInput.AlignVCenter
+                        background: Rectangle { radius: 6; color: "#333333"; border.color: "#3A3A3A" }
+                        onTextChanged: {
+                            var query = text.toLowerCase().trim()
+                            var all = musicManager.availableArtists()
+                            if (!query) {
+                                mainWindow._artistDialogFilter = all
+                                return
+                            }
+                            var result = []
+                            for (var i = 0; i < all.length; i++) {
+                                if (all[i].toLowerCase().indexOf(query) >= 0)
+                                    result.push(all[i])
+                            }
+                            mainWindow._artistDialogFilter = result
+                        }
+                    }
+                }
+            }
+
+            // 歌手列表
+            ListView {
+                id: artistDlgListView
+                Layout.fillWidth: true; Layout.fillHeight: true
+                Layout.topMargin: 4
+                spacing: 1; clip: true
+                model: _artistDialogFilter
+
+                ScrollBar.vertical: ScrollBar {
+                    policy: ScrollBar.AsNeeded; width: 10
+                    background: Rectangle { implicitWidth: 10; radius: 5; color: "#222222" }
+                    contentItem: Rectangle {
+                        implicitWidth: 10; radius: 5
+                        color: arThumbHover.containsMouse ? "#777777" : "#3A3A3A"
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        MouseArea {
+                            id: arThumbHover
+                            hoverEnabled: true; acceptedButtons: Qt.NoButton
+                            propagateComposedEvents: true
+                        }
+                    }
+                }
+
+                // 空结果提示
+                Label {
+                    anchors.centerIn: parent
+                    text: artistSearchField.text.trim() ? "未找到匹配的歌手" : (musicManager.library.length === 0 ? "音乐库为空" : "未找到歌手")
+                    font.family: appFont.name; font.pixelSize: 15; color: "#888"
+                    visible: _artistDialogFilter.length === 0
+                }
+
+                delegate: Rectangle {
+                    id: arItemRoot
+                    width: artistDlgListView.width; height: 44; color: "transparent"
+
+                    readonly property bool _added: mainWindow._existingArtistNames[modelData] === true
+
+                    RowLayout {
+                        anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 10
+
+                        // 歌手图标
+                        Rectangle {
+                            Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 4
+                            color: arItemRoot._added ? "#1E1E1E" : "#2C2C2C"
+                            Label {
+                                anchors.centerIn: parent
+                                text: "🎤"
+                                font.pixelSize: 15
+                                opacity: arItemRoot._added ? 0.4 : 1.0
+                            }
+                        }
+
+                        // 歌手名
+                        Label {
+                            Layout.fillWidth: true
+                            text: modelData
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: arItemRoot._added ? "#666" : "#ccc"
+                            elide: Text.ElideRight
+                        }
+
+                        // 已添加标记
+                        Label {
+                            text: "已添加"
+                            font.family: appFont.name; font.pixelSize: 11; color: "#00d4ff"
+                            visible: arItemRoot._added
+                        }
+                    }
+
+                    // hover 背景
+                    Rectangle {
+                        anchors.fill: parent
+                        color: arDlgMA.containsMouse ? "#2C2C2C" : "transparent"
+                        z: -1
+                    }
+
+                    // 点击处理
+                    MouseArea {
+                        id: arDlgMA
+                        anchors.fill: parent; hoverEnabled: true
+                        cursorShape: arItemRoot._added ? Qt.ArrowCursor : Qt.PointingHandCursor
+                        enabled: !arItemRoot._added
+                        onClicked: {
+                            musicManager.createArtistPlaylist(modelData)
+                            artistSelectDialog.close()
+                        }
+                    }
+                }
+            }
+
+            // 底部按钮
+            Rectangle {
+                Layout.fillWidth: true; Layout.preferredHeight: 52
+                color: "#222222"
+                Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.top: parent.top }
+
+                RowLayout {
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    anchors.rightMargin: 16; spacing: 10
+
+                    Rectangle {
+                        Layout.preferredHeight: 34; Layout.preferredWidth: 80; radius: 6
+                        color: artistDlgCancelMA.containsMouse ? "#333333" : "#1E1E1E"
+                        border.color: "#3A3A3A"; border.width: 1
+                        Label { anchors.centerIn: parent; text: "关闭"; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                        MouseArea {
+                            id: artistDlgCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: artistSelectDialog.close()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
     // 从音乐库导入对话框
     // ============================================================
     Dialog {
@@ -2112,7 +2518,7 @@ Window {
 
         Overlay.modal: Rectangle { color: "#80000000" }
 
-        background: Rectangle { color: "#222222"; radius: 10; border.color: "#3A3A3A"; border.width: 1 }
+        background: Rectangle { color: "#222222"; radius: 10 }
 
         contentItem: ColumnLayout {
             spacing: 0
@@ -2121,6 +2527,7 @@ Window {
             Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 10
                 color: "#2C2C2C"
+                Rectangle { width: parent.width; height: 10; color: "#2C2C2C"; anchors.bottom: parent.bottom }
                 Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.bottom: parent.bottom }
 
                 RowLayout {
@@ -2147,17 +2554,18 @@ Window {
 
             // 搜索栏
             Rectangle {
-                Layout.fillWidth: true; Layout.preferredHeight: 40
+                Layout.fillWidth: true; Layout.preferredHeight: 52
                 color: "#1E1E1E"
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 8; spacing: 8
                     TextField {
                         id: libSearchField
-                        Layout.fillWidth: true; Layout.preferredHeight: 30
+                        Layout.fillWidth: true; Layout.preferredHeight: 36
                         placeholderText: "搜索歌曲或歌手..."
                         placeholderTextColor: "#888"
                         font.family: appFont.name; font.pixelSize: 13; color: "#ddd"
-                        leftPadding: 10
+                        leftPadding: 10; rightPadding: 10
+                        verticalAlignment: TextInput.AlignVCenter
                         background: Rectangle { radius: 6; color: "#333333"; border.color: "#3A3A3A" }
                         onTextChanged: {
                             // 独立过滤，不碰全局 searchText/updateSearch
@@ -2366,6 +2774,19 @@ Window {
         function onWasapiExclusiveFailed() {
             exclusiveDialog.open()
         }
+    }
+
+    // ---- 自定义列表变更时重建分类索引 ----
+    Connections {
+        target: musicManager
+        function onCustomPlaylistsChanged() {
+            mainWindow._rebuildPlaylistIndices()
+        }
+    }
+
+    // ---- 启动时初始化分类索引 ----
+    Component.onCompleted: {
+        _rebuildPlaylistIndices()
     }
 
     // ---- WASAPI 独占开启前提示（启动时保存了开启独占：先弹窗提示，确认后再开启） ----
@@ -2590,8 +3011,10 @@ Window {
     function doRename() {
         var name = renameField.text.trim()
         if (name.length === 0 || mainWindow._rightClickedPlaylistIndex < 0) return
-        // 验证名称格式
-        if (!musicManager.isValidPlaylistName(name)) {
+        // 歌手列表放宽名称校验（允许空格、顿号等），普通列表严格校验
+        var pl = musicManager.customPlaylists[mainWindow._rightClickedPlaylistIndex]
+        var isArtist = pl && pl.type === "artist"
+        if (!isArtist && !musicManager.isValidPlaylistName(name)) {
             renameHint.text = "仅支持中英文、数字、- 和 _"
             return
         }

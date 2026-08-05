@@ -828,7 +828,10 @@ void MusicManager::createCustomPlaylist(const QString &name) {
 
 void MusicManager::renameCustomPlaylist(int index, const QString &newName) {
     QString n = newName.trimmed();
-    if (index < 0 || index >= m_customPlaylists.size() || !isValidPlaylistName(n)) return;
+    if (index < 0 || index >= m_customPlaylists.size() || n.isEmpty()) return;
+    // 歌手列表放宽名称校验（允许空格、顿号等），普通列表严格校验
+    bool isArtist = m_customPlaylists[index].toMap()["type"].toString() == QStringLiteral("artist");
+    if (!isArtist && !isValidPlaylistName(n)) return;
     // 检查重名（排除自己）
     for (int i = 0; i < m_customPlaylists.size(); i++) {
         if (i != index && m_customPlaylists[i].toMap()["name"].toString() == n) return;
@@ -982,6 +985,74 @@ void MusicManager::addLibrarySongsToCustomPlaylist(const QVariantList &libraryIn
 
     pl["songs"] = songs;
     m_customPlaylists[playlistIndex] = pl;
+    saveCustomPlaylists();
+    emit customPlaylistsChanged();
+}
+
+// ---- 歌手列表 ----
+
+QVariantList MusicManager::availableArtists() const {
+    QSet<QString> seen;
+    QVariantList result;
+    for (const QVariant &v : m_library) {
+        QString artist = v.toMap()["artist"].toString().trimmed();
+        if (artist.isEmpty()) continue;
+        if (!seen.contains(artist)) {
+            seen.insert(artist);
+            result.append(artist);
+        }
+    }
+    std::sort(result.begin(), result.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toString().localeAwareCompare(b.toString()) < 0;
+    });
+    return result;
+}
+
+void MusicManager::createArtistPlaylist(const QString &artist) {
+    QString a = artist.trimmed();
+    if (a.isEmpty()) return;
+    // 检查重复：同名歌手列表或同名任意列表
+    for (const QVariant &pl : m_customPlaylists) {
+        QVariantMap m = pl.toMap();
+        if (m["type"].toString() == QStringLiteral("artist") && m["artist"].toString() == a) return;
+        if (m["name"].toString() == a) return;
+    }
+    // 从音乐库收集该歌手的所有歌曲
+    QVariantList songs;
+    for (const QVariant &v : m_library) {
+        if (v.toMap()["artist"].toString() == a) {
+            QVariantMap entry;
+            entry["path"] = v.toMap()["path"].toString();
+            songs.append(entry);
+        }
+    }
+    QVariantMap pl;
+    pl["type"] = QStringLiteral("artist");
+    pl["artist"] = a;
+    pl["name"] = a;
+    pl["songs"] = songs;
+    m_customPlaylists.append(pl);
+    saveCustomPlaylists();
+    emit customPlaylistsChanged();
+}
+
+void MusicManager::refreshArtistPlaylist(int index) {
+    if (index < 0 || index >= m_customPlaylists.size()) return;
+    QVariantMap pl = m_customPlaylists[index].toMap();
+    if (pl["type"].toString() != QStringLiteral("artist")) return;
+    QString artist = pl["artist"].toString();
+    if (artist.isEmpty()) return;
+    // 重新从音乐库收集该歌手的所有歌曲
+    QVariantList songs;
+    for (const QVariant &v : m_library) {
+        if (v.toMap()["artist"].toString() == artist) {
+            QVariantMap entry;
+            entry["path"] = v.toMap()["path"].toString();
+            songs.append(entry);
+        }
+    }
+    pl["songs"] = songs;
+    m_customPlaylists[index] = pl;
     saveCustomPlaylists();
     emit customPlaylistsChanged();
 }
