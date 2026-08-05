@@ -46,6 +46,7 @@ class MusicManager : public QObject
     Q_PROPERTY(bool wasapiExclusive READ wasapiExclusive WRITE setWasapiExclusive NOTIFY wasapiExclusiveChanged)
     Q_PROPERTY(QString lyricFont READ lyricFont WRITE setLyricFont NOTIFY lyricFontChanged)
     Q_PROPERTY(QString lyricFontFamily READ lyricFontFamily NOTIFY lyricFontChanged)
+    Q_PROPERTY(int seekStep READ seekStep WRITE setSeekStep NOTIFY seekStepChanged)
 
     // ---- 自定义播放列表 ----
     Q_PROPERTY(QVariantList customPlaylists READ customPlaylists NOTIFY customPlaylistsChanged)
@@ -147,6 +148,10 @@ public:
     Q_INVOKABLE void forceWasapiExclusive();   // 跳过探测强制开启独占（弹窗"强制开启"，可能导致其他音视频软件崩溃）
     Q_INVOKABLE void disableWasapiExclusive(); // 关闭独占并持久化（弹窗"关闭独占模式"）
 
+    // ---- 快进 / 快退步长（秒） ----
+    int seekStep() const { return m_seekStep; }
+    void setSeekStep(int v);
+
     // ---- 歌词字体 ----
     QString lyricFont() const { return m_lyricFont; }
     QString lyricFontFamily() const;             // 解析当前选择为可用字体族名（空串=回退默认）
@@ -229,6 +234,7 @@ signals:
     void volumeChanged();
     void wasapiExclusiveChanged();
     void lyricFontChanged();
+    void seekStepChanged();
     void wasapiExclusiveFailed();  // 启动时开启 WASAPI 独占失败（设备被占用），QML 应弹窗询问用户
     void exclusiveConfirmRequested();  // 启动时保存了开启独占：QML 先弹窗提示（识别精度有限），用户确认后再真正开启
     void customPlaylistsChanged();
@@ -288,6 +294,7 @@ private:
     qreal m_volume = 0.9;
     bool m_wasapiExclusive = false; // 音频输出模式: false=共享(默认), true=WASAPI 独占
     QString m_lyricFont = QStringLiteral("builtin:HarmonyOS_Sans_SC_Regular.ttf"); // 歌词字体选择键
+    int m_seekStep = 5;              // 快进/快退步长（秒），范围 1~10
     QMap<QString, QString> m_builtinFontFamilies;  // 内置字体 qrc 路径 -> 族名
     QVariantList m_customPlaylists;         // 自定义播放列表
     int m_playingListIndex = -1;            // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义

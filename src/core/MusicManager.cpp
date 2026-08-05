@@ -461,6 +461,10 @@ void MusicManager::loadSettings() {
         m_lyricFont = obj.value("lyricFont").toString(m_lyricFont);
         emit lyricFontChanged();
     }
+    if (obj.contains("seekStep")) {
+        m_seekStep = qBound(1, obj.value("seekStep").toInt(m_seekStep), 10);
+        emit seekStepChanged();
+    }
 }
 
 void MusicManager::saveSettings() {
@@ -476,6 +480,7 @@ void MusicManager::saveSettings() {
     obj["volume"] = m_volume;
     obj["wasapiExclusive"] = m_wasapiExclusive;
     obj["lyricFont"] = m_lyricFont;
+    obj["seekStep"] = m_seekStep;
     QJsonDocument doc(obj);
     QFile file(m_cacheDir + "/settings.json");
     if (file.open(QIODevice::WriteOnly)) {
@@ -675,6 +680,14 @@ void MusicManager::setLyricFont(const QString &v) {
     if (v == m_lyricFont) return;
     m_lyricFont = v;
     emit lyricFontChanged();
+    saveSettings();
+}
+
+void MusicManager::setSeekStep(int v) {
+    v = qBound(1, v, 10);
+    if (v == m_seekStep) return;
+    m_seekStep = v;
+    emit seekStepChanged();
     saveSettings();
 }
 

@@ -453,6 +453,59 @@ Rectangle {
 
         Item { Layout.preferredHeight: 14 }
 
+        // 快进 / 快退步长
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 110; radius: 8
+            color: "#222222"; border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "快进 / 快退步长"
+                        font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: musicManager.seekStep + " 秒"
+                        font.family: fontFamily; font.pixelSize: 15; color: "#3B82F6"
+                    }
+                }
+
+                Slider {
+                    Layout.fillWidth: true
+                    from: 1; to: 10; stepSize: 1
+                    value: musicManager.seekStep
+                    onMoved: musicManager.seekStep = Math.round(value)
+
+                    background: Rectangle {
+                        x: 0; y: parent.height / 2 - 2
+                        width: parent.width; height: 4; radius: 2; color: "#3A3A3A"
+                    }
+                    contentItem: Rectangle {
+                        width: parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from)
+                        height: 4; radius: 2; color: "#3B82F6"
+                        visible: parent.visible
+                    }
+                    handle: Rectangle {
+                        x: parent.leftPadding + parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from) - width / 2
+                        y: parent.height / 2 - height / 2
+                        width: 16; height: 16; radius: 8; color: "#3B82F6"
+                    }
+                }
+
+                Label {
+                    text: "按快捷键快进 / 快退时每次跳转的秒数，范围 1~10 秒。"
+                    font.family: fontFamily; font.pixelSize: 12; color: "#777777"
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 14 }
+
         // 音频输出模式（WASAPI 独占/共享）
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520
@@ -555,8 +608,8 @@ Rectangle {
                             { label: "播放 / 暂停", id: 0 },
                             { label: "下一首",       id: 1 },
                             { label: "上一首",       id: 2 },
-                            { label: "快进 5 秒",    id: 3 },
-                            { label: "快退 5 秒",    id: 4 }
+                            { label: "快进",         id: 3 },
+                            { label: "快退",         id: 4 }
                         ]
 
                         delegate: Rectangle {
