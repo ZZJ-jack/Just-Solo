@@ -389,6 +389,21 @@ int main(int argc, char *argv[])
     });
     QObject::connect(hotkeyManager, &HotkeyManager::nextTriggered, musicManager, &MusicManager::next);
     QObject::connect(hotkeyManager, &HotkeyManager::previousTriggered, musicManager, &MusicManager::previous);
+    // 快进 / 快退：默认 ±5 秒，自动夹到 [0, duration]
+    static constexpr qint64 kSeekStepMs = 5000;
+    QObject::connect(hotkeyManager, &HotkeyManager::fastForwardTriggered, musicManager, [musicManager]() {
+        if (musicManager->currentIndex() < 0) return;
+        qint64 target = musicManager->position() + kSeekStepMs;
+        qint64 dur = musicManager->duration();
+        if (dur > 0 && target > dur) target = dur;
+        musicManager->seek(target);
+    });
+    QObject::connect(hotkeyManager, &HotkeyManager::rewindTriggered, musicManager, [musicManager]() {
+        if (musicManager->currentIndex() < 0) return;
+        qint64 target = musicManager->position() - kSeekStepMs;
+        if (target < 0) target = 0;
+        musicManager->seek(target);
+    });
     engine.rootContext()->setContextProperty("hotkeyManager", hotkeyManager);
 
     // 软件更新检查器

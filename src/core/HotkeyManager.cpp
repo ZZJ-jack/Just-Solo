@@ -74,9 +74,11 @@ HotkeyManager::HotkeyManager(const QString &cacheDir, QObject *parent)
 {
     // 初始化默认绑定（valid=true，确保首次运行也能注册）
     m_bindings.resize(Count);
-    m_bindings[PlayPause] = {PlayPause, Qt::Key_Space, Qt::ControlModifier | Qt::AltModifier, true};
-    m_bindings[Next]      = {Next,      Qt::Key_Right, Qt::ControlModifier | Qt::AltModifier, true};
-    m_bindings[Previous]  = {Previous,  Qt::Key_Left, Qt::ControlModifier | Qt::AltModifier, true};
+    m_bindings[PlayPause]   = {PlayPause,   Qt::Key_Space, Qt::ControlModifier | Qt::AltModifier, true};
+    m_bindings[Next]        = {Next,        Qt::Key_Right, Qt::ControlModifier | Qt::AltModifier, true};
+    m_bindings[Previous]    = {Previous,    Qt::Key_Left,  Qt::ControlModifier | Qt::AltModifier, true};
+    m_bindings[FastForward] = {FastForward, Qt::Key_Right, Qt::ControlModifier, true};
+    m_bindings[Rewind]      = {Rewind,      Qt::Key_Left,  Qt::ControlModifier, true};
 
     load();  // 从文件读取用户自定义
 
@@ -164,9 +166,11 @@ bool HotkeyManager::nativeEventFilter(const QByteArray &eventType, void *message
             int id = (int)msg->wParam - ID_BASE;
             if (id >= 0 && id < m_bindings.size()) {
                 switch (id) {
-                case PlayPause: emit playPauseTriggered(); break;
-                case Next:      emit nextTriggered();      break;
-                case Previous:  emit previousTriggered();   break;
+                case PlayPause:   emit playPauseTriggered();   break;
+                case Next:        emit nextTriggered();        break;
+                case Previous:    emit previousTriggered();    break;
+                case FastForward: emit fastForwardTriggered(); break;
+                case Rewind:      emit rewindTriggered();      break;
                 }
                 return true;
             }

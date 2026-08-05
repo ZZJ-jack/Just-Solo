@@ -18,10 +18,12 @@ class HotkeyManager : public QObject, public QAbstractNativeEventFilter
     Q_OBJECT
 public:
     enum HotkeyId {
-        PlayPause = 0,
-        Next     = 1,
-        Previous = 2,
-        Count    = 3
+        PlayPause   = 0,
+        Next        = 1,
+        Previous    = 2,
+        FastForward = 3,
+        Rewind      = 4,
+        Count       = 5
     };
 
     explicit HotkeyManager(const QString &cacheDir, QObject *parent = nullptr);
@@ -39,6 +41,8 @@ signals:
     void playPauseTriggered();
     void nextTriggered();
     void previousTriggered();
+    void fastForwardTriggered();
+    void rewindTriggered();
     void hotkeyChanged();
 
 private:

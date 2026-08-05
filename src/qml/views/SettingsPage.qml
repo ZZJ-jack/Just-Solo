@@ -532,7 +532,7 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520
-            Layout.preferredHeight: 280
+            Layout.preferredHeight: 380
             radius: 8
             color: "#222222"; border.color: "#3A3A3A"
 
@@ -545,7 +545,7 @@ Rectangle {
                     font.family: fontFamily; font.pixelSize: 15; font.bold: true; color: "#ffffff"
                 }
 
-                // 三行快捷键
+                // 快捷键列表
                 Column {
                     Layout.fillWidth: true
                     spacing: 10
@@ -554,7 +554,9 @@ Rectangle {
                         model: [
                             { label: "播放 / 暂停", id: 0 },
                             { label: "下一首",       id: 1 },
-                            { label: "上一首",       id: 2 }
+                            { label: "上一首",       id: 2 },
+                            { label: "快进 5 秒",    id: 3 },
+                            { label: "快退 5 秒",    id: 4 }
                         ]
 
                         delegate: Rectangle {
@@ -678,9 +680,11 @@ Rectangle {
                             function resetDefault() {
                                 var mods = Qt.ControlModifier | Qt.AltModifier
                                 var defaults = [
-                                    { key: Qt.Key_Space, mods: mods },
-                                    { key: Qt.Key_Right, mods: mods },
-                                    { key: Qt.Key_Left,  mods: mods }
+                                    { key: Qt.Key_Space,  mods: mods },
+                                    { key: Qt.Key_Right,  mods: mods },
+                                    { key: Qt.Key_Left,   mods: mods },
+                                    { key: Qt.Key_Right,  mods: Qt.ControlModifier },
+                                    { key: Qt.Key_Left,   mods: Qt.ControlModifier }
                                 ]
                                 var d = defaults[hkId]
                                 hotkeyManager.setHotkey(hkId, d.key, d.mods)
