@@ -1813,8 +1813,8 @@ Window {
 
                 Popup {
                     id: modePopupBar
-                    x: -width - 12
-                    y: parent.height / 2 - height / 2
+                    x: (parent.width - width) / 2
+                    y: -height - 12
                     padding: 6
                     closePolicy: Popup.CloseOnEscape  // 不自动关闭，由定时器管理
 
