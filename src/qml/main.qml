@@ -64,6 +64,7 @@ Window {
     property var _manualPlaylistIndices: []    // 普通自定义列表在 customPlaylists 中的索引
     property var _artistPlaylistIndices: []    // 歌手列表在 customPlaylists 中的索引
     property var _artistDialogFilter: []       // 歌手选择对话框的过滤后列表
+    property string _connectedClientName: ""  // LyricServer 连接的客户端名称
     property var _existingArtistNames: ({})    // 已创建歌手列表的歌手名集合（去重标记）
 
     function _rebuildPlaylistIndices() {
@@ -2331,6 +2332,95 @@ Window {
     }
 
     // ============================================================
+    // LyricServer 第三方客户端连接通知对话框
+    // ============================================================
+    Dialog {
+        id: lyricServerConnectDialog
+        parent: Overlay.overlay
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: Math.min(parent.width * 0.7, 440)
+        height: 200
+        padding: 0
+
+        Overlay.modal: Rectangle { color: "#80000000" }
+
+        background: Rectangle { color: "#222222"; radius: 10 }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            // 标题栏
+            Rectangle {
+                Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 10
+                color: "#2C2C2C"
+                Rectangle { width: parent.width; height: 10; color: "#2C2C2C"; anchors.bottom: parent.bottom }
+                Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.bottom: parent.bottom }
+
+                Label {
+                    anchors.centerIn: parent
+                    text: "LyricServer连接"
+                    font.family: appFont.name; font.pixelSize: 16; font.bold: true; color: "#ddd"
+                }
+            }
+
+            // 正文
+            ColumnLayout {
+                Layout.fillWidth: true; Layout.fillHeight: true
+                Layout.leftMargin: 24; Layout.rightMargin: 24; Layout.topMargin: 20; Layout.bottomMargin: 8
+                spacing: 8
+
+                Label {
+                    Layout.fillWidth: true
+                    text: "检测到第三方客户端连接到了"
+                    font.family: appFont.name; font.pixelSize: 14; color: "#ccc"
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: "Just Solo LyricServer服务"
+                    font.family: appFont.name; font.pixelSize: 14; color: "#ccc"
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: "客户端名称：<font color='#00d4ff'>" + mainWindow._connectedClientName + "</font>"
+                    textFormat: Text.RichText
+                    font.family: appFont.name; font.pixelSize: 14; color: "#ccc"
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            // 底部按钮
+            Rectangle {
+                Layout.fillWidth: true; Layout.preferredHeight: 52; radius: 10
+                color: "#222222"
+                Rectangle { width: parent.width; height: 10; color: "#222222"; anchors.top: parent.top }
+                Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.top: parent.top }
+
+                RowLayout {
+                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    anchors.rightMargin: 16; spacing: 10
+
+                    Rectangle {
+                        Layout.preferredHeight: 34; Layout.preferredWidth: 80; radius: 6
+                        color: lsConnectOkMA.containsMouse ? "#333333" : "#1E1E1E"
+                        border.color: "#3A3A3A"; border.width: 1
+                        Label { anchors.centerIn: parent; text: "确定"; font.family: appFont.name; font.pixelSize: 13; color: "#ccc" }
+                        MouseArea {
+                            id: lsConnectOkMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: lyricServerConnectDialog.close()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
     // 歌手选择对话框
     // ============================================================
     Dialog {
@@ -2803,6 +2893,15 @@ Window {
         target: musicManager
         function onCustomPlaylistsChanged() {
             mainWindow._rebuildPlaylistIndices()
+        }
+    }
+
+    // ---- LyricServer 第三方客户端连接通知 ----
+    Connections {
+        target: lyricServer
+        function onClientConnected(clientName) {
+            mainWindow._connectedClientName = clientName
+            lyricServerConnectDialog.open()
         }
     }
 

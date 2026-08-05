@@ -91,6 +91,23 @@ void LyricServer::onNewConnection()
         connect(client, &QWebSocket::disconnected,
                 this, &LyricServer::onClientDisconnected);
 
+        // v1.2.0: 监听客户端 hello 消息（声明客户端名称）
+        connect(client, &QWebSocket::textMessageReceived,
+                this, &LyricServer::onTextMessageReceived);
+
+        // 超时定时器：500ms 内未收到 hello → 按未知客户端通知
+        QTimer *helloTimer = new QTimer(client);
+        helloTimer->setSingleShot(true);
+        m_helloTimers[client] = helloTimer;
+        connect(helloTimer, &QTimer::timeout, this, [this, client]() {
+            m_helloTimers.remove(client);
+            // 超时仍未收到 hello，断开监听
+            disconnect(client, &QWebSocket::textMessageReceived,
+                       this, &LyricServer::onTextMessageReceived);
+            emit clientConnected(QStringLiteral("未知客户端"));
+        });
+        helloTimer->start(500);
+
         // 补推当前歌词
         client->sendTextMessage(QString::fromUtf8(buildInitPayload()));
 
@@ -123,8 +140,43 @@ void LyricServer::onClientDisconnected()
     QWebSocket *client = qobject_cast<QWebSocket *>(sender());
     if (client) {
         m_clients.removeAll(client);
+        // 清理 hello 定时器
+        if (m_helloTimers.contains(client)) {
+            m_helloTimers[client]->stop();
+            m_helloTimers.remove(client);
+        }
         client->deleteLater();
     }
+}
+
+void LyricServer::onTextMessageReceived(const QString &message)
+{
+    QWebSocket *client = qobject_cast<QWebSocket *>(sender());
+    if (!client) return;
+
+    // 只处理第一条消息（hello），之后不再监听
+    disconnect(client, &QWebSocket::textMessageReceived,
+               this, &LyricServer::onTextMessageReceived);
+
+    // 尝试解析 hello 消息: {"type":"hello","client":"客户端名称"}
+    QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
+    QJsonObject obj = doc.object();
+    if (obj.value("type").toString() == "hello") {
+        QString name = obj.value("client").toString().trimmed();
+        if (name.isEmpty()) name = QStringLiteral("未知客户端");
+
+        // 取消超时定时器
+        if (m_helloTimers.contains(client)) {
+            m_helloTimers[client]->stop();
+            m_helloTimers.remove(client);
+        }
+
+        if (m_devMode)
+            qDebug("JustSolo LyricServer: 客户端 hello — %s", qPrintable(name));
+
+        emit clientConnected(name);
+    }
+    // 非 hello 消息：忽略（向下兼容，旧客户端不发送任何消息）
 }
 
 // ============================================================

@@ -1,4 +1,4 @@
-# Just Solo LyricServer 协议 v1.0.0
+# Just Solo LyricServer 协议 v1.1.0
 
 ## 简介
 
@@ -54,6 +54,7 @@ Just Solo LyricServer 是 Just Solo 音乐播放器内置的 **单向 WebSocket 
 | 最小开销 | 每帧约 40–100 字节 JSON；无客户端时自动停推 |
 | 即连即用 | 连接后立即补推当前完整状态，零握手 |
 | 无状态服务端 | 不维护客户端会话，任意数量客户端并发连接 |
+| 客户端名称（协议v1.1.0+） | 客户端可在连接后发送可选的 `hello` 消息声明名称；旧客户端不发送也完全兼容 |
 
 ---
 
@@ -88,11 +89,26 @@ Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
 Sec-WebSocket-Version: 13
 ```
 
-### 2.3 Ping / Pong
+### 2.3 客户端名称声明（协议v1.1.0+，可选）
+
+客户端在 WebSocket 连接建立后，可发送一条 `hello` 消息声明自己的名称。Just Solo 收到后会弹出通知提示用户。
+
+```json
+{"type":"hello","client":"我的桌面歌词"}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `string` | 是 | 固定 `"hello"` |
+| `client` | `string` | 是 | 客户端名称，任意 UTF-8 文本 |
+
+**向下兼容：** 旧客户端不发送 `hello` 消息也能正常使用所有推送功能。Just Solo 会在连接 500ms 后按"未知客户端"通知用户。
+
+### 2.4 Ping / Pong
 
 服务端 **不主动发送** Ping 帧，也不要求客户端发 Pong。断线检测依赖 TCP 层面的 `disconnected` 信号、操作系统 TCP keep-alive（默认 2 小时）及客户端自身的重连逻辑。
 
-### 2.4 端口冲突
+### 2.5 端口冲突
 
 如果 `47290` 端口已被占用，`LyricServer::start()` 返回 `false`，Just Solo 仍正常运行但 `lyricServer.running === false`。设置页"关于"中将显示「未启用」。
 
@@ -445,6 +461,8 @@ class LyricClient {
     this.ws.onopen = () => {
       this.reconnectDelay = 1000;
       this.onStatusChange('connected');
+      // v1.1.0+: 声明客户端名称（可选，向下兼容）
+      this.ws.send(JSON.stringify({ type: 'hello', client: '我的桌面歌词' }));
     };
     this.ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
@@ -513,6 +531,8 @@ class LyricClient:
                 async with websockets.connect(self.url) as ws:
                     self._reconnect_delay = 1
                     self.on_status_change("connected")
+                    # v1.1.0+: 声明客户端名称（可选，向下兼容）
+                    await ws.send(json.dumps({"type": "hello", "client": "我的桌面歌词"}))
                     async for raw in ws:
                         msg = json.loads(raw)
                         await self._handle(msg)
@@ -599,6 +619,11 @@ public class LyricClient : IDisposable
                 await _ws.ConnectAsync(new Uri(_url), _cts.Token);
                 OnConnectionChanged?.Invoke(true);
                 delay = 1000;
+
+                // v1.1.0+: 声明客户端名称（可选，向下兼容）
+                var hello = Encoding.UTF8.GetBytes(
+                    JsonSerializer.Serialize(new { type = "hello", client = "我的桌面歌词" }));
+                await _ws.SendAsync(hello, WebSocketMessageType.Text, true, _cts.Token);
 
                 var buffer = new byte[4096];
                 var sb = new StringBuilder();
@@ -711,6 +736,7 @@ netstat -ano | findstr 47290
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| v1.1.0 | 2026-08-05 | 新增可选 `hello` 消息：客户端可声明名称，Just Solo 弹窗提示第三方连接；向下兼容旧客户端 |
 | v1.0.2 | 2026-07-26 | 将`progress` 推送间隔从 300ms 变更为 400ms，修复进度更新过快问题 |
 | v1.0.1 | 2026-07-25 | 修复Just Solo内置的LyricServer问题：将`progress` 推送间隔从 200ms 更改为 300ms，修复进度更新过快问题 |
 | v1.0.0 | 2026-07-24 | 初始发布；`init`（lyrics 含 translation 字段）+ `progress`（200ms）+ `playback`（playing/paused） |

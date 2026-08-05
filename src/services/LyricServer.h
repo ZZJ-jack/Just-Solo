@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QList>
 #include <QTimer>
+#include <QHash>
 
 class MusicManager;
 class QWebSocketServer;
@@ -16,6 +17,8 @@ class QWebSocket;
  *   - init      切歌时推送完整歌词时间轴
  *   - progress  播放中每 300ms 推送当前进度（毫秒）
  *   - playback  播放/暂停状态变化时推送
+ *
+ * v1.2.0 新增：客户端可发送 hello 消息声明名称（向下兼容）
  */
 class LyricServer : public QObject
 {
@@ -33,10 +36,12 @@ public:
 
 signals:
     void runningChanged();
+    void clientConnected(const QString &clientName);   // 第三方客户端连接
 
 private slots:
     void onNewConnection();
     void onClientDisconnected();
+    void onTextMessageReceived(const QString &message); // 接收客户端 hello
     void onLyricsChanged();     // → init
     void onPlaybackChanged();   // → playback + 控制 progress 定时器
     void onProgressTick();      // → progress
@@ -51,6 +56,7 @@ private:
     QList<QWebSocket *> m_clients;
     QTimer *m_progressTimer;
     bool m_devMode = false;      // 开发者模式（--develop）：输出客户端连接日志
+    QHash<QWebSocket *, QTimer *> m_helloTimers;  // hello 超时定时器
 };
 
 #endif // LYRICSERVER_H

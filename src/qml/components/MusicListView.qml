@@ -612,10 +612,10 @@ ColumnLayout {
 
             Label {
                 text: root.dialogMode === "custom"
-                      ? "当前播放来源不是本列表，\n点击确定将改变播放列表并播放选定的歌曲。"
+                      ? "当前播放来源不是本列表，\n将改变播放列表并播放选定的歌曲。"
                       : root.dialogMode === "switch"
-                      ? "当前播放来源不是本列表，\n点击确定将切换播放来源并播放选定的歌曲。"
-                      : "当前播放来源不是本列表，\n点击确定将从头播放选定的歌曲。"
+                      ? "当前播放来源不是本列表，\n将切换播放来源并播放选定的歌曲。"
+                      : "当前播放来源不是本列表，\n将从头播放选定的歌曲。"
                 font.family: fontFamily
                 font.pixelSize: 15
                 lineHeight: 1.4

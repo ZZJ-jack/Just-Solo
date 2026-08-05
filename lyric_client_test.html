@@ -95,6 +95,8 @@ function connect() {
     document.getElementById('dot').className = 'dot on';
     document.getElementById('connText').textContent = '已连接';
     document.getElementById('reconnectInfo').textContent = '';
+    // v1.1.0+: 声明客户端名称（可选，向下兼容）
+    ws.send(JSON.stringify({ type: 'hello', client: '网页测试客户端' }));
   };
 
   ws.onmessage = (ev) => {
