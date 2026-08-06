@@ -15,13 +15,17 @@ Item {
         return f !== "" ? f : fontFamily
     }
 
-    // 歌词布局字号：最大化窗口保持原字号，默认窗口略小
-    property real _fontFactor: (typeof mainWindow !== "undefined" && mainWindow && mainWindow.visibility === Window.Maximized) ? 1.0 : 0.85
+    // 歌词布局字号：最大化/全屏窗口时歌词放大，默认窗口略小
+    property real _fontFactor: (typeof mainWindow !== "undefined" && mainWindow
+                                && (mainWindow.visibility === Window.FullScreen
+                                    || mainWindow.visibility === Window.Maximized)) ? 1.2 : 0.85
     property real mainFontSize: 52 * _fontFactor
     property real transFontSize: 30 * _fontFactor
 
-    // 封面高度系数：最大化窗口时封面再放大一点
-    property real _coverHeightFactor: (typeof mainWindow !== "undefined" && mainWindow && mainWindow.visibility === Window.Maximized) ? 0.62 : 0.55
+    // 封面高度系数：最大化/全屏窗口时封面再放大一点
+    property real _coverHeightFactor: (typeof mainWindow !== "undefined" && mainWindow
+                                       && (mainWindow.visibility === Window.FullScreen
+                                           || mainWindow.visibility === Window.Maximized)) ? 0.62 : 0.55
 
     property bool opening: false
     property int _pastIdx: -1  // 已播放到的歌词行索引（前进时增大，回退/切歌时重置）
@@ -250,7 +254,6 @@ Item {
             anchors.fill: parent
             visible: root._immersiveBg || opacity > 0
             opacity: root._immersiveBg ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 400 } }
 
             // 主色调底层：切歌时颜色平滑过渡（ColorAnimation）
             Rectangle {

@@ -56,7 +56,6 @@ Window {
         anchors.fill: parent
         visible: miniWindow._immersiveBg || opacity > 0
         opacity: miniWindow._immersiveBg ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 400 } }
 
         // 主色调底层：切歌时颜色平滑过渡（ColorAnimation）
         Rectangle {
