@@ -28,6 +28,7 @@ Item {
                                            || mainWindow.visibility === Window.Maximized)) ? 0.62 : 0.55
 
     property bool opening: false
+    property bool _closing: false  // 是否为真正的关闭流程：控制 closeAnim 完成时是否允许隐藏页面
     property int _pastIdx: -1  // 已播放到的歌词行索引（前进时增大，回退/切歌时重置）
     property int _lastIdxTime: 0  // 上次切行的时间戳，用于区分正常播放与快速 seek
 
@@ -58,11 +59,24 @@ Item {
 
     function close() {
         if (!visible || opening) return
+        // 标记为真正的关闭流程：closeAnim 完成后才允许隐藏页面
+        // （防止进入小窗后立刻退出时，残留 closeAnim 的回调把重新打开的页面又隐藏）
+        root._closing = true
         closeAnim.start()
+        // 延迟 50ms 后通知控制栏变回原色（让详情页关闭动画先启动一点点）
+        controlBarResetTimer.restart()
     }
 
     // 强制重新打开（处理意外隐藏/状态不同步的情况）
     function reopen() {
+        // 取消关闭流程标记：残留 closeAnim 完成时不得隐藏页面
+        root._closing = false
+        // 停止控制栏重置计时器，避免它把 showPlayerDetail 覆盖回 false
+        // （小窗退出后立即重新打开详情页的场景）
+        controlBarResetTimer.stop()
+        // 确保控制栏沉浸色状态为 true（防止残留 closeAnim 回调已把其置 false）
+        if (typeof mainWindow !== "undefined" && mainWindow)
+            mainWindow.showPlayerDetail = true
         openAnim.stop()
         closeAnim.stop()
         opening = true
@@ -75,6 +89,16 @@ Item {
         } else {
             visible = true
             // onVisibleChanged 中将启动 openAnim.start()
+        }
+    }
+
+    // 控制栏重置计时器：close() 后 50ms 触发，通知底部控制栏变回原色
+    Timer {
+        id: controlBarResetTimer
+        interval: 50
+        onTriggered: {
+            if (typeof mainWindow !== "undefined" && mainWindow)
+                mainWindow.showPlayerDetail = false
         }
     }
 
@@ -136,6 +160,10 @@ Item {
 
     onVisibleChanged: {
         if (visible) {
+            // 重新显示：取消关闭流程标记，残留 closeAnim 完成时不得隐藏页面
+            root._closing = false
+            // 先停掉残留的关闭动画，防止其 onFinished 把 visible 设回 false
+            closeAnim.stop()
             opening = true
             openAnim.start() // 直接启动动画，不再等待沉浸背景渲染
         } else {
@@ -216,7 +244,11 @@ Item {
             }
         }
         onFinished: {
-            root.visible = false
+            // 仅当确实是关闭流程时才隐藏页面；否则忽略（页面已被重新打开）
+            if (root._closing) {
+                root._closing = false
+                root.visible = false
+            }
         }
     }
 

@@ -1535,10 +1535,14 @@ Window {
         property int currentSeconds: Math.floor(musicManager.position / 1000)
         property int totalSeconds: Math.floor(musicManager.duration / 1000)
 
-        // ---- 沉浸背景调色层：详情页打开时控制栏同步封面主色调 ----
+        // ---- 沉浸背景调色层：进入详情页立即变色，退出详情页先变回原色 ----
+        // 进入：showPlayerDetail=true → playerDetail.visible=true 时控制栏立即显示沉浸色
+        // 退出：PlayerDetailPage.close() 中延迟 50ms 将 showPlayerDetail 置 false，
+        //       控制栏先变回原色，详情页关闭动画随后完成
         Rectangle {
             anchors.fill: parent
-            visible: mainWindow.showPlayerDetail
+            visible: playerDetail.visible
+                     && mainWindow.showPlayerDetail
                      && (typeof musicManager !== "undefined" && musicManager)
                      && musicManager.playbackBackground === 1
 
@@ -1803,7 +1807,8 @@ Window {
         RowLayout {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             Layout.rightMargin: 16
-            spacing: 24
+            // 收藏(36)、循环(24)、音量(22) 三个按钮中心间距拉齐（音量按钮补 5px）
+            spacing: 19
 
             // ---- 当前时长 / 总时长 ----
             Label {
@@ -1829,8 +1834,8 @@ Window {
             // ---- 收藏按钮 ----
             Item {
                 id: favBtnBar
-                Layout.preferredWidth: 28
-                Layout.preferredHeight: 28
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 36
 
                 // 当前曲目是否已收藏（引用 favorites 触发刷新）
                 property bool isFav: {
@@ -1843,7 +1848,7 @@ Window {
                     source: favBtnBar.isFav
                         ? "qrc:/qt/qml/JustSolo/data/image/mylike-on.png"
                         : "qrc:/qt/qml/JustSolo/data/image/mylike-off.png"
-                    width: 24; height: 24
+                    width: 28; height: 28
                     opacity: (favMABar.containsMouse || favBtnBar.isFav) ? 1.0 : 0.7
                     Behavior on opacity { NumberAnimation { duration: 120 } }
                 }
@@ -1877,6 +1882,9 @@ Window {
                     Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                     opacity: (modeMABar.containsMouse || modePopupBar.visible) ? 1.0 : 0.7
                     Behavior on opacity { NumberAnimation { duration: 120 } }
+                    // 图标提亮为纯白
+                    layer.enabled: true
+                    layer.effect: MultiEffect { brightness: 1.0 }
                 }
 
                 // 轮询检查，鼠标离开按钮和菜单 450ms 后关闭
@@ -1981,6 +1989,8 @@ Window {
                 id: volumeBtn
                 Layout.preferredWidth: 22
                 Layout.preferredHeight: 22
+                // 补偿左间距，使三个按钮中心间距一致
+                Layout.leftMargin: 5
 
                 Image {
                     anchors.centerIn: parent
@@ -1988,6 +1998,9 @@ Window {
                     width: 20; height: 20
                     opacity: (volumeMA.containsMouse || volumePopup.visible) ? 1.0 : 0.7
                     Behavior on opacity { NumberAnimation { duration: 120 } }
+                    // 图标提亮为纯白
+                    layer.enabled: true
+                    layer.effect: MultiEffect { brightness: 1.0 }
                 }
 
                 // 轮询检查，鼠标离开按钮/弹窗/间隙/滑块拖拽区 450ms 后关闭

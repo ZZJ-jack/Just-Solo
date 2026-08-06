@@ -1,5 +1,5 @@
 // ============================================================
-// MiniPlayer — 迷你播放小窗（300×100，无边框，独立于主窗口）
+// MiniPlayer — 迷你播放小窗（350×130，无边框，独立于主窗口）
 // ============================================================
 import QtQuick
 import QtQuick.Window
@@ -10,11 +10,11 @@ import QtQuick.Effects
 Window {
     id: miniWindow
     width: 350
-    height: 100
+    height: 130
     minimumWidth: 350
-    minimumHeight: 100
+    minimumHeight: 130
     maximumWidth: 350
-    maximumHeight: 100
+    maximumHeight: 130
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     color: "transparent"
     title: "Just Solo"
@@ -27,6 +27,15 @@ Window {
 
     // 退出小窗信号
     signal exitMiniMode()
+
+    // 时间格式化（MM:SS，分钟与秒均补零）
+    function fmtTime(ms) {
+        if (ms < 0) ms = 0
+        var s = Math.floor(ms / 1000)
+        var m = Math.floor(s / 60)
+        var ss = s % 60
+        return (m < 10 ? "0" : "") + m + ":" + (ss < 10 ? "0" : "") + ss
+    }
 
     // ============================================================
     // 字体加载
@@ -101,10 +110,11 @@ Window {
         anchors.margins: 6
         spacing: 8
 
-        // ---- 左侧：封面（上下顶格） ----
+        // ---- 左侧：封面（正方形，上下居中） ----
         Rectangle {
-            Layout.preferredWidth: 88
-            Layout.fillHeight: true
+            Layout.preferredWidth: 100
+            Layout.preferredHeight: 100
+            Layout.alignment: Qt.AlignVCenter
             radius: 6
             color: "#3A3A3A"
 
@@ -146,8 +156,8 @@ Window {
             // ---- 歌曲标题（居中） ----
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 22
-                Layout.topMargin: 2
+                Layout.preferredHeight: 19
+                Layout.topMargin: 1
                 clip: true
 
                 property bool needsScroll: titleText.contentWidth > width
@@ -183,7 +193,7 @@ Window {
                 }
                 font.family: _font; font.pixelSize: 11; color: "#FFFFFF"
                 Layout.fillWidth: true
-                Layout.preferredHeight: 14
+                Layout.preferredHeight: 11
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 visible: text !== ""
@@ -193,8 +203,8 @@ Window {
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 6
-                Layout.topMargin: 4
-                Layout.bottomMargin: 2
+                Layout.topMargin: 10
+                Layout.bottomMargin: 1
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
@@ -221,6 +231,21 @@ Window {
                     onClicked: function(m) { seek(m.x) }
                     onPressed: function(m) { seek(m.x) }
                     onPositionChanged: function(m) { if (pressed) seek(m.x) }
+                }
+            }
+
+            // ---- 时间显示：左当前播放时间，右音频总时长（统一白色） ----
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                Label {
+                    text: miniWindow.fmtTime(musicManager.position)
+                    font.family: _font; font.pixelSize: 10; color: "#FFFFFF"
+                }
+                Item { Layout.fillWidth: true }
+                Label {
+                    text: miniWindow.fmtTime(musicManager.duration)
+                    font.family: _font; font.pixelSize: 10; color: "#FFFFFF"
                 }
             }
 
@@ -345,9 +370,9 @@ Window {
                                         y: (24 - height) / 2 - (index === 3 ? 1 : 0)  // 垂直居中，随机播放上移 1px
                                         fillMode: Image.PreserveAspectFit
                                         opacity: (itemMA.containsMouse || musicManager.playMode === index) ? 1.0 : 0.65
-                                        // 选中项加亮度提升
-                                        layer.enabled: musicManager.playMode === index
-                                        layer.effect: MultiEffect { brightness: 0.12 }
+                                        // 图标统一提亮为纯白（选中项靠透明度区分）
+                                        layer.enabled: true
+                                        layer.effect: MultiEffect { brightness: 1.0 }
                                         Behavior on opacity { NumberAnimation { duration: 120 } }
 
                                         MouseArea {
@@ -390,11 +415,10 @@ Window {
                         }
                     }
 
-                    // 播放/暂停
+                    // 播放/暂停（无底色，仅图标）
                     Rectangle {
-                        Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: 17
-                        color: "#3A3A3A"
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Layout.preferredWidth: 40; Layout.preferredHeight: 40; radius: 20
+                        color: "transparent"
                         Image {
                             anchors.centerIn: parent
                             source: {
@@ -403,7 +427,7 @@ Window {
                                     ? "qrc:/qt/qml/JustSolo/data/image/playing.png"
                                     : "qrc:/qt/qml/JustSolo/data/image/play.png"
                             }
-                            width: 20; height: 20; anchors.horizontalCenterOffset: (!musicManager || !musicManager.isPlaying) ? 1 : 0
+                            width: 26; height: 26; anchors.horizontalCenterOffset: (!musicManager || !musicManager.isPlaying) ? 1 : 0
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -445,6 +469,9 @@ Window {
                         width: 18; height: 18
                         opacity: exitMA.containsMouse ? 1.0 : 1.0
                         Behavior on opacity { NumberAnimation { duration: 120 } }
+                        // 图标提亮为纯白
+                        layer.enabled: true
+                        layer.effect: MultiEffect { brightness: 1.0 }
                     }
                     MouseArea {
                         id: exitMA
