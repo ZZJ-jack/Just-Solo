@@ -2,5 +2,7 @@
     <qresource prefix="/qt/qml/JustSolo/data/font">
         <file alias="HarmonyOS_Sans_SC_Regular.ttf">HarmonyOS_Sans_SC_Regular.ttf</file>
         <file alias="AaZhuNiWoMingMeiXiangChunTian-2.ttf">AaZhuNiWoMingMeiXiangChunTian-2.ttf</file>
+        <file alias="DongLiShanZhouLiangTongShuZhengKai（FanTi）.ttf">DongLiShanZhouLiangTongShuZhengKai（FanTi）.ttf</file>
+        <file alias="AaBiMoHengZiZhenBaoKaiShu.ttf">AaBiMoHengZiZhenBaoKaiShu.ttf</file>
     </qresource>
 </RCC>

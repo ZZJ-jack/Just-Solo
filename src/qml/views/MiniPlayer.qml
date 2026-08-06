@@ -393,7 +393,7 @@ Window {
 
                     // 播放/暂停
                     Rectangle {
-                        Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 14
+                        Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: 17
                         color: "#3A3A3A"
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Image {
@@ -404,7 +404,7 @@ Window {
                                     ? "qrc:/qt/qml/JustSolo/data/image/playing.png"
                                     : "qrc:/qt/qml/JustSolo/data/image/play.png"
                             }
-                            width: 16; height: 16; anchors.horizontalCenterOffset: (!musicManager || !musicManager.isPlaying) ? 1 : 0
+                            width: 20; height: 20; anchors.horizontalCenterOffset: (!musicManager || !musicManager.isPlaying) ? 1 : 0
                         }
                         MouseArea {
                             anchors.fill: parent

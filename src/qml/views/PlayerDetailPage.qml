@@ -278,7 +278,7 @@ Item {
 
     // 迷你小窗按钮
     Rectangle {
-        anchors.top: parent.top; anchors.right: closeBtn.left
+        anchors.top: parent.top; anchors.right: maxBtn.left
         anchors.topMargin: 14; anchors.rightMargin: 8
         width: 36; height: 36; radius: 18
         color: miniEnterMA.containsMouse ? "#33ffffff" : "transparent"
@@ -329,6 +329,48 @@ Item {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: root.close() 
+        }
+    }
+
+    // 最大化按钮
+    Rectangle {
+        id: maxBtn
+        anchors.top: parent.top; anchors.right: closeBtn.left
+        anchors.topMargin: 14; anchors.rightMargin: 8
+        width: 36; height: 36; radius: 18
+        color: maxBtnMA.containsMouse ? "#33ffffff" : "transparent"
+
+        Image {
+            id: maxBtnIcon
+            visible: false
+            width: 20; height: 20
+            source: (typeof mainWindow !== "undefined" && mainWindow && mainWindow.visibility === Window.FullScreen)
+                    ? "qrc:/qt/qml/JustSolo/data/image/Biggest-exit.png"
+                    : "qrc:/qt/qml/JustSolo/data/image/Biggest-enter.png"
+            fillMode: Image.PreserveAspectFit
+        }
+        MultiEffect {
+            anchors.centerIn: parent
+            width: maxBtnIcon.width; height: maxBtnIcon.height
+            source: maxBtnIcon
+            // 染色为白色 #FFFFFF，与迷你小窗/关闭按钮统一
+            colorizationColor: "#FFFFFF"
+            colorization: 1.0
+        }
+
+        MouseArea {
+            id: maxBtnMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                if (typeof mainWindow === "undefined" || !mainWindow) return
+                // 等效 F11 全屏切换
+                if (mainWindow.visibility === Window.FullScreen)
+                    mainWindow.showNormal()
+                else
+                    mainWindow.showFullScreen()
+            }
         }
     }
 

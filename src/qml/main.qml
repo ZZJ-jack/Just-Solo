@@ -1535,6 +1535,31 @@ Window {
         property int currentSeconds: Math.floor(musicManager.position / 1000)
         property int totalSeconds: Math.floor(musicManager.duration / 1000)
 
+        // ---- 沉浸背景调色层：详情页打开时控制栏同步封面主色调 ----
+        Rectangle {
+            anchors.fill: parent
+            visible: mainWindow.showPlayerDetail
+                     && (typeof musicManager !== "undefined" && musicManager)
+                     && musicManager.playbackBackground === 1
+
+            // 主色调底层（与详情页沉浸背景同一取色源）
+            Rectangle {
+                anchors.fill: parent
+                color: (typeof musicManager !== "undefined" && musicManager)
+                       ? (musicManager.currentCoverColor || "#181818") : "#181818"
+                Behavior on color { ColorAnimation { duration: 600 } }
+            }
+
+            // 深色渐变遮罩：顶部与详情页背景底部无缝衔接，向底部继续加深
+            Rectangle {
+                anchors.fill: parent
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#D8181818" }
+                    GradientStop { position: 1.0; color: "#E8181818" }
+                }
+            }
+        }
+
         // 吸顶进度条 (作为 playerBar 的上边框)
         Rectangle {
             id: barProgressTrack
