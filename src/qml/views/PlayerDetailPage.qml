@@ -437,6 +437,7 @@ Item {
                     anchors.fill: parent; anchors.margins: 3
                     source: (typeof musicManager !== "undefined" && musicManager) ? (musicManager.currentCover || "") : ""
                     fillMode: Image.PreserveAspectFit; asynchronous: true
+                    sourceSize: Qt.size(640, 640)  // 限制解码尺寸，避免全尺寸封面位图占用内存
                     visible: source !== ""
                     opacity: status === Image.Ready ? 1 : 0
 
@@ -545,10 +546,11 @@ Item {
                 // 上下留白让当前行居中，只展示约 5 句
                 topMargin: parent.height * 0.38; bottomMargin: parent.height * 0.38
                 clip: true; reuseItems: true
-                // cacheBuffer 调大：歌词行高度不固定（有无翻译/换行不同），
-                // 只实例化可视区的行时，Qt 对远处行按平均行高估算，居中会累计偏移；
-                // 全部行实例化后几何信息始终真实，任意行都能精确居中
-                cacheBuffer: 1000000
+                // 历史原因：歌词行高度不固定（有无翻译/换行不同），曾用超大 cacheBuffer(1000000)
+                // 让全部行实例化以保证任意行精确居中，但这会让数千行 delegate 全部常驻内存。
+                // 改为约一屏半的合理值，让 reuseItems 真正生效；远处行未实例化时
+                // centerOnIndex 会先 positionViewAtIndex 粗略定位，再由 _centerRetryTimer 精确定位
+                cacheBuffer: 1500
                 // 窗口大小变化后自动重新居中当前歌词（防抖，避免拖动过程中持续触发；平滑滚动）
                 onWidthChanged: { lyricRecenterTimer.snap = false; lyricRecenterTimer.restart() }
                 onHeightChanged: { lyricRecenterTimer.snap = false; lyricRecenterTimer.restart() }

@@ -260,7 +260,8 @@ private:
     void updateCurrentTrack();
     void updateCurrentCoverColor();          // 从 m_currentCover 提取主色调
     static QString extractCoverColor(const QString &coverUrl);
-    void registerBuiltinFonts();             // 启动时注册 data/font 内置字体，记录族名
+    void registerBuiltinFonts();             // 启动时注册当前选用的内置字体，其余按需注册
+    void ensureFontRegistered(const QString &file);  // 按需注册内置歌词字体（已注册则跳过）
     static QString builtinFontPath(const QString &file);  // 内置字体 qrc 路径
     void updateLyricIndex();
     void onMetaDataChanged();
@@ -278,6 +279,7 @@ private:
     void loadHistory();
     void saveCustomPlaylists();
     void loadCustomPlaylists();
+    void shrinkLegacyCoverCache();   // 历史版本缓存的封面是全尺寸，启动时把 >512px 的在位重写为缩略图
     QString m_cacheDir;          // 缓存目录（如 %APPDATA%/Just Solo）
     bool m_useCache = false;     // 开发者模式=false，非开发者模式=true
 

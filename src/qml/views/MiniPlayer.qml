@@ -124,6 +124,7 @@ Window {
                 source: (typeof musicManager !== "undefined" && musicManager) ? (musicManager.currentCover || "") : ""
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
+                sourceSize: Qt.size(200, 200)  // 显示仅 100px，限制解码尺寸降低图像缓存内存
                 visible: source !== ""
                 opacity: status === Image.Ready ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 200 } }

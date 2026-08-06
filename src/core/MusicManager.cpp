@@ -6,6 +6,7 @@
 #include <QStandardPaths>
 #include <QCryptographicHash>
 #include <QImage>
+#include <QImageReader>
 #include <QTimer>
 #include <QRandomGenerator>
 #include <QEventLoop>
@@ -212,8 +213,8 @@ static QVariantMap buildTrack(const QString &filePath)
                     }
                     if (!coverImg.isNull()) {
                         QByteArray hash = QCryptographicHash::hash(filePath.toUtf8(), QCryptographicHash::Md5).toHex();
-                        QString cacheFile = coverDir() + "/" + QString::fromLatin1(hash) + ".jpg";
-                        if (coverImg.save(cacheFile, "JPEG"))
+                        QString cacheFile = MetadataReader::cacheCoverThumbnail(coverImg, coverDir(), QString::fromLatin1(hash));
+                        if (!cacheFile.isEmpty())
                             cover = QUrl::fromLocalFile(cacheFile).toString();
                     }
                     if (cover.isEmpty()) {
@@ -303,8 +304,8 @@ static QVariantMap buildTrack(const QString &filePath)
     }
     if (!coverImg.isNull()) {
         QByteArray hash = QCryptographicHash::hash(filePath.toUtf8(), QCryptographicHash::Md5).toHex();
-        QString cacheFile = coverDir() + "/" + QString::fromLatin1(hash) + ".jpg";
-        if (coverImg.save(cacheFile, "JPEG"))
+        QString cacheFile = MetadataReader::cacheCoverThumbnail(coverImg, coverDir(), QString::fromLatin1(hash));
+        if (!cacheFile.isEmpty())
             track["cover"] = QUrl::fromLocalFile(cacheFile).toString();
     }
     if (!track.contains("cover") || track["cover"].toString().isEmpty()) {
@@ -387,10 +388,39 @@ void MusicManager::setUseCache(bool use) {
     m_cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(m_cacheDir);
     loadSettings();
+    // 用户上次选用的内置字体此时才从设置读出，补注册（启动默认只注册了鸿蒙字体）
+    if (m_lyricFont.startsWith(QStringLiteral("builtin:")))
+        ensureFontRegistered(m_lyricFont.mid(8));
     loadCache();
     loadFavorites();
     loadHistory();
     loadCustomPlaylists();
+    // 历史版本封面缓存是全尺寸（可达 36MB/张），启动后异步压缩到 512px 内
+    if (use)
+        QTimer::singleShot(0, this, &MusicManager::shrinkLegacyCoverCache);
+}
+
+// 把超过 512px 的历史封面缓存原位重写为缩略图（路径不变，已存储的 URL 仍有效）
+void MusicManager::shrinkLegacyCoverCache()
+{
+    QDir dir(coverDir());
+    const QStringList entries = dir.entryList({"*.jpg", "*.jpeg", "*.png"}, QDir::Files);
+    for (const QString &name : entries) {
+        const QString filePath = dir.filePath(name);
+        QImageReader reader(filePath);
+        const QSize size = reader.size();  // 仅读文件头，不解码整图
+        if (!size.isValid() || (size.width() <= 512 && size.height() <= 512))
+            continue;
+        QImage img = reader.read();
+        if (img.isNull())
+            continue;
+        QImage thumb = img.scaled(512, 512, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        if (QFileInfo(name).suffix().toLower() == "png")
+            thumb.save(filePath, "PNG");
+        else
+            thumb.save(filePath, "JPEG", 90);
+        qDebug() << "[CoverCache] shrunk legacy cover" << name << size;
+    }
 }
 
 void MusicManager::clearUserData() {
@@ -610,19 +640,24 @@ QString MusicManager::builtinFontPath(const QString &file) {
 }
 
 void MusicManager::registerBuiltinFonts() {
-    const QStringList files = {
-        QStringLiteral("HarmonyOS_Sans_SC_Regular.ttf"),
-        QStringLiteral("AaZhuNiWoMingMeiXiangChunTian-2.ttf"),
-        QStringLiteral("DongLiShanZhouLiangTongShuZhengKai（FanTi）.ttf"),
-        QStringLiteral("AaBiMoHengZiZhenBaoKaiShu.ttf"),
-    };
-    for (const QString &file : files) {
-        int id = QFontDatabase::addApplicationFont(builtinFontPath(file));
-        if (id < 0) continue;
-        const QStringList fams = QFontDatabase::applicationFontFamilies(id);
-        if (!fams.isEmpty())
-            m_builtinFontFamilies[builtinFontPath(file)] = fams.first();
-    }
+    // 只注册当前选用的内置字体（默认鸿蒙），其余按需注册。
+    // 全部注册会让 4 个内置字体（共约 44MB）常驻内存，而同一时间只会用到一种
+    QString file = m_lyricFont.startsWith(QStringLiteral("builtin:"))
+            ? m_lyricFont.mid(8)
+            : QStringLiteral("HarmonyOS_Sans_SC_Regular.ttf");
+    ensureFontRegistered(file);
+}
+
+void MusicManager::ensureFontRegistered(const QString &file) {
+    const QString path = builtinFontPath(file);
+    if (m_builtinFontFamilies.contains(path))
+        return;  // 已注册
+    int id = QFontDatabase::addApplicationFont(path);
+    if (id < 0)
+        return;
+    const QStringList fams = QFontDatabase::applicationFontFamilies(id);
+    if (!fams.isEmpty())
+        m_builtinFontFamilies[path] = fams.first();
 }
 
 QVariantList MusicManager::builtinLyricFonts() const {
@@ -683,6 +718,9 @@ QString MusicManager::lyricFontFamily() const {
 void MusicManager::setLyricFont(const QString &v) {
     if (v == m_lyricFont) return;
     m_lyricFont = v;
+    // 切换到未注册的内置字体时按需注册
+    if (v.startsWith(QStringLiteral("builtin:")))
+        ensureFontRegistered(v.mid(8));
     emit lyricFontChanged();
     saveSettings();
 }
@@ -1852,18 +1890,22 @@ static QString extractEmbeddedLyricsFromFile(const QString &filePath) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return {};
 
-    QByteArray data = file.readAll();
-    file.close();
-    if (data.isEmpty()) return {};
+    // 只读文件头判断格式，再按格式读取所需区域，避免整文件 readAll
+    QByteArray head = file.read(12);
+    if (head.isEmpty()) return {};
 
     // === MP3 ID3v2 USLT (Unsynchronized Lyrics) ===
-    if (data.startsWith("ID3")) {
+    if (head.startsWith("ID3")) {
         // 读取 ID3v2 头大小（syncsafe 编码）
         quint32 tagSize = 0;
         for (int i = 6; i <= 9; ++i) {
-            tagSize = (tagSize << 7) | (static_cast<quint8>(data[i]) & 0x7F);
+            tagSize = (tagSize << 7) | (static_cast<quint8>(head[i]) & 0x7F);
         }
         tagSize += 10; // 加上头本身
+
+        // 只读 ID3v2 标签区（通常 < 100KB），不读整首音频
+        file.seek(0);
+        QByteArray data = file.read(qint64(tagSize));
 
         if (tagSize > static_cast<quint32>(data.size())) tagSize = data.size();
 
@@ -1918,7 +1960,10 @@ static QString extractEmbeddedLyricsFromFile(const QString &filePath) {
     }
 
     // === FLAC Vorbis Comment ===
-    if (data.startsWith("fLaC")) {
+    if (head.startsWith("fLaC")) {
+        // 元数据块（含 Vorbis Comment 歌词）都在文件开头，只读前 1MB
+        file.seek(0);
+        QByteArray data = file.read(1024 * 1024);
         int pos = 4; // 跳过 "fLaC"
         while (pos + 4 <= data.size()) {
             quint8 blockType = static_cast<quint8>(data[pos]) & 0x7F;
@@ -1963,7 +2008,10 @@ static QString extractEmbeddedLyricsFromFile(const QString &filePath) {
     }
 
     // === Ogg/Opus (OpusTags) 与 Ogg/Vorbis（注释头）中的 LYRICS= 注释 ===
-    if (data.startsWith("OggS")) {
+    if (head.startsWith("OggS")) {
+        // 注释头在前几个 Ogg page，只读前 1MB
+        file.seek(0);
+        QByteArray data = file.read(1024 * 1024);
         QByteArray curPacket;   // 跨页累积的 packet（lacing=255 表示分片未结束）
         bool commentChecked = false;
         int pos = 0;
@@ -2009,11 +2057,12 @@ static QString extractEmbeddedLyricsFromFile(const QString &filePath) {
     // 不能用 startsWith("ftyp") 判断（MP3 的 "ID3"/FLAC 的 "fLaC" 才是真正的文件头）。
     QString mp4Ext = QFileInfo(filePath).suffix().toLower();
     bool isMp4 = (mp4Ext == "m4a" || mp4Ext == "mp4");
-    if (!isMp4 && data.size() >= 8) {
-        const QByteArray atomType = data.mid(4, 4);
+    if (!isMp4 && head.size() >= 8) {
+        const QByteArray atomType = head.mid(4, 4);
         isMp4 = (atomType == "ftyp" || atomType == "moov" || atomType == "styp");
     }
     if (isMp4) {
+        // readMP4TextTags 已流式化：只读 moov 区间，不再二次整读
         QMap<QString, QString> tags = MetadataReader::readMP4TextTags(filePath, nullptr);
         QString lyrics = tags.value(QStringLiteral("LYRICS")).trimmed();
         if (!lyrics.isEmpty()) return lyrics;

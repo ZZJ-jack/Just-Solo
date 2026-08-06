@@ -13,6 +13,27 @@
 // Public API
 // ============================================================
 
+QString MetadataReader::cacheCoverThumbnail(const QImage &image, const QString &cacheDir,
+                                            const QString &fileNameBase, int maxSize)
+{
+    if (image.isNull())
+        return QString();
+    QDir cache(cacheDir);
+    if (!cache.exists())
+        cache.mkpath(".");
+    // 等比缩图到 maxSize 内再落盘，避免全尺寸封面解码占用内存
+    QImage thumb = image;
+    if (thumb.width() > maxSize || thumb.height() > maxSize)
+        thumb = thumb.scaled(maxSize, maxSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QString cacheFile = cache.filePath(fileNameBase + ".jpg");
+    if (!thumb.save(cacheFile, "JPEG", 90)) {
+        cacheFile = cache.filePath(fileNameBase + ".png");
+        if (!thumb.save(cacheFile, "PNG"))
+            return QString();
+    }
+    return cacheFile;
+}
+
 AudioMetadata MetadataReader::read(const QString &filePath, const QString &cacheDir)
 {
     AudioMetadata meta;
@@ -67,19 +88,10 @@ AudioMetadata MetadataReader::read(const QString &filePath, const QString &cache
         meta.tagFound = !tags.isEmpty();
     }
 
-    // 封面处理
+    // 封面处理（缩图缓存，见 cacheCoverThumbnail）
     if (!embeddedCover.isNull()) {
-        QDir cache(cacheDir);
-        if (!cache.exists()) cache.mkpath(".");
         QByteArray hash = QCryptographicHash::hash(filePath.toUtf8(), QCryptographicHash::Md5).toHex();
-        QString cacheFile = cache.filePath(QString::fromLatin1(hash) + ".jpg");
-        if (!embeddedCover.save(cacheFile, "JPEG")) {
-            cacheFile = cache.filePath(QString::fromLatin1(hash) + ".png");
-            if (!embeddedCover.save(cacheFile, "PNG"))
-                cacheFile.clear();
-        }
-        if (!cacheFile.isEmpty())
-            meta.coverPath = cacheFile;
+        meta.coverPath = cacheCoverThumbnail(embeddedCover, cacheDir, QString::fromLatin1(hash));
     } else {
         QString external = findExternalCover(filePath);
         if (!external.isEmpty())
@@ -477,9 +489,29 @@ QMap<QString, QString> MetadataReader::readMP4TextTags(const QString &filePath, 
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly))
         return tags;
-    QByteArray data = file.readAll();
+
+    // 流式定位 moov：只遍历顶层 atom 头（8 字节），mdat 等大块直接 seek 跳过，
+    // 找到 moov 后仅把该区间读入内存（几十 KB ~ 几 MB），避免整文件 readAll
+    const qint64 fileSize = file.size();
+    qint64 pos = 0;
+    while (pos + 8 <= fileSize) {
+        if (!file.seek(pos))
+            break;
+        QByteArray hdr = file.read(8);
+        if (hdr.size() < 8)
+            break;
+        quint32 sz = mp4BE32(hdr, 0);
+        if (sz < 8)
+            break;
+        if (hdr.mid(4, 4) == "moov") {
+            const qint64 moovLen = qMin<qint64>(sz, fileSize - pos);
+            QByteArray moov = file.read(moovLen);
+            walkMp4Atoms(moov, 0, moov.size(), &tags, outCover, 0);
+            break;
+        }
+        pos += sz;  // 跳过该 atom（含 mdat 大块）
+    }
     file.close();
-    walkMp4Atoms(data, 0, data.size(), &tags, outCover, 0);
     return tags;
 }
 
@@ -495,7 +527,8 @@ QMap<QString, QString> MetadataReader::readOggTags(const QString &filePath, QIma
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly))
         return tags;
-    QByteArray data = file.readAll();
+    // 注释头只在前几个 Ogg page 内，只读前 1MB 即可，避免整文件 readAll
+    QByteArray data = file.read(1024 * 1024);
     file.close();
     if (!data.startsWith("OggS"))
         return tags;

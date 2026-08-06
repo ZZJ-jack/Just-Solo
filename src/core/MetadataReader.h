@@ -23,6 +23,9 @@ public:
     static QMap<QString, QString> readMP4TextTags(const QString &filePath, QImage *outCover);
     // Ogg/Opus - 解析 OpusTags / Vorbis 注释头，返回 TITLE/ARTIST/ALBUM/LYRICS
     static QMap<QString, QString> readOggTags(const QString &filePath, QImage *outCover);
+    // 封面缓存：等比缩图到 maxSize 内后存为 JPEG(质量90)，失败回退 PNG；返回最终绝对路径（空=失败）
+    static QString cacheCoverThumbnail(const QImage &image, const QString &cacheDir,
+                                       const QString &fileNameBase, int maxSize = 512);
 
 private:
     // ID3v2 (MP3) - 返回 text frame 字典 + 封面 + TLEN 时长
