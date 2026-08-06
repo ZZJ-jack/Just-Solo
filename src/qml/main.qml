@@ -318,7 +318,7 @@ Window {
                     color: "#3A3A3A2B"
                 }
 
-                Item { Layout.preferredHeight: 14 } // 还原你原本的代码间距
+                Item { Layout.preferredHeight: 6 } // 与下方分割线间距保持一致，按钮居中于上下线之间
 
                 // ---- 设置按钮 ----
                 Rectangle {
@@ -1180,13 +1180,15 @@ Window {
 
                     // ---- 清除播放列表按钮（仅播放列表页） ----
                     Rectangle {
-                        Layout.preferredHeight: 28; radius: 4
+                        Layout.preferredHeight: 28; radius: 6
                         Layout.preferredWidth: clearPlaylistText.contentWidth + 20
-                        color: clearPlaylistMA.containsMouse ? "#3a2a2a" : "transparent"
+                        Layout.alignment: Qt.AlignVCenter
+                        color: clearPlaylistMA.containsMouse ? "#4A4A4A" : "#333333"
+                        Behavior on color { ColorAnimation { duration: 120 } }
                         visible: currentMenu === "playlist"
                         Label {
                             id: clearPlaylistText
-                            text: "清除播放列表"; font.family: appFont.name; font.pixelSize: 12; color: "#969696"
+                            text: "清除播放列表"; font.family: appFont.name; font.pixelSize: 13; color: "#cccccc"
                             anchors.centerIn: parent
                         }
                         MouseArea {
@@ -1198,13 +1200,15 @@ Window {
 
                     // ---- 清除所有历史按钮（仅历史页） ----
                     Rectangle {
-                        Layout.preferredHeight: 28; radius: 4
+                        Layout.preferredHeight: 28; radius: 6
                         Layout.preferredWidth: clearBtnText.contentWidth + 20
-                        color: clearBtnMA.containsMouse ? "#3a2a2a" : "transparent"
+                        Layout.alignment: Qt.AlignVCenter
+                        color: clearBtnMA.containsMouse ? "#4A4A4A" : "#333333"
+                        Behavior on color { ColorAnimation { duration: 120 } }
                         visible: currentMenu === "history"
                         Label {
                             id: clearBtnText
-                            text: "清除所有历史"; font.family: appFont.name; font.pixelSize: 12; color: "#969696"
+                            text: "清除所有历史"; font.family: appFont.name; font.pixelSize: 13; color: "#cccccc"
                             anchors.centerIn: parent
                         }
                         MouseArea {
@@ -1217,7 +1221,8 @@ Window {
                     // ---- 添加音乐按钮（仅首页） ----
                     Rectangle {
                         Layout.preferredWidth: 140
-                        Layout.preferredHeight: 36
+                        Layout.preferredHeight: 28
+                        Layout.alignment: Qt.AlignVCenter
                         radius: 6
                         color: addMusicBtn.containsMouse ? "#4A4A4A" : "#333333"
                         Behavior on color { ColorAnimation { duration: 120 } }
@@ -1240,9 +1245,10 @@ Window {
                     // ---- 从音乐库导入（仅自定义列表页） ----
                     Rectangle {
                         Layout.preferredWidth: importLibBtnText.contentWidth + 28
-                        Layout.preferredHeight: 36
+                        Layout.preferredHeight: 28
+                        Layout.alignment: Qt.AlignVCenter
                         radius: 6
-                        color: importLibBtnMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                        color: importLibBtnMA.containsMouse ? "#4A4A4A" : "#333333"
                         Behavior on color { ColorAnimation { duration: 120 } }
                         visible: currentMenu === "customPlaylist" && musicManager.library.length > 0 && !_isCurrentArtistList()
                         Label {
@@ -1251,7 +1257,7 @@ Window {
                             text: "从音乐库导入"
                             font.family: appFont.name
                             font.pixelSize: 13
-                            color: "#ddd"
+                            color: "#cccccc"
                         }
                         MouseArea {
                             id: importLibBtnMA
@@ -1265,6 +1271,27 @@ Window {
                                 _rebuildDialogLibrary()
                                 libraryImportDialog.open()
                             }
+                        }
+                    }
+
+                    // ---- 刷新歌曲按钮（仅歌手类型自定义列表） ----
+                    Rectangle {
+                        Layout.preferredWidth: refreshArtistText.contentWidth + 20
+                        Layout.preferredHeight: 28; radius: 6
+                        Layout.alignment: Qt.AlignVCenter
+                        color: refreshArtistMA.containsMouse ? "#4A4A4A" : "#333333"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        visible: currentMenu === "customPlaylist" && _isCurrentArtistList()
+                        Label {
+                            id: refreshArtistText
+                            text: "刷新歌曲"; font.family: appFont.name; font.pixelSize: 13; color: "#cccccc"
+                            anchors.centerIn: parent
+                        }
+                        MouseArea {
+                            id: refreshArtistMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: musicManager.refreshArtistPlaylist(currentCustomPlaylistIndex)
                         }
                     }
                 }

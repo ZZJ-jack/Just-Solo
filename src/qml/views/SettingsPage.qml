@@ -786,8 +786,6 @@ Rectangle {
             width: appearanceScroll.availableWidth
             spacing: 0
 
-            Item { Layout.preferredHeight: 14 }
-
         // 歌词字体
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520
@@ -1226,7 +1224,6 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "about"
-        Item { Layout.preferredHeight: 8 }
         Label { text: "Just Solo - 轻量级桌面音乐播放器"; font.family: fontFamily; font.pixelSize: 15; color: "#ffffff" }
         Item { Layout.preferredHeight: 4 }
         Label { text: "软件版本: " + (typeof APP_VERSION !== "undefined" ? APP_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#777777" }
@@ -1254,8 +1251,6 @@ Rectangle {
     ColumnLayout {
         anchors.fill: parent; spacing: 0
         visible: settingsSubMenu === "lyricserver"
-
-        Item { Layout.preferredHeight: 8 }
 
         // 服务状态卡片
         Rectangle {
