@@ -665,8 +665,6 @@ QVariantList MusicManager::builtinLyricFonts() const {
     static const Entry entries[] = {
         {"HarmonyOS_Sans_SC_Regular.ttf", "鸿蒙字体（默认）"},
         {"AaZhuNiWoMingMeiXiangChunTian-2.ttf", "Aa筑你我们像春天"},
-        {"DongLiShanZhouLiangTongShuZhengKai（FanTi）.ttf", "东篱山舟梁同书正楷（繁体）"},
-        {"AaBiMoHengZiZhenBaoKaiShu.ttf", "Aa笔墨横姿珍宝楷书"},
     };
     QVariantList result;
     for (const auto &e : entries) {
