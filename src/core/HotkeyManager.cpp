@@ -157,6 +157,16 @@ int HotkeyManager::hotkeyMods(int id) const
     return m_bindings[id].qtMods;
 }
 
+void HotkeyManager::suspendHotkeys()
+{
+    unregisterAll();
+}
+
+void HotkeyManager::resumeHotkeys()
+{
+    registerAll();
+}
+
 bool HotkeyManager::nativeEventFilter(const QByteArray &eventType, void *message, qintptr * /*result*/)
 {
 #ifdef Q_OS_WIN

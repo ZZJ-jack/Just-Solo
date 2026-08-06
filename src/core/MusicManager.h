@@ -26,6 +26,7 @@ class MusicManager : public QObject
     Q_PROPERTY(QString currentCover READ currentCover NOTIFY currentTrackChanged)
     Q_PROPERTY(QString currentCoverColor READ currentCoverColor NOTIFY currentCoverColorChanged)
     Q_PROPERTY(QString currentAlbum READ currentAlbum NOTIFY currentTrackChanged)
+    Q_PROPERTY(QString currentPath READ currentPath NOTIFY currentTrackChanged)
     Q_PROPERTY(bool isLoading READ isLoading NOTIFY isLoadingChanged)
     Q_PROPERTY(qreal importProgress READ importProgress NOTIFY importProgressChanged)
     Q_PROPERTY(int importProcessed READ importProcessed NOTIFY importProgressChanged)
@@ -113,6 +114,7 @@ public:
     QString currentCover() const { return m_currentCover; }
     QString currentCoverColor() const { return m_currentCoverColor; }
     QString currentAlbum() const;
+    QString currentPath() const { return m_currentMediaPath; }
     QVariantList currentLyrics() const { return m_currentLyrics; }
     int lyricIndex() const { return m_lyricIndex; }
     qreal detailOpacity() const { return m_detailOpacity; }
@@ -202,6 +204,8 @@ public:
     Q_INVOKABLE void toggleFavorite(const QVariantMap &track);   // 切换收藏（有则删，无则加）
     Q_INVOKABLE void removeFavorite(int index);                  // 按收藏列表索引删除
     Q_INVOKABLE bool isFavorite(const QVariantMap &track);       // 检查是否已收藏
+    Q_INVOKABLE void toggleCurrentFavorite();                   // 切换当前播放曲目的收藏（保留完整元数据）
+    Q_INVOKABLE bool isCurrentFavorite() const;                 // 当前播放曲目是否已收藏
 
     // ---- 历史 ----
     Q_INVOKABLE void addToHistory(const QVariantMap &track);     // 播放时自动调用

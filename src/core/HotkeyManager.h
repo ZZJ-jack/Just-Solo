@@ -34,6 +34,9 @@ public:
     // QML 调用：获取当前快捷键的 Qt key code
     Q_INVOKABLE int hotkeyKey(int id) const;
     Q_INVOKABLE int hotkeyMods(int id) const;
+    // 录入快捷键期间挂起/恢复全局热键，避免击键被系统拦截直接触发操作
+    Q_INVOKABLE void suspendHotkeys();
+    Q_INVOKABLE void resumeHotkeys();
 
     bool nativeEventFilter(const QByteArray &eventType, void *message, qintptr *result) override;
 

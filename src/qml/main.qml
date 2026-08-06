@@ -361,17 +361,17 @@ Window {
                     }
                 }
 
-                Item { Layout.preferredHeight: 4 }
+                Item { Layout.preferredHeight: 2 }
 
                 // ---- 分割线 ----
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
-                    Layout.topMargin: 12
+                    Layout.topMargin: 4
                     color: "#3A3A3A2B"
                 }
 
-                Item { Layout.preferredHeight: 14 }
+                Item { Layout.preferredHeight: 2 }
 
                 // ---- 主导航（非设置页可见） ----
                 ColumnLayout {
@@ -1752,6 +1752,60 @@ Window {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             Layout.rightMargin: 16
             spacing: 24
+
+            // ---- 当前时长 / 总时长 ----
+            Label {
+                Layout.alignment: Qt.AlignVCenter
+                font.family: appFont.name
+                font.pixelSize: 13
+                color: "#777777"
+                text: {
+                    // 引用 favorites 无关，此处仅触发 position/duration 变化时刷新
+                    var curSec = Math.floor(musicManager.position / 1000)
+                    var totSec = Math.floor(musicManager.duration / 1000)
+                    function fmt(s) {
+                        if (s < 0) s = 0
+                        var m = Math.floor(s / 60)
+                        var ss = Math.floor(s % 60)
+                        return (m < 10 ? "0" : "") + m + ":" + (ss < 10 ? "0" : "") + ss
+                    }
+                    return "<font color='#ffffff'>" + fmt(curSec) + "</font> / " + fmt(totSec)
+                }
+                textFormat: Text.StyledText
+            }
+
+            // ---- 收藏按钮 ----
+            Item {
+                id: favBtnBar
+                Layout.preferredWidth: 28
+                Layout.preferredHeight: 28
+
+                // 当前曲目是否已收藏（引用 favorites 触发刷新）
+                property bool isFav: {
+                    musicManager.favorites
+                    return musicManager.currentPath !== "" && musicManager.isCurrentFavorite()
+                }
+
+                Image {
+                    anchors.centerIn: parent
+                    source: favBtnBar.isFav
+                        ? "qrc:/qt/qml/JustSolo/data/image/mylike-on.png"
+                        : "qrc:/qt/qml/JustSolo/data/image/mylike-off.png"
+                    width: 24; height: 24
+                    opacity: (favMABar.containsMouse || favBtnBar.isFav) ? 1.0 : 0.7
+                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                }
+
+                MouseArea {
+                    id: favMABar
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    enabled: musicManager.currentPath !== ""
+                    onClicked: musicManager.toggleCurrentFavorite()
+                }
+            }
 
             // ---- 循环模式按钮 ----
             Item {

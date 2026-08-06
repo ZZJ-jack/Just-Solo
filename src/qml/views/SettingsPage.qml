@@ -59,7 +59,16 @@ Rectangle {
         hotkeyManager.setHotkey(capturingHkId, event.key, event.modifiers)
         capturingHkId = -1
         focus = false
+        hotkeyManager.resumeHotkeys()
         event.accepted = true
+    }
+
+    // 离开设置页时结束捕获并恢复全局热键
+    Component.onDestruction: {
+        if (capturingHkId >= 0) {
+            capturingHkId = -1
+            hotkeyManager.resumeHotkeys()
+        }
     }
 
     // ---- 软件更新 ----
@@ -655,10 +664,12 @@ Rectangle {
                                             if (hotkeyRow.capturing) {
                                                 settingsRoot.capturingHkId = -1
                                                 settingsRoot.focus = false
+                                                hotkeyManager.resumeHotkeys()
                                             } else {
                                                 settingsRoot.capturingHkId = hkId
                                                 settingsRoot.focus = true
                                                 settingsRoot.forceActiveFocus()
+                                                hotkeyManager.suspendHotkeys()
                                             }
                                         }
                                     }

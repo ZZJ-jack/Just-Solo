@@ -220,7 +220,7 @@ Rectangle {
                     elide: Text.ElideRight
                     width: Math.min(implicitWidth,
                         titleArtistItem.width - (qualityBadge.visible ? qualityBadge.width + bottomRow.spacing + 2 : 0) - 2)
-                    visible: model.artist && model.artist !== ""
+                    visible: (model.artist || "") !== ""
                 }
 
                 Rectangle {
@@ -229,7 +229,7 @@ Rectangle {
                     height: 18
                     radius: 3
                     color: "#CDB800"
-                    visible: model.quality && model.quality !== ""
+                    visible: (model.quality || "") !== ""
                     opacity: 0.8
                     Behavior on opacity { NumberAnimation { duration: 120 } }
                     Label {

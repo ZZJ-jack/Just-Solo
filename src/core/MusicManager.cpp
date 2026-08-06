@@ -2210,6 +2210,28 @@ bool MusicManager::isFavorite(const QVariantMap &track) {
     return false;
 }
 
+void MusicManager::toggleCurrentFavorite() {
+    const QVariantList *list = (m_playlistSource == 1) ? &m_favorites
+                              : (m_playlistSource == 2) ? &m_history : &m_playlist;
+    if (m_currentIndex < 0 || m_currentIndex >= list->size()) return;
+    // 使用当前播放列表中的完整曲目（含 name/artist/cover/album/duration 等），
+    // 避免仅存 path 导致收藏页无法正常显示
+    toggleFavorite(list->at(m_currentIndex).toMap());
+}
+
+bool MusicManager::isCurrentFavorite() const {
+    const QVariantList *list = (m_playlistSource == 1) ? &m_favorites
+                             : (m_playlistSource == 2) ? &m_history : &m_playlist;
+    if (m_currentIndex < 0 || m_currentIndex >= list->size()) return false;
+    QString path = list->at(m_currentIndex).toMap()["path"].toString();
+    if (path.isEmpty()) return false;
+    for (const QVariant &item : m_favorites) {
+        if (item.toMap()["path"].toString() == path)
+            return true;
+    }
+    return false;
+}
+
 // ============================================================
 // 历史（最近播放）
 // ============================================================
