@@ -353,7 +353,7 @@ Item {
 
         Image {
             anchors.centerIn: parent
-            width: 18; height: 18
+            width: 23; height: 23
             source: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round'><path d='M18 6L6 18M6 6l12 12'/></svg>"
             fillMode: Image.PreserveAspectFit
         }
@@ -378,7 +378,7 @@ Item {
         Image {
             id: maxBtnIcon
             visible: false
-            width: 20; height: 20
+            width: 18; height: 18
             source: (typeof mainWindow !== "undefined" && mainWindow && mainWindow.visibility === Window.FullScreen)
                     ? "qrc:/qt/qml/JustSolo/data/image/Biggest-exit.png"
                     : "qrc:/qt/qml/JustSolo/data/image/Biggest-enter.png"

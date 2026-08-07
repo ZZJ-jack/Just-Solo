@@ -273,7 +273,7 @@ Rectangle {
                 source: (songRow.isCurrent && musicManager.isPlaying)
                     ? "qrc:/qt/qml/JustSolo/data/image/playing.png"
                     : "qrc:/qt/qml/JustSolo/data/image/play.png"
-                width: 20; height: 20; opacity: 0.7
+                width: 25; height: 25; opacity: 0.7
                 visible: rowMouse.containsMouse && !contextMenuOpen
 
                 MouseArea {
@@ -300,7 +300,7 @@ Rectangle {
                         ? "qrc:/qt/qml/JustSolo/data/image/mylike-on.png"
                         : "qrc:/qt/qml/JustSolo/data/image/mylike-off.png"
                 }
-                width: 20; height: 20; opacity: 0.7
+                width: 25; height: 25; opacity: 0.7
                 visible: rowMouse.containsMouse && !contextMenuOpen
 
                 MouseArea {
@@ -322,7 +322,7 @@ Rectangle {
             Image {
                 anchors.centerIn: parent
                 source: "qrc:/qt/qml/JustSolo/data/image/menu.png"
-                width: 16; height: 16
+                width: 20; height: 20
                 opacity: 0.6
 
                 MouseArea {

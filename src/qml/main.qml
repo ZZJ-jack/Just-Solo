@@ -1648,7 +1648,7 @@ Window {
                     font.family: appFont.name
                     font.pixelSize: 12
                     font.bold: true
-                    color: "#777777"            // 默认颜色（应用于 / 总时间 部分）
+                    color: "#ffffff"            // 默认颜色（应用于 / 总时间 部分）
                     textFormat: Text.StyledText  // 开启富文本/样式文本支持
 
                     text: {
@@ -1815,7 +1815,7 @@ Window {
                 Layout.alignment: Qt.AlignVCenter
                 font.family: appFont.name
                 font.pixelSize: 13
-                color: "#777777"
+                color: "#ffffff"
                 text: {
                     // 引用 favorites 无关，此处仅触发 position/duration 变化时刷新
                     var curSec = Math.floor(musicManager.position / 1000)
@@ -2195,13 +2195,12 @@ Window {
             }
 
             // 播放 / 暂停
-            Rectangle {
-                width: 42; height: 42; radius: 21; color: "#3A3A3A"
+            Item {
+                width: 32; height: 32
                 anchors.verticalCenter: parent.verticalCenter
-                Behavior on color { ColorAnimation { duration: 120 } }
                 Image {
                     source: "qrc:/qt/qml/JustSolo/data/image/play.png"
-                    width: 24; height: 24
+                    width: 36; height: 36
                     anchors.centerIn: parent
                     opacity: musicManager.isPlaying ? 0 : 1
                     anchors.horizontalCenterOffset: 1
@@ -2209,7 +2208,7 @@ Window {
                 }
                 Image {
                     source: "qrc:/qt/qml/JustSolo/data/image/playing.png"
-                    width: 24; height: 24
+                    width: 32; height: 32
                     anchors.centerIn: parent
                     opacity: musicManager.isPlaying ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: 120 } }
