@@ -1890,7 +1890,8 @@ Window {
                     property int missCount: 0
                     onTriggered: {
                         if (speedBgMA.containsMouse || speedMABar.containsMouse
-                                || speedSlider.pressed || speedSlider.hovered) {
+                                || speedSlider.pressed || speedSlider.hovered
+                                || speedContentHover.hovered) {
                             missCount = 0
                         } else {
                             missCount++
@@ -1947,6 +1948,11 @@ Window {
                     contentItem: Column {
                         width: 200
                         spacing: 8
+
+                        // 检测整个内容区域的 hover（不拦截事件，保障 Slider/档位按钮交互）
+                        HoverHandler {
+                            id: speedContentHover
+                        }
 
                         // 标题行：变速 + 当前倍率
                         RowLayout {
