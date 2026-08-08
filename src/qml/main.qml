@@ -2024,7 +2024,6 @@ Window {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             musicManager.playbackRate = modelData
-                                            speedPopup.close()
                                         }
                                     }
                                 }
@@ -2146,7 +2145,6 @@ Window {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         musicManager.playMode = index
-                                        modePopupBar.close()
                                     }
                                 }
                             }
