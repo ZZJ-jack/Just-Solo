@@ -383,7 +383,6 @@ Window {
                                             onClicked: {
                                                 if (typeof musicManager !== "undefined" && musicManager)
                                                     musicManager.playMode = index
-                                                modePopup.close()
                                             }
                                         }
                                     }
