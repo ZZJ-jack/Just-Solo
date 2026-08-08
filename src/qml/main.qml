@@ -1807,8 +1807,8 @@ Window {
         RowLayout {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             Layout.rightMargin: 16
-            // 收藏(36)、循环(24)、音量(22) 三个按钮中心间距拉齐（音量按钮补 5px）
-            spacing: 19
+            // 收藏(28)、变速(24)、循环(24)、音量(22) 按钮统一间距（Layout spacing 17，压缩宽度以右移时长/收藏）
+            spacing: 17
 
             // ---- 当前时长 / 总时长 ----
             Label {
@@ -1834,7 +1834,7 @@ Window {
             // ---- 收藏按钮 ----
             Item {
                 id: favBtnBar
-                Layout.preferredWidth: 36
+                Layout.preferredWidth: 28
                 Layout.preferredHeight: 36
 
                 // 当前曲目是否已收藏（引用 favorites 触发刷新）
@@ -1861,6 +1861,170 @@ Window {
                     cursorShape: Qt.PointingHandCursor
                     enabled: musicManager.currentPath !== ""
                     onClicked: musicManager.toggleCurrentFavorite()
+                }
+            }
+
+            // ---- 变速按钮（循环按钮左侧） ----
+            Item {
+                id: speedBtnBar
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
+
+                Image {
+                    anchors.centerIn: parent
+                    source: "qrc:/qt/qml/JustSolo/data/image/speed_change.png"
+                    width: 18; height: 18
+                    opacity: (speedMABar.containsMouse || speedPopup.visible) ? 1.0 : 0.7
+                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                    // 图标提亮为纯白
+                    layer.enabled: true
+                    layer.effect: MultiEffect { brightness: 1.0 }
+                }
+
+                // 轮询检查，鼠标离开按钮和菜单 450ms 后关闭
+                Timer {
+                    id: speedCloseTimer
+                    interval: 150
+                    repeat: true
+                    running: false
+                    property int missCount: 0
+                    onTriggered: {
+                        if (speedBgMA.containsMouse || speedMABar.containsMouse
+                                || speedSlider.pressed || speedSlider.hovered) {
+                            missCount = 0
+                        } else {
+                            missCount++
+                            if (missCount >= 3) {
+                                missCount = 0
+                                stop()
+                                speedPopup.close()
+                            }
+                        }
+                    }
+                }
+
+                MouseArea {
+                    id: speedMABar
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: {
+                        speedCloseTimer.stop()
+                        speedCloseTimer.missCount = 0
+                        speedCloseTimer.start()
+                        speedPopup.open()
+                    }
+                    onExited: {
+                        // 不立即动作，让轮询定时器判断
+                    }
+                }
+
+                Popup {
+                    id: speedPopup
+                    x: (parent.width - width) / 2
+                    y: -height - 12
+                    padding: 6
+                    closePolicy: Popup.CloseOnEscape  // 不自动关闭，由定时器管理
+
+                    background: Rectangle {
+                        radius: 8
+                        color: "#222222"
+                        border.color: "#3A3A3A"
+                        border.width: 1
+                        opacity: musicManager.speedMenuOpacity || 0.8
+                        Behavior on opacity { NumberAnimation { duration: 120 } }
+
+                        // 菜单框内任意位置保持打开
+                        MouseArea {
+                            id: speedBgMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                        }
+                    }
+
+                    contentItem: Column {
+                        width: 200
+                        spacing: 8
+
+                        // 标题行：变速 + 当前倍率
+                        RowLayout {
+                            width: parent.width
+                            spacing: 6
+                            Label {
+                                text: "变速"
+                                font.family: appFont.name
+                                font.pixelSize: 13
+                                color: "#aaaaaa"
+                            }
+                            Item { Layout.fillWidth: true }
+                            Label {
+                                text: Math.round(musicManager.playbackRate * 100) + "%"
+                                font.family: appFont.name
+                                font.pixelSize: 13
+                                font.bold: true
+                                color: "#3B82F6"
+                            }
+                        }
+
+                        // 无极调节滑块 0.5x ~ 2.0x
+                        Slider {
+                            id: speedSlider
+                            width: parent.width
+                            from: 0.5; to: 2.0; stepSize: 0.01
+                            value: musicManager.playbackRate
+                            hoverEnabled: true  // 启用 hovered，供自动关闭判定使用
+                            onMoved: musicManager.playbackRate = value
+
+                            background: Rectangle {
+                                x: 0; y: parent.height / 2 - 2
+                                width: parent.width; height: 4; radius: 2; color: "#3A3A3A"
+                            }
+                            contentItem: Rectangle {
+                                width: parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from)
+                                height: 4; radius: 2; color: "#3B82F6"
+                            }
+                            handle: Rectangle {
+                                x: parent.leftPadding + parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from) - width / 2
+                                y: parent.height / 2 - height / 2
+                                width: 14; height: 14; radius: 7; color: "#3B82F6"
+                            }
+                        }
+
+                        // 快捷档位
+                        Row {
+                            spacing: 6
+                            Repeater {
+                                model: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+                                Rectangle {
+                                    readonly property bool isCurrent: Math.abs(musicManager.playbackRate - modelData) < 0.001
+                                    width: 34
+                                    height: 22
+                                    radius: 4
+                                    color: speedPresetMA.containsMouse ? "#333333" : (isCurrent ? "#2C2C2C" : "transparent")
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: String(modelData) + "x"
+                                        font.family: appFont.name
+                                        font.pixelSize: 11
+                                        color: isCurrent ? "#3B82F6" : "#cccccc"
+                                    }
+                                    MouseArea {
+                                        id: speedPresetMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            musicManager.playbackRate = modelData
+                                            speedPopup.close()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1989,8 +2153,6 @@ Window {
                 id: volumeBtn
                 Layout.preferredWidth: 22
                 Layout.preferredHeight: 22
-                // 补偿左间距，使三个按钮中心间距一致
-                Layout.leftMargin: 5
 
                 Image {
                     anchors.centerIn: parent

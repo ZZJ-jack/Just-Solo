@@ -28,6 +28,8 @@ public:
     qint64 duration() const;
     void setVolume(float vol);
     float volume() const;
+    void setPitch(float pitch);
+    float pitch() const { return m_pitch; }
     bool isPlaying() const;
 
     // WASAPI 输出模式：true=独占, false=共享（默认）。切换时重建引擎并保留播放现场。
@@ -71,6 +73,7 @@ private:
     qint64 m_cachedDuration = 0;   // milliseconds
     bool m_wasPlaying = false;
     float m_volume = 0.9f;
+    float m_pitch = 1.0f;  // 变速倍率 (0.5-2.0)，改变 pitch 会同时改变播放速度
 
     // Hotplug retry: 设备拔出时冻结状态并定时重试
     bool m_hotplugMode = false;

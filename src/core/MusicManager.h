@@ -40,6 +40,8 @@ class MusicManager : public QObject
     Q_PROPERTY(int playMode READ playMode WRITE setPlayMode NOTIFY playModeChanged)
     Q_PROPERTY(qreal menuOpacity READ menuOpacity WRITE setMenuOpacity NOTIFY menuOpacityChanged)
     Q_PROPERTY(qreal volumeMenuOpacity READ volumeMenuOpacity WRITE setVolumeMenuOpacity NOTIFY volumeMenuOpacityChanged)
+    Q_PROPERTY(qreal speedMenuOpacity READ speedMenuOpacity WRITE setSpeedMenuOpacity NOTIFY speedMenuOpacityChanged)
+    Q_PROPERTY(qreal playbackRate READ playbackRate WRITE setPlaybackRate NOTIFY playbackRateChanged)
     Q_PROPERTY(int playlistSource READ playlistSource WRITE setPlaylistSource NOTIFY playlistSourceChanged)
     Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY minimizeToTrayChanged)
     Q_PROPERTY(int playbackBackground READ playbackBackground WRITE setPlaybackBackground NOTIFY playbackBackgroundChanged)
@@ -125,6 +127,10 @@ public:
     void setMenuOpacity(qreal v);
     qreal volumeMenuOpacity() const { return m_volumeMenuOpacity; }
     void setVolumeMenuOpacity(qreal v);
+    qreal speedMenuOpacity() const { return m_speedMenuOpacity; }
+    void setSpeedMenuOpacity(qreal v);
+    qreal playbackRate() const { return m_playbackRate; }
+    void setPlaybackRate(qreal v);
 
     // ---- 播放列表来源 ----
     int playlistSource() const { return m_playlistSource; }
@@ -232,6 +238,8 @@ signals:
     void playModeChanged();
     void menuOpacityChanged();
     void volumeMenuOpacityChanged();
+    void speedMenuOpacityChanged();
+    void playbackRateChanged();
     void playlistSourceChanged();
     void minimizeToTrayChanged();
     void playbackBackgroundChanged();
@@ -294,6 +302,8 @@ private:
     int m_playMode = 0;             // 播放模式 (Sequential=0)
     qreal m_menuOpacity = 0.80;     // 模式菜单透明度 (0.3-1.0)
     qreal m_volumeMenuOpacity = 0.80; // 音量控制条透明度 (0.3-1.0)
+    qreal m_speedMenuOpacity = 0.80; // 变速菜单透明度 (0.3-1.0)
+    qreal m_playbackRate = 1.0;     // 变速倍率 (0.5-2.0)
     int m_playlistSource = 0;       // 活跃播放列表来源 (SourcePlaylist=0)
     bool m_minimizeToTray = false;
     int m_playbackBackground = 0;   // 播放背景 (0=深色背景, 1=沉浸背景)

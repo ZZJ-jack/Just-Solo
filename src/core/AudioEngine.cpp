@@ -448,14 +448,14 @@ bool AudioEngine::load(const QString &filePath)
     std::wstring path = filePath.toStdWString();
     ma_result result = ma_sound_init_from_file_w(
         m_engine, path.c_str(),
-        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_PITCH | MA_SOUND_FLAG_NO_SPATIALIZATION,
+        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
         nullptr, nullptr, m_sound
     );
 #else
     QByteArray path = filePath.toUtf8();
     ma_result result = ma_sound_init_from_file(
         m_engine, path.constData(),
-        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_PITCH | MA_SOUND_FLAG_NO_SPATIALIZATION,
+        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
         nullptr, nullptr, m_sound
     );
 #endif
@@ -477,6 +477,9 @@ bool AudioEngine::load(const QString &filePath)
 
     m_soundInitialized = true;
     m_currentFilePath = filePath;
+
+    // 恢复用户设置的变速倍率（pitch 与速度联动）
+    ma_sound_set_pitch(m_sound, m_pitch);
 
     // 缓存时长（毫秒）
     ma_uint64 frames;
@@ -600,6 +603,14 @@ void AudioEngine::setVolume(float vol)
     }
 }
 
+void AudioEngine::setPitch(float pitch)
+{
+    m_pitch = pitch;
+    if (m_soundInitialized) {
+        ma_sound_set_pitch(m_sound, m_pitch);
+    }
+}
+
 float AudioEngine::volume() const
 {
     return m_volume;
@@ -672,14 +683,14 @@ void AudioEngine::retryLoad()
     std::wstring path = m_hotplugFilePath.toStdWString();
     ma_result result = ma_sound_init_from_file_w(
         m_engine, path.c_str(),
-        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_PITCH | MA_SOUND_FLAG_NO_SPATIALIZATION,
+        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
         nullptr, nullptr, m_sound
     );
 #else
     QByteArray path = m_hotplugFilePath.toUtf8();
     ma_result result = ma_sound_init_from_file(
         m_engine, path.constData(),
-        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_PITCH | MA_SOUND_FLAG_NO_SPATIALIZATION,
+        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
         nullptr, nullptr, m_sound
     );
 #endif
@@ -693,6 +704,7 @@ void AudioEngine::retryLoad()
     m_currentFilePath = m_hotplugFilePath;
     m_cachedDuration = m_hotplugDuration;
     ma_sound_set_volume(m_sound, m_volume);
+    ma_sound_set_pitch(m_sound, m_pitch);
 
     // 跳转到保存的位置
     if (m_hotplugPosition > 0) {

@@ -1091,6 +1091,60 @@ Rectangle {
 
         Item { Layout.preferredHeight: 14 }
 
+        // 变速菜单透明度
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 90; radius: 8
+            color: "#222222"; border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "变速菜单透明度"
+                        font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: {
+                            var op = Number(musicManager.speedMenuOpacity)
+                            return Math.round((op > 0 ? op : 0.8) * 100) + "%"
+                        }
+                        font.family: fontFamily; font.pixelSize: 15; color: "#3B82F6"
+                    }
+                }
+
+                Slider {
+                    Layout.fillWidth: true
+                    from: 0.3; to: 1.0; stepSize: 0.01
+                    value: {
+                        var op = Number(musicManager.speedMenuOpacity)
+                        return op > 0 ? op : 0.8
+                    }
+                    onMoved: musicManager.speedMenuOpacity = value
+
+                    background: Rectangle {
+                        x: 0; y: parent.height / 2 - 2
+                        width: parent.width; height: 4; radius: 2; color: "#3A3A3A"
+                    }
+                    contentItem: Rectangle {
+                        width: parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from)
+                        height: 4; radius: 2; color: "#3B82F6"
+                        visible: parent.visible
+                    }
+                    handle: Rectangle {
+                        x: parent.leftPadding + parent.availableWidth * (parent.value - parent.from) / (parent.to - parent.from) - width / 2
+                        y: parent.height / 2 - height / 2
+                        width: 16; height: 16; radius: 8; color: "#3B82F6"
+                    }
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 14 }
+
         // 播放背景
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520

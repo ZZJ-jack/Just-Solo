@@ -458,6 +458,16 @@ void MusicManager::loadSettings() {
         m_volumeMenuOpacity = obj.value("volumeMenuOpacity").toDouble(m_volumeMenuOpacity);
         emit volumeMenuOpacityChanged();
     }
+    if (obj.contains("speedMenuOpacity")) {
+        m_speedMenuOpacity = obj.value("speedMenuOpacity").toDouble(m_speedMenuOpacity);
+        emit speedMenuOpacityChanged();
+    }
+    if (obj.contains("playbackRate")) {
+        m_playbackRate = qBound(0.5, obj.value("playbackRate").toDouble(m_playbackRate), 2.0);
+        if (m_audioEngine)
+            m_audioEngine->setPitch(static_cast<float>(m_playbackRate));
+        emit playbackRateChanged();
+    }
     if (obj.contains("minimizeToTray")) {
         m_minimizeToTray = obj.value("minimizeToTray").toBool(false);
         emit minimizeToTrayChanged();
@@ -505,6 +515,8 @@ void MusicManager::saveSettings() {
     obj["playMode"] = m_playMode;
     obj["menuOpacity"] = m_menuOpacity;
     obj["volumeMenuOpacity"] = m_volumeMenuOpacity;
+    obj["speedMenuOpacity"] = m_speedMenuOpacity;
+    obj["playbackRate"] = m_playbackRate;
     obj["minimizeToTray"] = m_minimizeToTray;
     obj["playbackBackground"] = m_playbackBackground;
     obj["volume"] = m_volume;
@@ -548,6 +560,24 @@ void MusicManager::setVolumeMenuOpacity(qreal v) {
     if (qFuzzyCompare(v, m_volumeMenuOpacity)) return;
     m_volumeMenuOpacity = v;
     emit volumeMenuOpacityChanged();
+    saveSettings();
+}
+
+void MusicManager::setSpeedMenuOpacity(qreal v) {
+    v = qBound(0.3, v, 1.0);
+    if (qFuzzyCompare(v, m_speedMenuOpacity)) return;
+    m_speedMenuOpacity = v;
+    emit speedMenuOpacityChanged();
+    saveSettings();
+}
+
+void MusicManager::setPlaybackRate(qreal v) {
+    v = qBound(0.5, v, 2.0);
+    if (qFuzzyCompare(v, m_playbackRate)) return;
+    m_playbackRate = v;
+    if (m_audioEngine)
+        m_audioEngine->setPitch(static_cast<float>(m_playbackRate));
+    emit playbackRateChanged();
     saveSettings();
 }
 
