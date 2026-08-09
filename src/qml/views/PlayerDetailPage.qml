@@ -139,11 +139,12 @@ Item {
             lyricScrollAnim.from = from
             lyricScrollAnim.to = to
             lyricScrollAnim.start()
-        } else if (animate === false) {
-            // 直接落位（进入页面 / 快速 seek / 从后台恢复）
-            // 原实现缺少此分支，导致从后台恢复时歌词不对齐
+        } else {
+            // 直接落位（进入页面 / 快速 seek / 从后台恢复），或目标已与当前位置一致无需动画。
+            // 两种情况下都必须立即清除自动滚动标志：否则 _autoScrolling 会一直卡在 true，
+            // 导致 onMovementStarted 不再激活手动滚动（表现为恢复原位置无动画后无法再滚动）
             lyricsView.contentY = to
-            root._autoScrolling = false  // 直接落位，立即清除标志
+            root._autoScrolling = false
         }
     }
 
@@ -160,8 +161,12 @@ Item {
                 var savedAnimate = animate
                 idx = -1  // 清除标记，避免重复触发
                 root.centerOnIndex(savedIdx, savedAnimate)
+            } else {
+                // delegate 仍未实例化，放弃定位（避免无限重试，等下次 lyricIndex 变化时自然对齐）；
+                // 同时清除自动滚动标志，防止 _autoScrolling 卡死导致手动滚动失效
+                idx = -1
+                root._autoScrolling = false
             }
-            // 若 delegate 仍未实例化，放弃（避免无限重试，等下次 lyricIndex 变化时自然对齐）
         }
     }
 
