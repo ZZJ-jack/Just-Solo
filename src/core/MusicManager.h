@@ -43,6 +43,7 @@ class MusicManager : public QObject
     Q_PROPERTY(qreal speedMenuOpacity READ speedMenuOpacity WRITE setSpeedMenuOpacity NOTIFY speedMenuOpacityChanged)
     Q_PROPERTY(qreal playbackRate READ playbackRate WRITE setPlaybackRate NOTIFY playbackRateChanged)
     Q_PROPERTY(bool pitchCompensation READ pitchCompensation WRITE setPitchCompensation NOTIFY pitchCompensationChanged)
+    Q_PROPERTY(bool autoPitchCompensation READ autoPitchCompensation WRITE setAutoPitchCompensation NOTIFY autoPitchCompensationChanged)
     Q_PROPERTY(int playlistSource READ playlistSource WRITE setPlaylistSource NOTIFY playlistSourceChanged)
     Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY minimizeToTrayChanged)
     Q_PROPERTY(int playbackBackground READ playbackBackground WRITE setPlaybackBackground NOTIFY playbackBackgroundChanged)
@@ -134,6 +135,8 @@ public:
     void setPlaybackRate(qreal v);
     bool pitchCompensation() const { return m_pitchCompensation; }
     void setPitchCompensation(bool v);
+    bool autoPitchCompensation() const { return m_autoPitchCompensation; }
+    void setAutoPitchCompensation(bool v);
 
     // ---- 播放列表来源 ----
     int playlistSource() const { return m_playlistSource; }
@@ -244,6 +247,7 @@ signals:
     void speedMenuOpacityChanged();
     void playbackRateChanged();
     void pitchCompensationChanged();
+    void autoPitchCompensationChanged();
     void playlistSourceChanged();
     void minimizeToTrayChanged();
     void playbackBackgroundChanged();
@@ -309,6 +313,7 @@ private:
     qreal m_speedMenuOpacity = 0.80; // 变速菜单透明度 (0.3-1.0)
     qreal m_playbackRate = 1.0;     // 变速倍率 (0.5-2.0)
     bool m_pitchCompensation = false; // 音调补偿（变速不变调）
+    bool m_autoPitchCompensation = true; // 自动控制音调补偿（变速≠1x自动开，=1x自动关）
     int m_playlistSource = 0;       // 活跃播放列表来源 (SourcePlaylist=0)
     bool m_minimizeToTray = false;
     int m_playbackBackground = 0;   // 播放背景 (0=深色背景, 1=沉浸背景)

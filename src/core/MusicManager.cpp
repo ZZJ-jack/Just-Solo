@@ -474,6 +474,10 @@ void MusicManager::loadSettings() {
             m_audioEngine->setPitchCompensation(m_pitchCompensation);
         emit pitchCompensationChanged();
     }
+    if (obj.contains("autoPitchCompensation")) {
+        m_autoPitchCompensation = obj.value("autoPitchCompensation").toBool(true);
+        emit autoPitchCompensationChanged();
+    }
     if (obj.contains("minimizeToTray")) {
         m_minimizeToTray = obj.value("minimizeToTray").toBool(false);
         emit minimizeToTrayChanged();
@@ -524,6 +528,7 @@ void MusicManager::saveSettings() {
     obj["speedMenuOpacity"] = m_speedMenuOpacity;
     obj["playbackRate"] = m_playbackRate;
     obj["pitchCompensation"] = m_pitchCompensation;
+    obj["autoPitchCompensation"] = m_autoPitchCompensation;
     obj["minimizeToTray"] = m_minimizeToTray;
     obj["playbackBackground"] = m_playbackBackground;
     obj["volume"] = m_volume;
@@ -584,12 +589,14 @@ void MusicManager::setPlaybackRate(qreal v) {
     m_playbackRate = v;
     if (m_audioEngine)
         m_audioEngine->setPitch(static_cast<float>(m_playbackRate));
-    // 变速（非 1x）自动开启音调补偿；恢复 1x 自动关闭
-    if (qFuzzyCompare(v, 1.0)) {
-        if (m_pitchCompensation)
-            setPitchCompensation(false);
-    } else if (!m_pitchCompensation) {
-        setPitchCompensation(true);
+    // 自动控制音调补偿：变速（非 1x）自动开启；恢复 1x 自动关闭
+    if (m_autoPitchCompensation) {
+        if (qFuzzyCompare(v, 1.0)) {
+            if (m_pitchCompensation)
+                setPitchCompensation(false);
+        } else if (!m_pitchCompensation) {
+            setPitchCompensation(true);
+        }
     }
     emit playbackRateChanged();
     saveSettings();
@@ -601,6 +608,13 @@ void MusicManager::setPitchCompensation(bool v) {
     if (m_audioEngine)
         m_audioEngine->setPitchCompensation(m_pitchCompensation);
     emit pitchCompensationChanged();
+    saveSettings();
+}
+
+void MusicManager::setAutoPitchCompensation(bool v) {
+    if (v == m_autoPitchCompensation) return;
+    m_autoPitchCompensation = v;
+    emit autoPitchCompensationChanged();
     saveSettings();
 }
 
