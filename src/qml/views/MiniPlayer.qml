@@ -195,6 +195,7 @@ Window {
                 font.family: _font; font.pixelSize: 11; color: "#FFFFFF"
                 Layout.fillWidth: true
                 Layout.preferredHeight: 11
+                Layout.topMargin: 4  // 与标题间距拉大一点
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 visible: text !== ""
@@ -204,7 +205,7 @@ Window {
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 6
-                Layout.topMargin: 10
+                Layout.topMargin: 15  // 下移一点
                 Layout.bottomMargin: 1
 
                 Rectangle {
@@ -238,7 +239,7 @@ Window {
             // ---- 时间显示：左当前播放时间，右音频总时长（统一白色） ----
             RowLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 6
+                Layout.topMargin: 10  // 下移一点
                 Label {
                     text: miniWindow.fmtTime(musicManager.position)
                     font.family: _font; font.pixelSize: 10; color: "#FFFFFF"

@@ -31,6 +31,11 @@ Item {
     property bool _closing: false  // 是否为真正的关闭流程：控制 closeAnim 完成时是否允许隐藏页面
     property int _pastIdx: -1  // 已播放到的歌词行索引（前进时增大，回退/切歌时重置）
     property int _lastIdxTime: 0  // 上次切行的时间戳，用于区分正常播放与快速 seek
+    property int _manualScrollIdx: -1  // 手动滚动时当前居中行的索引（仅 playbackRate===1.0 时生效）
+    property bool _manualActive: false  // 用户手动滚动激活（控制时间/虚线/按钮显示）；播放进度变化或变速时自动关闭
+    property bool _autoScrolling: false  // centerOnIndex 正在自动滚动时为 true（用于区分用户手动滚动）
+    property real _manualCenterY: -999  // 居中行中心在歌词视口坐标系中的 y（供悬浮时间层定位）
+    property int _manualCenterTime: 0  // 居中行的时间戳（供悬浮时间层显示）
 
     // 播放背景模式：0=深色背景，1=沉浸背景（与设置页联动）
     readonly property bool _immersiveBg: (typeof musicManager !== "undefined" && musicManager)
@@ -52,9 +57,9 @@ Item {
     }
 
     function fmtTime(ms) {
-        if (ms <= 0) return "0:00"
+        if (ms <= 0) return "00:00"
         var s = Math.floor(ms / 1000)
-        return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2)
+        return ("0" + Math.floor(s / 60)).slice(-2) + ":" + ("0" + (s % 60)).slice(-2)
     }
 
     function close() {
@@ -110,6 +115,7 @@ Item {
     function centerOnIndex(idx, animate) {
         if (lyricsView.count === 0 || idx < 0) return
         lyricScrollAnim.stop()
+        root._autoScrolling = true  // 标记自动滚动中，防止 onMovementStarted 误判为手动滚动
         var item = lyricsView.itemAtIndex(idx)
         if (!item) {
             // delegate 还未实例化（从后台恢复时 ListView 刚重建），
@@ -137,6 +143,7 @@ Item {
             // 直接落位（进入页面 / 快速 seek / 从后台恢复）
             // 原实现缺少此分支，导致从后台恢复时歌词不对齐
             lyricsView.contentY = to
+            root._autoScrolling = false  // 直接落位，立即清除标志
         }
     }
 
@@ -155,6 +162,78 @@ Item {
                 root.centerOnIndex(savedIdx, savedAnimate)
             }
             // 若 delegate 仍未实例化，放弃（避免无限重试，等下次 lyricIndex 变化时自然对齐）
+        }
+    }
+
+    // 变速切换回 1x 时延迟一帧检测居中行（等 delegate 宽度重排完成）
+    Timer {
+        id: _manualCenterTimer
+        interval: 150
+        onTriggered: root.updateManualCenterIdx()
+    }
+
+    // 手动滚动无操作 3s 后自动退出手动模式，恢复自动跟随
+    Timer {
+        id: _manualExitTimer
+        interval: 3000
+        onTriggered: {
+            root._manualActive = false
+            // 退出后自动滚动到当前播放行
+            if (typeof musicManager !== "undefined" && musicManager
+                    && musicManager.lyricIndex >= 0)
+                root.centerOnIndex(musicManager.lyricIndex, true)
+        }
+    }
+
+    // 计算当前视口中央的歌词行索引（仅 1x 手动滚动模式下使用）
+    // 遍历已实例化的 delegate，找到中心点最接近视口中央的行
+    function updateManualCenterIdx() {
+        if (typeof musicManager === "undefined" || !musicManager) return
+        if (musicManager.playbackRate !== 1.0) {
+            if (root._manualScrollIdx !== -1)
+                root._manualScrollIdx = -1
+            root._manualCenterY = -999
+            return
+        }
+        if (lyricsView.count === 0) {
+            if (root._manualScrollIdx !== -1)
+                root._manualScrollIdx = -1
+            root._manualCenterY = -999
+            return
+        }
+        var centerY = lyricsView.contentY + lyricsView.height / 2
+        var bestIdx = -1
+        var bestDist = Infinity
+        for (var i = 0; i < lyricsView.count; ++i) {
+            var item = lyricsView.itemAtIndex(i)
+            if (!item) continue
+            var itemCenter = item.y + item.height / 2
+            var dist = Math.abs(itemCenter - centerY)
+            if (dist < bestDist) {
+                bestDist = dist
+                bestIdx = i
+            }
+        }
+        if (bestIdx >= 0) {
+            if (bestIdx !== root._manualScrollIdx)
+                root._manualScrollIdx = bestIdx
+            // 记录居中行中心位置（供歌词列外的悬浮时间层定位）
+            var cItem = lyricsView.itemAtIndex(bestIdx)
+            if (cItem) {
+                var centerInView = cItem.mapToItem(lyricsView, 0, cItem.height / 2).y
+                if (Math.abs(centerInView - root._manualCenterY) > 0.5)
+                    root._manualCenterY = centerInView
+            }
+            // 直接按索引取歌词数组的时间，避免经 delegate 上下文访问不可靠
+            var arr = (typeof musicManager !== "undefined" && musicManager)
+                      ? (musicManager.currentLyrics || []) : []
+            if (bestIdx < arr.length && arr[bestIdx]) {
+                var t = arr[bestIdx].time || 0
+                if (t !== root._manualCenterTime)
+                    root._manualCenterTime = t
+            }
+        } else {
+            root._manualCenterY = -999
         }
     }
 
@@ -177,6 +256,9 @@ Item {
         function onCurrentLyricsChanged() {
             // 切换歌曲时重置已播索引，避免旧歌的 _pastIdx 污染新歌词的状态
             root._pastIdx = -1
+            root._manualScrollIdx = -1  // 切歌时重置手动滚动居中行
+            root._manualActive = false  // 切歌时退出手动滚动模式
+            _manualExitTimer.stop()
             // 歌词模型已替换（ListView 内容重置），等布局稳定后直接对齐首行
             lyricRecenterTimer.snap = true
             lyricRecenterTimer.restart()
@@ -195,7 +277,22 @@ Item {
             var now = Date.now()
             var rapid = now - root._lastIdxTime < 300
             root._lastIdxTime = now
-            root.centerOnIndex(idx, !rapid)
+            // 手动滚动激活时，禁用自动滚动（让用户自由浏览歌词）
+            if (!root._manualActive)
+                root.centerOnIndex(idx, !rapid)
+        }
+        function onPlaybackRateChanged() {
+            // 变速时禁用手动滚动 UI，恢复原歌词显示；1x 时延迟检测居中行
+            root._manualActive = false
+            _manualExitTimer.stop()
+            if (musicManager.playbackRate !== 1.0) {
+                root._manualScrollIdx = -1
+            } else {
+                _manualCenterTimer.restart()
+            }
+            // 变速后歌词容器宽度变化（手动模式切换导致换行变化），重新居中当前播放行
+            lyricRecenterTimer.snap = true
+            lyricRecenterTimer.restart()
         }
     }
 
@@ -554,6 +651,30 @@ Item {
                 // 窗口大小变化后自动重新居中当前歌词（防抖，避免拖动过程中持续触发；平滑滚动）
                 onWidthChanged: { lyricRecenterTimer.snap = false; lyricRecenterTimer.restart() }
                 onHeightChanged: { lyricRecenterTimer.snap = false; lyricRecenterTimer.restart() }
+                // 1x 手动滚动模式下，实时跟踪视口中央行（用于显示时间/播放按钮）
+                onContentYChanged: {
+                    if (typeof musicManager !== "undefined" && musicManager
+                            && musicManager.playbackRate === 1.0) {
+                        root.updateManualCenterIdx()
+                        // 手动滚动激活时，重置 3s 退出计时
+                        if (root._manualActive)
+                            _manualExitTimer.restart()
+                    }
+                }
+                // 用户开始手动滚动（拖动/滚轮）时激活手动模式（非自动滚动才触发）
+                onMovementStarted: {
+                    if (typeof musicManager !== "undefined" && musicManager
+                            && musicManager.playbackRate === 1.0
+                            && !root._autoScrolling) {
+                        root._manualActive = true
+                        _manualExitTimer.restart()
+                    }
+                }
+                onMovementEnded: {
+                    if (typeof musicManager !== "undefined" && musicManager
+                            && musicManager.playbackRate === 1.0)
+                        root.updateManualCenterIdx()
+                }
 
                 delegate: Item {
                     id: lyricDelegate
@@ -567,6 +688,9 @@ Item {
                     // 放大比例：所有行都按放大后的固定字号布局，非当前行通过 Scale 缩小，当前行放大到原尺寸
                     property real mainScale: isCurrent ? 1.0 : 36 / 58
                     property real transScale: isCurrent ? 1.0 : 24 / 34
+
+                    // 手动滚动模式：仅用户手动滚动激活时显示时间/虚线/按钮（1x 且 _manualActive）
+                    property bool _isManualCenter: root._manualActive && index === root._manualScrollIdx
 
                     // 歌词主体（行高按固定字号布局，换行恒定，仅视觉缩放切换高亮）
                     // 垂直居中于 delegate（delegate 比内容高 8px），保证 ListView.Center
@@ -638,6 +762,52 @@ Item {
                             }
                         }
                     }
+
+                    // 右侧播放按钮（在行框中垂直居中，仅当前居中行显示；置顶）
+                    Rectangle {
+                        id: manualPlayBtn
+                        anchors.right: parent.right
+                        anchors.rightMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: lyricDelegate._isManualCenter
+                        z: 100  // 置顶：始终渲染在歌词之上
+                        width: 25; height: 25; radius: 20
+                        color: manualPlayMA.containsMouse ? "#3300d4ff" : "transparent"
+                        border.color: "#00d4ff"
+                        border.width: 1
+
+                        // 播放图标（三角形，在按钮中居中）
+                        Canvas {
+                            anchors.horizontalCenterOffset: 1
+                            anchors.centerIn: parent
+                            width: 13; height: 14
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.reset()
+                                ctx.fillStyle = "#00d4ff"
+                                ctx.beginPath()
+                                ctx.moveTo(0, 0)
+                                ctx.lineTo(width, height / 2)
+                                ctx.lineTo(0, height)
+                                ctx.closePath()
+                                ctx.fill()
+                            }
+                        }
+
+                        MouseArea {
+                            id: manualPlayMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (typeof musicManager !== "undefined" && musicManager) {
+                                    root._manualActive = false  // 退出手动模式，恢复自动跟随
+                                    _manualExitTimer.stop()
+                                    musicManager.seek(modelData.time)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -665,6 +835,34 @@ Item {
                 property: "contentY"
                 duration: 1000
                 easing.type: Easing.OutCubic
+                onRunningChanged: {
+                    // 动画停止时清除自动滚动标志（被 stop 或自然完成）
+                    if (!running) root._autoScrolling = false
+                }
+            }
+        }
+
+        // 悬浮时间层：跟随手动滚动的居中行，置顶显示。
+        // 放在歌词列外部（不受歌词列/ListView 裁剪），可自由左移
+        Rectangle {
+            id: manualTimeOverlay
+            anchors.left: lyricsCol.left
+            anchors.leftMargin: -55
+            y: root._manualCenterY - height / 2
+            width: manualTimeOverlayText.width + 14
+            height: 24
+            radius: 12
+            color: "#B3000000"  // 半透明深色底，保证清晰可读
+            visible: root._manualActive && root._manualScrollIdx >= 0
+            z: 100
+
+            Text {
+                id: manualTimeOverlayText
+                anchors.centerIn: parent
+                text: root.fmtTime(root._manualCenterTime)
+                font.family: root.fontFamily
+                font.pixelSize: 13
+                color: "#00d4ff"
             }
         }
     }
