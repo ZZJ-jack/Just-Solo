@@ -2029,6 +2029,47 @@ Window {
                                 }
                             }
                         }
+
+                        // 分隔线 + 音调补偿开关
+                        Rectangle {
+                            width: parent.width
+                            height: 1
+                            color: "#333333"
+                        }
+                        RowLayout {
+                            width: parent.width
+                            spacing: 6
+                            Label {
+                                text: "音调补偿"
+                                font.family: appFont.name
+                                font.pixelSize: 13
+                                color: "#cccccc"
+                            }
+                            Item { Layout.fillWidth: true }
+                            Switch {
+                                checked: musicManager.pitchCompensation
+                                onToggled: musicManager.pitchCompensation = checked
+
+                                indicator: Rectangle {
+                                    implicitWidth: 34
+                                    implicitHeight: 20
+                                    x: parent.leftPadding
+                                    y: parent.topPadding + (parent.availableHeight - height) / 2
+                                    radius: 10
+                                    color: parent.checked ? "#3B82F6" : "#555"
+                                    border.color: parent.checked ? "#3B82F6" : "#444"
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+
+                                    Rectangle {
+                                        x: parent.checked ? parent.width - width - 2 : 2
+                                        y: (parent.height - height) / 2
+                                        width: 16; height: 16; radius: 8
+                                        color: "#fff"
+                                        Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

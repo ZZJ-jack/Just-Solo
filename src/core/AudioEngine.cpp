@@ -3,6 +3,7 @@
 #include "decoder_backends.h"   // 自定义解码后端（Opus / AAC）
 
 #include "AudioEngine.h"
+#include "TimeStretchSource.h"
 #include <QDebug>
 #include <QFileInfo>
 #include <QTimer>
@@ -143,7 +144,8 @@ on_fail:
     return false;
 }
 
-void AudioEngine::shutdownAudioDevice()
+// ---- 卸载当前声音（含时间拉伸数据源）----
+void AudioEngine::unloadSound()
 {
     if (m_soundInitialized && m_sound) {
         ma_sound_stop(m_sound);
@@ -151,6 +153,14 @@ void AudioEngine::shutdownAudioDevice()
         std::memset(m_sound, 0, sizeof(*m_sound));
         m_soundInitialized = false;
     }
+    // ma_sound_init_from_data_source 不接管数据源所有权，需自行释放
+    m_stretchSource.reset();
+    m_usingStretchSource = false;
+}
+
+void AudioEngine::shutdownAudioDevice()
+{
+    unloadSound();
     m_wasPlaying = false;
 
     if (m_engine) {
@@ -436,32 +446,45 @@ bool AudioEngine::load(const QString &filePath)
     m_hotplugMode = false;
 
     // 停止并卸载旧声音
-    if (m_soundInitialized) {
-        ma_sound_stop(m_sound);
-        ma_sound_uninit(m_sound);
-        std::memset(m_sound, 0, sizeof(*m_sound));
-        m_soundInitialized = false;
-    }
+    unloadSound();
     m_wasPlaying = false;
 
+    ma_result result;
+    if (m_pitchCompensation) {
+        // 音调补偿：解码 → SoundTouch 时间拉伸数据源（变速不变调）
+        m_stretchSource = std::make_unique<TimeStretchSource>();
+        if (!m_stretchSource->open(filePath)) {
+            result = MA_DOES_NOT_EXIST;
+        } else {
+            m_usingStretchSource = true;
+            result = ma_sound_init_from_data_source(
+                m_engine, &m_stretchSource->base,
+                MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, m_sound
+            );
+        }
+    } else {
 #ifdef Q_OS_WIN
-    std::wstring path = filePath.toStdWString();
-    ma_result result = ma_sound_init_from_file_w(
-        m_engine, path.c_str(),
-        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
-        nullptr, nullptr, m_sound
-    );
+        std::wstring path = filePath.toStdWString();
+        result = ma_sound_init_from_file_w(
+            m_engine, path.c_str(),
+            MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
+            nullptr, nullptr, m_sound
+        );
 #else
-    QByteArray path = filePath.toUtf8();
-    ma_result result = ma_sound_init_from_file(
-        m_engine, path.constData(),
-        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
-        nullptr, nullptr, m_sound
-    );
+        QByteArray path = filePath.toUtf8();
+        result = ma_sound_init_from_file(
+            m_engine, path.constData(),
+            MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
+            nullptr, nullptr, m_sound
+        );
 #endif
+    }
 
     if (result != MA_SUCCESS) {
         qWarning() << "AudioEngine: Failed to load file:" << filePath << "error:" << result;
+        // 释放失败的时间拉伸数据源
+        m_stretchSource.reset();
+        m_usingStretchSource = false;
         // 进入热插拔重试模式：冻结旧状态，定时尝试重新加载
         if (!m_currentFilePath.isEmpty()) {
             m_hotplugMode = true;
@@ -478,8 +501,13 @@ bool AudioEngine::load(const QString &filePath)
     m_soundInitialized = true;
     m_currentFilePath = filePath;
 
-    // 恢复用户设置的变速倍率（pitch 与速度联动）
-    ma_sound_set_pitch(m_sound, m_pitch);
+    // 恢复用户设置的变速倍率与音量
+    if (m_usingStretchSource) {
+        m_stretchSource->setTempo(m_pitch);
+    } else {
+        ma_sound_set_pitch(m_sound, m_pitch);
+    }
+    ma_sound_set_volume(m_sound, m_volume);
 
     // 缓存时长（毫秒）
     ma_uint64 frames;
@@ -606,9 +634,34 @@ void AudioEngine::setVolume(float vol)
 void AudioEngine::setPitch(float pitch)
 {
     m_pitch = pitch;
-    if (m_soundInitialized) {
+    if (!m_soundInitialized) return;
+    if (m_usingStretchSource) {
+        // 时间拉伸路径：变速仅改速度，音调保持不变
+        m_stretchSource->setTempo(pitch);
+    } else {
+        // 磁带式变速：pitch 与速度联动
         ma_sound_set_pitch(m_sound, m_pitch);
     }
+}
+
+void AudioEngine::setPitchCompensation(bool on)
+{
+    if (on == m_pitchCompensation) return;
+    m_pitchCompensation = on;
+
+    // 有声音加载时按新模式重载并保留播放现场
+    if (!m_soundInitialized) return;
+
+    const bool wasPlaying = isPlaying();
+    const qint64 pos = position();
+    const QString path = !m_currentFilePath.isEmpty() ? m_currentFilePath : m_hotplugFilePath;
+
+    if (path.isEmpty()) return;
+    // 重载失败时 load() 内部已进入热插拔重试，保留现场
+    if (!load(path)) return;
+    if (pos > 0) seek(pos);
+    if (wasPlaying) play();
+    emit playbackStateChanged();
 }
 
 float AudioEngine::volume() const
@@ -677,25 +730,43 @@ void AudioEngine::retryLoad()
         std::memset(m_sound, 0, sizeof(*m_sound));
         m_soundInitialized = false;
     }
+    m_stretchSource.reset();
+    m_usingStretchSource = false;
 
-    // 尝试重新加载
+    // 尝试重新加载（按当前模式：流式 / 时间拉伸）
+    ma_result result;
+    if (m_pitchCompensation) {
+        m_stretchSource = std::make_unique<TimeStretchSource>();
+        if (!m_stretchSource->open(m_hotplugFilePath)) {
+            result = MA_DOES_NOT_EXIST;
+        } else {
+            m_usingStretchSource = true;
+            result = ma_sound_init_from_data_source(
+                m_engine, &m_stretchSource->base,
+                MA_SOUND_FLAG_NO_SPATIALIZATION, nullptr, m_sound
+            );
+        }
+    } else {
 #ifdef Q_OS_WIN
-    std::wstring path = m_hotplugFilePath.toStdWString();
-    ma_result result = ma_sound_init_from_file_w(
-        m_engine, path.c_str(),
-        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
-        nullptr, nullptr, m_sound
-    );
+        std::wstring path = m_hotplugFilePath.toStdWString();
+        result = ma_sound_init_from_file_w(
+            m_engine, path.c_str(),
+            MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
+            nullptr, nullptr, m_sound
+        );
 #else
-    QByteArray path = m_hotplugFilePath.toUtf8();
-    ma_result result = ma_sound_init_from_file(
-        m_engine, path.constData(),
-        MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
-        nullptr, nullptr, m_sound
-    );
+        QByteArray path = m_hotplugFilePath.toUtf8();
+        result = ma_sound_init_from_file(
+            m_engine, path.constData(),
+            MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION,
+            nullptr, nullptr, m_sound
+        );
 #endif
+    }
 
     if (result != MA_SUCCESS) {
+        m_stretchSource.reset();
+        m_usingStretchSource = false;
         return;  // 设备恢复但文件还不能读，继续重试
     }
 
@@ -704,7 +775,11 @@ void AudioEngine::retryLoad()
     m_currentFilePath = m_hotplugFilePath;
     m_cachedDuration = m_hotplugDuration;
     ma_sound_set_volume(m_sound, m_volume);
-    ma_sound_set_pitch(m_sound, m_pitch);
+    if (m_usingStretchSource) {
+        m_stretchSource->setTempo(m_pitch);
+    } else {
+        ma_sound_set_pitch(m_sound, m_pitch);
+    }
 
     // 跳转到保存的位置
     if (m_hotplugPosition > 0) {

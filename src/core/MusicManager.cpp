@@ -468,6 +468,12 @@ void MusicManager::loadSettings() {
             m_audioEngine->setPitch(static_cast<float>(m_playbackRate));
         emit playbackRateChanged();
     }
+    if (obj.contains("pitchCompensation")) {
+        m_pitchCompensation = obj.value("pitchCompensation").toBool(false);
+        if (m_audioEngine)
+            m_audioEngine->setPitchCompensation(m_pitchCompensation);
+        emit pitchCompensationChanged();
+    }
     if (obj.contains("minimizeToTray")) {
         m_minimizeToTray = obj.value("minimizeToTray").toBool(false);
         emit minimizeToTrayChanged();
@@ -517,6 +523,7 @@ void MusicManager::saveSettings() {
     obj["volumeMenuOpacity"] = m_volumeMenuOpacity;
     obj["speedMenuOpacity"] = m_speedMenuOpacity;
     obj["playbackRate"] = m_playbackRate;
+    obj["pitchCompensation"] = m_pitchCompensation;
     obj["minimizeToTray"] = m_minimizeToTray;
     obj["playbackBackground"] = m_playbackBackground;
     obj["volume"] = m_volume;
@@ -577,7 +584,19 @@ void MusicManager::setPlaybackRate(qreal v) {
     m_playbackRate = v;
     if (m_audioEngine)
         m_audioEngine->setPitch(static_cast<float>(m_playbackRate));
+    // 恢复 1x 时自动关闭音调补偿（无变速则无补偿意义）
+    if (qFuzzyCompare(v, 1.0) && m_pitchCompensation)
+        setPitchCompensation(false);
     emit playbackRateChanged();
+    saveSettings();
+}
+
+void MusicManager::setPitchCompensation(bool v) {
+    if (v == m_pitchCompensation) return;
+    m_pitchCompensation = v;
+    if (m_audioEngine)
+        m_audioEngine->setPitchCompensation(m_pitchCompensation);
+    emit pitchCompensationChanged();
     saveSettings();
 }
 

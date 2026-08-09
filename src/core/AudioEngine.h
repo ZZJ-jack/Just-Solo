@@ -4,12 +4,15 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <memory>
 
 struct ma_engine;
 struct ma_sound;
 struct ma_context;
 struct ma_device;
 struct ma_resource_manager;
+
+class TimeStretchSource;
 
 class AudioEngine : public QObject
 {
@@ -30,6 +33,9 @@ public:
     float volume() const;
     void setPitch(float pitch);
     float pitch() const { return m_pitch; }
+    // 音调补偿（变速不变调）：开启后变速不再改变音调，走 SoundTouch 时间拉伸管线
+    void setPitchCompensation(bool on);
+    bool pitchCompensation() const { return m_pitchCompensation; }
     bool isPlaying() const;
 
     // WASAPI 输出模式：true=独占, false=共享（默认）。切换时重建引擎并保留播放现场。
@@ -48,6 +54,8 @@ signals:
 private:
     void pollAudio();
     void retryLoad();
+    // 停止并卸载当前声音及其数据源（含时间拉伸数据源），复位相关状态
+    void unloadSound();
 
     // 设备回调：驱动引擎混音输出（ma_engine_data_callback 为内部静态函数，这里等价实现）
     static void deviceDataCallback(ma_device *pDevice, void *pFramesOut,
@@ -74,6 +82,10 @@ private:
     bool m_wasPlaying = false;
     float m_volume = 0.9f;
     float m_pitch = 1.0f;  // 变速倍率 (0.5-2.0)，改变 pitch 会同时改变播放速度
+    // 音调补偿：false=磁带式变速（pitch 联动），true=变速不变调（SoundTouch 时间拉伸）
+    bool m_pitchCompensation = false;
+    bool m_usingStretchSource = false;   // 当前声音是否走时间拉伸数据源
+    std::unique_ptr<TimeStretchSource> m_stretchSource;  // 仅在使用拉伸数据源时非空
 
     // Hotplug retry: 设备拔出时冻结状态并定时重试
     bool m_hotplugMode = false;

@@ -5,7 +5,7 @@ project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 set(APP_VERSION_MAJOR 1)   # X：主版本号
 set(APP_VERSION_MINOR 2)   # Y：次版本号
 set(APP_VERSION_PATCH 3)   # Z：修订版本号
-set(APP_VERSION_PRE   2)   # N：0=正式版, >0=beta.N
+set(APP_VERSION_PRE   3)   # N：0=正式版, >0=beta.N
 # 版本号格式: vX.Y.Z-beta.N
 
 # 格式化显示版本: vX.Y.Z 或 vX.Y.Z-beta.N
@@ -122,6 +122,23 @@ add_library(alac STATIC
 )
 target_include_directories(alac PUBLIC third_party/alac/codec)
 
+# SoundTouch：时间拉伸/变速不变调（音调补偿）。浮点采样 + x64 SSE 优化；
+# 仅编译核心库（不含 BPMDetect/SoundStretch），MMX 优化在 float/x64 下不生效故省略。
+add_library(soundtouch STATIC
+    third_party/soundtouch/SoundTouch.cpp
+    third_party/soundtouch/TDStretch.cpp
+    third_party/soundtouch/RateTransposer.cpp
+    third_party/soundtouch/FIRFilter.cpp
+    third_party/soundtouch/AAFilter.cpp
+    third_party/soundtouch/FIFOSampleBuffer.cpp
+    third_party/soundtouch/InterpolateLinear.cpp
+    third_party/soundtouch/InterpolateCubic.cpp
+    third_party/soundtouch/InterpolateShannon.cpp
+    third_party/soundtouch/cpu_detect_x86.cpp
+    third_party/soundtouch/sse_optimized.cpp
+)
+target_include_directories(soundtouch PUBLIC third_party/soundtouch)
+
 # 抑制第三方音频库的 C4819 警告（UTF-8 注释）
 if(MSVC)
     target_compile_options(ogg PRIVATE /wd4819)
@@ -129,12 +146,14 @@ if(MSVC)
     target_compile_options(opus PRIVATE /wd4819)
     target_compile_options(fdk-aac PRIVATE /wd4819)
     target_compile_options(alac PRIVATE /wd4819)
+    target_compile_options(soundtouch PRIVATE /wd4819)
 endif()
 
 # 可执行文件
 qt_add_executable(JustSolo WIN32
     src/main.cpp
     src/core/AudioEngine.cpp
+    src/core/TimeStretchSource.cpp
     src/core/ma_opus_decoder.c
     src/core/ma_fdkaac_decoder.c
     src/core/alac_wrapper.cpp
@@ -234,6 +253,7 @@ target_link_libraries(JustSolo PRIVATE
     opusfile        # libopusfile（Opus 解码，PUBLIC 传递 ogg + opus）
     fdk-aac         # fdk-aac（AAC 解码）
     alac            # 苹果 ALAC 参考解码器（.m4a 无损）
+    soundtouch      # 时间拉伸（变速不变调/音调补偿）
 )
 target_include_directories(JustSolo PRIVATE
     "${cmark-gfm_SOURCE_DIR}/src"
