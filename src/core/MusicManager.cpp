@@ -584,9 +584,13 @@ void MusicManager::setPlaybackRate(qreal v) {
     m_playbackRate = v;
     if (m_audioEngine)
         m_audioEngine->setPitch(static_cast<float>(m_playbackRate));
-    // 变速（非 1x）时自动开启音调补偿
-    if (!qFuzzyCompare(v, 1.0) && !m_pitchCompensation)
+    // 变速（非 1x）自动开启音调补偿；恢复 1x 自动关闭
+    if (qFuzzyCompare(v, 1.0)) {
+        if (m_pitchCompensation)
+            setPitchCompensation(false);
+    } else if (!m_pitchCompensation) {
         setPitchCompensation(true);
+    }
     emit playbackRateChanged();
     saveSettings();
 }
