@@ -14,6 +14,11 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QThread>
+#include <QColor>
+#include <QEasingCurve>
+#include <QVariantAnimation>
+
+#include "core/MusicManager.h"  // 提前包含：Q_OS_WIN 块内的 updateImmersiveTitleBar 需要完整类型
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -63,27 +68,109 @@ static QString osVersionString() {
     return isWindows11() ? QStringLiteral("Windows 11") : QStringLiteral("Windows 10");
 }
 
+// 解析 "#RRGGBB" → COLORREF，失败返回 false
+static bool parseHexColor(const QString &hex, COLORREF *out) {
+    if (hex.length() != 7 || !hex.startsWith(QLatin1Char('#'))) return false;
+    bool okR = false, okG = false, okB = false;
+    int r = hex.mid(1, 2).toInt(&okR, 16);
+    int g = hex.mid(3, 2).toInt(&okG, 16);
+    int b = hex.mid(5, 2).toInt(&okB, 16);
+    if (!okR || !okG || !okB) return false;
+    *out = RGB(r, g, b);
+    return true;
+}
+
+// Win11 追加三色定制：一次性设置标题栏背景/文字/边框颜色
+static void applyTitleBarColors(HWND hwnd, int r, int g, int b) {
+    if (!isWindows11()) return;
+    COLORREF caption = RGB(r, g, b);
+    COLORREF text    = RGB(204, 204, 204);
+    COLORREF border  = caption;            // 与背景同色（视觉无边框）
+    DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
+    DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR,    &text,    sizeof(text));
+    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,  &border,  sizeof(border));
+}
+
 // 深度自定义原生标题栏 — 强制暗黑模式，Win11 追加三色定制
-static void customizeTitleBar(HWND hwnd) {
+// captionHex 为空时使用默认深色 RGB(30,30,30)
+static void customizeTitleBar(HWND hwnd, const QString &captionHex = QString()) {
     BOOL darkMode = TRUE;
     // Win10 1809-2004 (属性 19) + Win10 2004+/Win11 (属性 20) 双保险
     DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
     DwmSetWindowAttribute(hwnd, 19, &darkMode, sizeof(darkMode));  // 旧版常量
 
-    // Win11+: 边框同侧边栏背景（视觉无边框）
     if (isWindows11()) {
-        COLORREF caption = RGB(30, 30, 30);
-        COLORREF text    = RGB(204, 204, 204);
-        COLORREF border  = caption;            // 与背景同色
-        DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
-        DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR,    &text,    sizeof(text));
-        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR,  &border,  sizeof(border));
+        COLORREF parsed = 0;
+        if (!captionHex.isEmpty() && parseHexColor(captionHex, &parsed))
+            applyTitleBarColors(hwnd, GetRValue(parsed), GetGValue(parsed), GetBValue(parsed));
+        else
+            applyTitleBarColors(hwnd, 30, 30, 30);
     }
+}
+
+// ============================================================
+// 标题栏颜色平滑过渡
+// DWM 原生切换标题栏颜色是瞬时的，这里用 QVariantAnimation 逐帧插值，
+// 让沉浸背景进入/退出/切歌时标题栏颜色平滑渐变。
+// ★ 调整下面 kTitleBarColorAnimMs 即可控制变色快慢（毫秒）：
+//   越大越慢（如 800），越小越快（如 150），设为 0 则瞬时变色。
+// ============================================================
+const int kTitleBarColorAnimMs = 350;  // 同步 PlayerDetailPage.qml openAnim 时长
+
+static HWND   g_titleBarHwnd  = nullptr;        // 标题栏所属窗口句柄
+static QColor g_titleBarColor(30, 30, 30);      // 当前已应用的颜色（作为下一轮动画起点）
+static bool   g_prevDetailVisible = false;      // 上一次详情页可见状态，用于区分"进入详情页"和"详情页内切歌"
+
+static void animateTitleBarColor(HWND hwnd, const QString &targetHex, int durationMs) {
+    g_titleBarHwnd = hwnd;
+
+    COLORREF target = 0;
+    QColor targetColor = parseHexColor(targetHex, &target)
+        ? QColor(GetRValue(target), GetGValue(target), GetBValue(target))
+        : QColor(30, 30, 30);
+    if (targetColor == g_titleBarColor) return;   // 颜色未变化，无需动画
+
+    static QVariantAnimation *anim = nullptr;
+    if (!anim) {
+        anim = new QVariantAnimation;
+        QObject::connect(anim, &QVariantAnimation::valueChanged, [](const QVariant &v) {
+            QColor c = v.value<QColor>();
+            g_titleBarColor = c;
+            applyTitleBarColors(g_titleBarHwnd, c.red(), c.green(), c.blue());
+        });
+    }
+    anim->stop();
+    anim->setDuration(durationMs);
+    anim->setEasingCurve(QEasingCurve::InOutQuad);
+    anim->setStartValue(g_titleBarColor);
+    anim->setEndValue(targetColor);
+    anim->start();
+}
+
+// 沉浸背景联动：详情页沉浸背景显示且开启同步时，Win11 标题栏跟随封面主色调，否则恢复默认深色
+// - 退出详情页：瞬时恢复（0ms）
+// - 进入详情页：同步 kTitleBarColorAnimMs（350ms）
+// - 详情页内切歌：同步详情页 ColorAnimation（600ms）
+static void updateImmersiveTitleBar(HWND hwnd, MusicManager *mgr) {
+    QString caption;
+    bool immersive = mgr->playbackBackground() == 1 && mgr->playerDetailVisible() && mgr->titleBarImmersiveSync();
+    if (immersive)
+        caption = mgr->currentCoverColor();   // 无封面时为空串 → 默认深色
+
+    int duration;
+    if (!immersive && g_prevDetailVisible) {
+        duration = 0;                          // 退出详情页：瞬时
+    } else if (immersive && !g_prevDetailVisible) {
+        duration = kTitleBarColorAnimMs;       // 进入详情页：200ms
+    } else {
+        duration = immersive ? 600 : 0;        // 切歌：600ms 同步详情页 / 非沉浸态：瞬时
+    }
+    g_prevDetailVisible = immersive;
+    animateTitleBarColor(hwnd, caption, duration);
 }
 #endif
 
 #include "version.h"
-#include "core/MusicManager.h"
 #include "core/SMTCManager.h"
 #include "core/HotkeyManager.h"
 #include "core/UpdateChecker.h"
@@ -108,7 +195,7 @@ static void setupSystemTray(QQuickWindow *window, MusicManager *mgr) {
     QAction *showAction = menu->addAction("显示主窗口");
     QAction *hideAction = menu->addAction("退出至托盘");
     QAction *miniAction = menu->addAction("迷你模式");
-    QAction *quitAction = menu->addAction("退出");
+    QAction *quitAction = menu->addAction("退出软件");
 
     tray->setContextMenu(menu);
 
@@ -441,6 +528,16 @@ int main(int argc, char *argv[])
             QTimer::singleShot(200, win, [win, musicManager]() {
                 HWND hwnd = HWND(win->winId());
                 customizeTitleBar(hwnd);
+
+                // 沉浸背景联动：标题栏颜色跟随封面主色调
+                // （详情页可见 + 沉浸背景模式 → 使用封面色，否则恢复默认深色）
+                auto refreshTitleBar = [hwnd, musicManager]() {
+                    updateImmersiveTitleBar(hwnd, musicManager);
+                };
+                QObject::connect(musicManager, &MusicManager::playbackBackgroundChanged, win, refreshTitleBar);
+                QObject::connect(musicManager, &MusicManager::currentCoverColorChanged, win, refreshTitleBar);
+                QObject::connect(musicManager, &MusicManager::playerDetailVisibleChanged, win, refreshTitleBar);
+                QObject::connect(musicManager, &MusicManager::titleBarImmersiveSyncChanged, win, refreshTitleBar);
 
                 // 初始化 Windows 系统媒体控件 (SMTC)
                 new SMTCManager(musicManager, hwnd, musicManager);

@@ -486,6 +486,10 @@ void MusicManager::loadSettings() {
         m_playbackBackground = obj.value("playbackBackground").toInt(0);
         emit playbackBackgroundChanged();
     }
+    if (obj.contains("titleBarImmersiveSync")) {
+        m_titleBarImmersiveSync = obj.value("titleBarImmersiveSync").toBool(true);
+        emit titleBarImmersiveSyncChanged();
+    }
     if (obj.contains("volume")) {
         m_volume = obj.value("volume").toDouble(m_volume);
         emit volumeChanged();
@@ -531,6 +535,7 @@ void MusicManager::saveSettings() {
     obj["autoPitchCompensation"] = m_autoPitchCompensation;
     obj["minimizeToTray"] = m_minimizeToTray;
     obj["playbackBackground"] = m_playbackBackground;
+    obj["titleBarImmersiveSync"] = m_titleBarImmersiveSync;
     obj["volume"] = m_volume;
     obj["wasapiExclusive"] = m_wasapiExclusive;
     obj["lyricFont"] = m_lyricFont;
@@ -629,6 +634,19 @@ void MusicManager::setPlaybackBackground(int v) {
     if (v < 0 || v > 1 || v == m_playbackBackground) return;
     m_playbackBackground = v;
     emit playbackBackgroundChanged();
+    saveSettings();
+}
+
+void MusicManager::setPlayerDetailVisible(bool v) {
+    if (v == m_playerDetailVisible) return;
+    m_playerDetailVisible = v;
+    emit playerDetailVisibleChanged();
+}
+
+void MusicManager::setTitleBarImmersiveSync(bool v) {
+    if (v == m_titleBarImmersiveSync) return;
+    m_titleBarImmersiveSync = v;
+    emit titleBarImmersiveSyncChanged();
     saveSettings();
 }
 
@@ -1810,6 +1828,7 @@ QString MusicManager::extractCoverColor(const QString &coverUrl) {
     QVector<quint64> rSum(BUCKETS * BUCKETS * BUCKETS, 0);
     QVector<quint64> gSum(BUCKETS * BUCKETS * BUCKETS, 0);
     QVector<quint64> bSum(BUCKETS * BUCKETS * BUCKETS, 0);
+    QVector<qreal> sSum(BUCKETS * BUCKETS * BUCKETS, 0.0);  // 饱和度累加，用于加权评分
 
     int validPixels = 0;
     for (int y = 0; y < img.height(); ++y) {
@@ -1826,9 +1845,7 @@ QString MusicManager::extractCoverColor(const QString &coverUrl) {
             qreal v = maxC / 255.0;
             qreal s = maxC > 0 ? (maxC - minC) / qreal(maxC) : 0.0;
 
-            // 仅跳过接近纯黑/纯白/纯灰的像素，保留暗色与柔和背景参与统计
-            // （否则背景被过滤后，文字/标题色会因像素集中而胜出）
-            if (v < 0.05 || v > 0.96 || s < 0.08) continue;
+            if (v < 0.15 || v > 0.95 || s < 0.25) continue;
 
             int ri = r >> 4;  // r / 16
             int gi = g >> 4;
@@ -1838,23 +1855,28 @@ QString MusicManager::extractCoverColor(const QString &coverUrl) {
             rSum[idx] += quint64(r);
             gSum[idx] += quint64(g);
             bSum[idx] += quint64(b);
+            sSum[idx] += s;
             ++validPixels;
         }
     }
 
     if (validPixels == 0) return QString();
 
-    // 取像素最多的 bucket 的平均色
+    // 用饱和度立方加权评分：score = count * avgSat^3，鲜艳颜色优先
     int bestIdx = 0;
-    int bestCount = 0;
+    qreal bestScore = 0.0;
     for (int i = 0; i < count.size(); ++i) {
-        if (count[i] > bestCount) {
-            bestCount = count[i];
+        if (count[i] == 0) continue;
+        qreal avgS = sSum[i] / count[i];
+        qreal score = count[i] * avgS * avgS * avgS;
+        if (score > bestScore) {
+            bestScore = score;
             bestIdx = i;
         }
     }
-    if (bestCount == 0) return QString();
+    if (bestScore == 0.0) return QString();
 
+    int bestCount = count[bestIdx];
     int r = int(rSum[bestIdx] / quint64(bestCount));
     int g = int(gSum[bestIdx] / quint64(bestCount));
     int b = int(bSum[bestIdx] / quint64(bestCount));

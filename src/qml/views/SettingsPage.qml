@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtCore
+import "../components"
 
 // ============================================================
 // 设置页 - 外观 / 软件更新 / 关于 三个子页面
@@ -531,30 +532,11 @@ Rectangle {
                         font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
                     }
                     Item { Layout.fillWidth: true }
-                    Switch {
+                    ToggleSwitch {
                         id: autoPitchSwitch
                         Layout.alignment: Qt.AlignVCenter
                         checked: musicManager.autoPitchCompensation
                         onToggled: musicManager.autoPitchCompensation = checked
-
-                        indicator: Rectangle {
-                            implicitWidth: 38
-                            implicitHeight: 22
-                            x: parent.leftPadding
-                            y: parent.topPadding + (parent.availableHeight - height) / 2
-                            radius: 11
-                            color: parent.checked ? "#3B82F6" : "#555"
-                            border.color: parent.checked ? "#3B82F6" : "#444"
-                            Behavior on color { ColorAnimation { duration: 150 } }
-
-                            Rectangle {
-                                x: parent.checked ? parent.width - width - 2 : 2
-                                y: (parent.height - height) / 2
-                                width: 18; height: 18; radius: 9
-                                color: "#fff"
-                                Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                            }
-                        }
                     }
                 }
 
@@ -581,7 +563,7 @@ Rectangle {
                     Layout.fillWidth: true
                     Label { text: "WASAPI 独占模式"; font.family: fontFamily; font.pixelSize: 15; color: "#ffffff" }
                     Item { Layout.fillWidth: true }
-                    Switch {
+                    ToggleSwitch {
                         id: wasapiSwitch
                         Layout.alignment: Qt.AlignVCenter
                         checked: musicManager.wasapiExclusive || false
@@ -595,25 +577,6 @@ Rectangle {
                                 })
                             } else {
                                 musicManager.wasapiExclusive = false
-                            }
-                        }
-
-                        indicator: Rectangle {
-                            implicitWidth: 38
-                            implicitHeight: 22
-                            x: parent.leftPadding
-                            y: parent.topPadding + (parent.availableHeight - height) / 2
-                            radius: 11
-                            color: parent.checked ? "#3B82F6" : "#555"
-                            border.color: parent.checked ? "#3B82F6" : "#444"
-                            Behavior on color { ColorAnimation { duration: 150 } }
-
-                            Rectangle {
-                                x: parent.checked ? parent.width - width - 2 : 2
-                                y: (parent.height - height) / 2
-                                width: 18; height: 18; radius: 9
-                                color: "#fff"
-                                Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                             }
                         }
                     }
@@ -1201,7 +1164,7 @@ Rectangle {
         // 播放背景
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520
-            Layout.preferredHeight: 150; radius: 8
+            Layout.preferredHeight: 190; radius: 8
             color: "#222222"; border.color: "#3A3A3A"
 
             ColumnLayout {
@@ -1263,6 +1226,25 @@ Rectangle {
                     font.family: fontFamily; font.pixelSize: 11; color: "#777777"
                     wrapMode: Text.WordWrap; Layout.fillWidth: true
                 }
+
+                // 沉浸背景时同步修改系统标题栏颜色（默认开启）
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: "沉浸背景时同步修改标题栏颜色"
+                        font.family: fontFamily; font.pixelSize: 14; color: "#ffffff"
+                        elide: Text.ElideRight
+                    }
+
+                    ToggleSwitch {
+                        Layout.alignment: Qt.AlignVCenter
+                        checked: musicManager.titleBarImmersiveSync
+                        onToggled: musicManager.titleBarImmersiveSync = checked
+                    }
+                }
             }
         }
 
@@ -1292,29 +1274,10 @@ Rectangle {
                     }
                 }
 
-                Switch {
+                ToggleSwitch {
                     Layout.alignment: Qt.AlignVCenter
                     checked: musicManager.minimizeToTray
                     onToggled: musicManager.minimizeToTray = checked
-
-                    indicator: Rectangle {
-                        implicitWidth: 38
-                        implicitHeight: 22
-                        x: parent.leftPadding
-                        y: parent.topPadding + (parent.availableHeight - height) / 2
-                        radius: 11
-                        color: parent.checked ? "#3B82F6" : "#555"
-                        border.color: parent.checked ? "#3B82F6" : "#444"
-                        Behavior on color { ColorAnimation { duration: 150 } }
-
-                        Rectangle {
-                            x: parent.checked ? parent.width - width - 2 : 2
-                            y: (parent.height - height) / 2
-                            width: 18; height: 18; radius: 9
-                            color: "#fff"
-                            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                        }
-                    }
                 }
             }
         }

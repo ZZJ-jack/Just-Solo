@@ -47,6 +47,8 @@ class MusicManager : public QObject
     Q_PROPERTY(int playlistSource READ playlistSource WRITE setPlaylistSource NOTIFY playlistSourceChanged)
     Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY minimizeToTrayChanged)
     Q_PROPERTY(int playbackBackground READ playbackBackground WRITE setPlaybackBackground NOTIFY playbackBackgroundChanged)
+    Q_PROPERTY(bool playerDetailVisible READ playerDetailVisible WRITE setPlayerDetailVisible NOTIFY playerDetailVisibleChanged)
+    Q_PROPERTY(bool titleBarImmersiveSync READ titleBarImmersiveSync WRITE setTitleBarImmersiveSync NOTIFY titleBarImmersiveSyncChanged)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool wasapiExclusive READ wasapiExclusive WRITE setWasapiExclusive NOTIFY wasapiExclusiveChanged)
     Q_PROPERTY(QString lyricFont READ lyricFont WRITE setLyricFont NOTIFY lyricFontChanged)
@@ -155,6 +157,14 @@ public:
     int playbackBackground() const { return m_playbackBackground; }
     void setPlaybackBackground(int v);
 
+    // ---- 播放详情页可见性（沉浸背景联动系统标题栏用） ----
+    bool playerDetailVisible() const { return m_playerDetailVisible; }
+    void setPlayerDetailVisible(bool v);
+
+    // ---- 沉浸背景时同步修改系统标题栏颜色（默认开启） ----
+    bool titleBarImmersiveSync() const { return m_titleBarImmersiveSync; }
+    void setTitleBarImmersiveSync(bool v);
+
     // ---- 音频输出模式（WASAPI 独占/共享） ----
     bool wasapiExclusive() const { return m_wasapiExclusive; }
     void setWasapiExclusive(bool v);
@@ -251,6 +261,8 @@ signals:
     void playlistSourceChanged();
     void minimizeToTrayChanged();
     void playbackBackgroundChanged();
+    void playerDetailVisibleChanged();
+    void titleBarImmersiveSyncChanged();
     void volumeChanged();
     void wasapiExclusiveChanged();
     void lyricFontChanged();
@@ -317,6 +329,8 @@ private:
     int m_playlistSource = 0;       // 活跃播放列表来源 (SourcePlaylist=0)
     bool m_minimizeToTray = false;
     int m_playbackBackground = 0;   // 播放背景 (0=深色背景, 1=沉浸背景)
+    bool m_playerDetailVisible = false; // 播放详情页是否可见（QML 同步，供标题栏沉浸色判断）
+    bool m_titleBarImmersiveSync = true; // 沉浸背景时同步修改系统标题栏颜色（默认开启）
     qreal m_volume = 0.9;
     bool m_wasapiExclusive = false; // 音频输出模式: false=共享(默认), true=WASAPI 独占
     QString m_lyricFont = QStringLiteral("builtin:HarmonyOS_Sans_SC_Regular.ttf"); // 歌词字体选择键

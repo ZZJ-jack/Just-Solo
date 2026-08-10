@@ -3492,6 +3492,8 @@ Window {
 
     // 外部触发详情页显隐
     onShowPlayerDetailChanged: {
+        // 同步给 C++：详情页沉浸背景联动系统标题栏颜色
+        musicManager.playerDetailVisible = showPlayerDetail
         if (showPlayerDetail)
             playerDetail.visible = true
     }
