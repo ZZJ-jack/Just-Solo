@@ -139,6 +139,11 @@ static void animateTitleBarColor(HWND hwnd, const QString &targetHex, int durati
             applyTitleBarColors(g_titleBarHwnd, c.red(), c.green(), c.blue());
         });
     }
+    if (durationMs <= 0) {
+        g_titleBarColor = targetColor;
+        applyTitleBarColors(hwnd, targetColor.red(), targetColor.green(), targetColor.blue());
+        return;
+    }
     anim->stop();
     anim->setDuration(durationMs);
     anim->setEasingCurve(QEasingCurve::InOutQuad);
