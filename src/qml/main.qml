@@ -1554,12 +1554,12 @@ Window {
                 Behavior on color { ColorAnimation { duration: 600 } }
             }
 
-            // 深色渐变遮罩：顶部与详情页背景底部无缝衔接，向底部继续加深
+            // 渐变遮罩：顶部与详情页背景底部无缝衔接，底部仅轻微加深，避免发黑
             Rectangle {
                 anchors.fill: parent
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#D8181818" }
-                    GradientStop { position: 1.0; color: "#E8181818" }
+                    GradientStop { position: 0.0; color: "#70000000" }
+                    GradientStop { position: 1.0; color: "#90000000" }
                 }
             }
         }
@@ -1572,7 +1572,7 @@ Window {
             anchors.right: parent.right
             // 悬浮或拖拽时高度增加到 5px，平时 3px
             height: (barSeekMA.containsMouse || barSeekMA.pressed) ? 5 : 3
-            color: "#3A3A3A"
+            color: "#555555"
             z: 10
 
             opacity: (barSeekMA.containsMouse || barSeekMA.pressed) ? 1.0 : 0.4

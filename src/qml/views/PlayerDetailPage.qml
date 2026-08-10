@@ -401,13 +401,13 @@ Item {
                 Behavior on color { ColorAnimation { duration: 600 } }
             }
 
-            // 渐变遮罩：顶部透出主色调，底部过渡到深色，形成渐变色背景
+            // 渐变遮罩：顶部透出主色调，底部仅轻微加深，避免底部发黑
             Rectangle {
                 anchors.fill: parent
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: "transparent" }
-                    GradientStop { position: 0.4; color: "#50181818" }
-                    GradientStop { position: 1.0; color: "#D8181818" }
+                    GradientStop { position: 0.5; color: "#30000000" }
+                    GradientStop { position: 1.0; color: "#70000000" }
                 }
             }
         }

@@ -79,14 +79,14 @@ Window {
             Behavior on color { ColorAnimation { duration: 600 } }
         }
 
-        // 渐变遮罩：顶部透出主色调，底部过渡到深色，形成渐变色背景
+        // 渐变遮罩：顶部透出主色调，底部仅轻微加深，避免底部发黑
         Rectangle {
             anchors.fill: parent
             radius: 8
             gradient: Gradient {
                 GradientStop { position: 0.0; color: "transparent" }
-                GradientStop { position: 0.4; color: "#50181818" }
-                GradientStop { position: 1.0; color: "#D8181818" }
+                GradientStop { position: 0.5; color: "#30000000" }
+                GradientStop { position: 1.0; color: "#70000000" }
             }
         }
     }
@@ -115,6 +115,7 @@ Window {
             Layout.preferredWidth: 100
             Layout.preferredHeight: 100
             Layout.alignment: Qt.AlignVCenter
+            Layout.topMargin: -10
             radius: 6
             color: "#3A3A3A"
 
@@ -239,7 +240,7 @@ Window {
             // ---- 时间显示：左当前播放时间，右音频总时长（统一白色） ----
             RowLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 10  // 下移一点
+                Layout.topMargin: 6  // 下移一点
                 Label {
                     text: miniWindow.fmtTime(musicManager.position)
                     font.family: _font; font.pixelSize: 10; color: "#FFFFFF"
@@ -256,7 +257,7 @@ Window {
             // ---- 底部控制栏（三大按钮居中） ----
             RowLayout {
                 Layout.fillWidth: true
-                Layout.bottomMargin: 1
+                Layout.bottomMargin: -2
                 spacing: 0
 
                 // ---- 左侧：循环模式 ----

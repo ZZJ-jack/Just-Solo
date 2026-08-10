@@ -1826,8 +1826,9 @@ QString MusicManager::extractCoverColor(const QString &coverUrl) {
             qreal v = maxC / 255.0;
             qreal s = maxC > 0 ? (maxC - minC) / qreal(maxC) : 0.0;
 
-            // 跳过过暗（接近黑）/ 过亮（接近白）/ 过灰（饱和度低）
-            if (v < 0.2 || v > 0.85 || s < 0.25) continue;
+            // 仅跳过接近纯黑/纯白/纯灰的像素，保留暗色与柔和背景参与统计
+            // （否则背景被过滤后，文字/标题色会因像素集中而胜出）
+            if (v < 0.05 || v > 0.96 || s < 0.08) continue;
 
             int ri = r >> 4;  // r / 16
             int gi = g >> 4;
