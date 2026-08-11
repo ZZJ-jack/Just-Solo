@@ -69,8 +69,13 @@ bool AudioEngine::initAudioDevice()
     ma_context_config contextConfig = ma_context_config_init();
     if (ma_context_init(nullptr, 0, &contextConfig, m_context) != MA_SUCCESS) {
         qWarning("AudioEngine: Failed to initialize miniaudio context");
-        BugReporter::submit(QStringLiteral("音频引擎初始化失败"),
-                            QStringLiteral("miniaudio context 初始化失败 (exclusive=%1)").arg(m_exclusive));
+        if (m_exclusive) {
+            // WASAPI 独占模式初始化失败属于预期环境问题，不上报、不弹窗
+        } else if (!m_initFailedNotified) {
+            // 共享模式失败：通知 QML 弹窗提示用户检查并重启（延迟到事件循环，避免构造期信号丢失）
+            m_initFailedNotified = true;
+            QTimer::singleShot(0, this, [this]{ emit audioInitFailed(); });
+        }
         goto on_fail;
     }
 
@@ -89,8 +94,13 @@ bool AudioEngine::initAudioDevice()
 
         if (ma_device_init(m_context, &deviceConfig, m_device) != MA_SUCCESS) {
             qWarning("AudioEngine: Failed to initialize device (exclusive=%d)", m_exclusive);
-            BugReporter::submit(QStringLiteral("音频引擎初始化失败"),
-                                QStringLiteral("miniaudio device 初始化失败 (exclusive=%1)").arg(m_exclusive));
+            if (m_exclusive) {
+                // WASAPI 独占模式初始化失败属于预期环境问题，不上报、不弹窗
+            } else if (!m_initFailedNotified) {
+                // 共享模式失败：通知 QML 弹窗提示用户检查并重启
+                m_initFailedNotified = true;
+                QTimer::singleShot(0, this, [this]{ emit audioInitFailed(); });
+            }
             ma_context_uninit(m_context);
             goto on_fail;
         }
@@ -127,8 +137,13 @@ bool AudioEngine::initAudioDevice()
         config.pResourceManager = m_resourceManager;
         if (ma_engine_init(&config, m_engine) != MA_SUCCESS) {
             qWarning("AudioEngine: Failed to initialize miniaudio engine");
-            BugReporter::submit(QStringLiteral("音频引擎初始化失败"),
-                                QStringLiteral("miniaudio engine 初始化失败 (exclusive=%1)").arg(m_exclusive));
+            if (m_exclusive) {
+                // WASAPI 独占模式初始化失败属于预期环境问题，不上报、不弹窗
+            } else if (!m_initFailedNotified) {
+                // 共享模式失败：通知 QML 弹窗提示用户检查并重启
+                m_initFailedNotified = true;
+                QTimer::singleShot(0, this, [this]{ emit audioInitFailed(); });
+            }
             ma_device_uninit(m_device);
             ma_context_uninit(m_context);
             ma_resource_manager_uninit(m_resourceManager);

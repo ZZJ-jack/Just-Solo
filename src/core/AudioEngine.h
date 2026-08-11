@@ -50,6 +50,8 @@ signals:
     void playbackStateChanged();
     void endOfMedia();
     void durationChanged();
+    // 共享模式音频初始化失败（如通道被占用）：通知 QML 弹窗提示用户检查并重启，不上报 BugReporter
+    void audioInitFailed();
 
 private:
     void pollAudio();
@@ -76,6 +78,7 @@ private:
     ma_sound *m_sound = nullptr;
     bool m_soundInitialized = false;
     bool m_exclusive = false;  // true=WASAPI 独占, false=共享
+    bool m_initFailedNotified = false;  // 共享模式初始化失败已通知（防止重复弹窗）
 
     QString m_currentFilePath;
     qint64 m_cachedDuration = 0;   // milliseconds

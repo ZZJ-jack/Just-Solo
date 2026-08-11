@@ -168,9 +168,7 @@ public:
     // ---- 音频输出模式（WASAPI 独占/共享） ----
     bool wasapiExclusive() const { return m_wasapiExclusive; }
     void setWasapiExclusive(bool v);
-    Q_INVOKABLE void retryWasapiExclusive();   // 重新尝试开启独占（弹窗"重新检测"）
-    Q_INVOKABLE void forceWasapiExclusive();   // 跳过探测强制开启独占（弹窗"强制开启"，可能导致其他音视频软件崩溃）
-    Q_INVOKABLE void disableWasapiExclusive(); // 关闭独占并持久化（弹窗"关闭独占模式"）
+    Q_INVOKABLE void disableWasapiExclusive(); // 关闭独占并持久化
 
     // ---- 快进 / 快退步长（秒） ----
     int seekStep() const { return m_seekStep; }
@@ -267,8 +265,8 @@ signals:
     void wasapiExclusiveChanged();
     void lyricFontChanged();
     void seekStepChanged();
-    void wasapiExclusiveFailed();  // 启动时开启 WASAPI 独占失败（设备被占用），QML 应弹窗询问用户
     void exclusiveConfirmRequested();  // 启动时保存了开启独占：QML 先弹窗提示（识别精度有限），用户确认后再真正开启
+    void audioInitFailed();  // 共享模式音频初始化失败：QML 弹窗提示用户检查并重启
     void customPlaylistsChanged();
     void playingListIndexChanged();
     void positionChanged(qint64 ms);

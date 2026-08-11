@@ -346,6 +346,7 @@ MusicManager::MusicManager(QObject *parent)
         m_lyricTimer->start();
     });
     connect(m_audioEngine, &AudioEngine::playbackStateChanged, this, &MusicManager::playbackStateChanged);
+    connect(m_audioEngine, &AudioEngine::audioInitFailed, this, &MusicManager::audioInitFailed);
     connect(m_audioEngine, &AudioEngine::endOfMedia, this, [this]() {
         // 根据播放模式决定下一步
         if (m_playMode == SingleLoop) {
@@ -668,45 +669,11 @@ void MusicManager::setWasapiExclusive(bool v) {
     if (m_audioEngine)
         applied = m_audioEngine->setExclusiveMode(v);
     if (!applied) {
-        // 独占模式不可用（如设备被占用）：回退共享并同步 UI，与启动时一致弹窗询问用户
+        // 独占模式不可用（如设备被占用）：静默回退共享并同步 UI，不上报、不弹窗
         m_wasapiExclusive = false;
         emit wasapiExclusiveChanged();
-        emit wasapiExclusiveFailed();
     }
     saveSettings();
-}
-
-void MusicManager::retryWasapiExclusive() {
-    // 重新检测：再次尝试开启独占
-    bool applied = false;
-    if (m_audioEngine)
-        applied = m_audioEngine->setExclusiveMode(true);
-    if (applied) {
-        m_wasapiExclusive = true;
-        emit wasapiExclusiveChanged();
-        saveSettings();
-    } else {
-        // 仍失败：继续回退共享，并再次通知 QML（弹窗保持/重新弹出）
-        m_wasapiExclusive = false;
-        emit wasapiExclusiveChanged();
-        emit wasapiExclusiveFailed();
-    }
-}
-
-void MusicManager::forceWasapiExclusive() {
-    // 强制开启：跳过探测直接尝试，若真实初始化仍失败则回退共享
-    bool applied = false;
-    if (m_audioEngine)
-        applied = m_audioEngine->setExclusiveMode(true, true);
-    if (applied) {
-        m_wasapiExclusive = true;
-        emit wasapiExclusiveChanged();
-        saveSettings();
-    } else {
-        m_wasapiExclusive = false;
-        emit wasapiExclusiveChanged();
-        emit wasapiExclusiveFailed();
-    }
 }
 
 void MusicManager::disableWasapiExclusive() {
