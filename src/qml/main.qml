@@ -3233,6 +3233,14 @@ Window {
         _rebuildPlaylistIndices()
     }
 
+    // ---- WASAPI 独占启动失败提示 ----
+    Connections {
+        target: musicManager
+        function onWasapiExclusiveFailed() {
+            exclusiveDialog.open()
+        }
+    }
+
     // ---- WASAPI 独占开启前提示（启动时保存了开启独占：先弹窗提示，确认后再开启） ----
     Connections {
         target: musicManager
@@ -3330,6 +3338,103 @@ Window {
                 var cb = mainWindow.exclusiveWarnCallback
                 mainWindow.exclusiveWarnCallback = null
                 cb(false)
+            }
+        }
+    }
+
+    // ---- WASAPI 独占启动失败提示（设备被占用，无法开启） ----
+    Dialog {
+        id: exclusiveDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 460
+        padding: 26
+
+        Overlay.modal: Rectangle { color: "transparent" }
+
+        background: Rectangle {
+            color: "#222222"
+            radius: 10
+            border.color: "#3A3A3A"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            Label {
+                text: "无法开启 WASAPI 独占"
+                font.family: appFont.name
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+            }
+
+            Label {
+                text: "音频通道已被占用，无法正常开启 WASAPI 独占功能，请选择以下操作："
+                font.family: appFont.name
+                font.pixelSize: 13
+                color: "#aaaaaa"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            Label {
+                text: "· 重新检测：重新检测音频通道被占用情况\n· 取消 WASAPI 独占模式，切换为共享模式\n· 强制开启 WASAPI 独占模式，可能会导致其他音视频软件崩溃"
+                font.family: appFont.name
+                font.pixelSize: 12
+                color: "#888888"
+                lineHeight: 1.6
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                spacing: 10
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 118; radius: 6
+                    color: disableExclMA.containsMouse ? "#333333" : "#1E1E1E"
+                    border.color: "#3A3A3A"; border.width: 1
+                    Label { text: "关闭独占模式"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: disableExclMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            musicManager.disableWasapiExclusive()
+                            exclusiveDialog.close()
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 88; radius: 6
+                    color: retryExclMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                    Label { text: "重新检测"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#ddd" }
+                    MouseArea {
+                        id: retryExclMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            exclusiveDialog.close()
+                            musicManager.retryWasapiExclusive()  // 若仍失败，wasapiExclusiveFailed 信号会重新弹出
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 88; radius: 6
+                    color: forceExclMA.containsMouse ? "#C96A4E" : "#B4543B"
+                    Label { text: "强制开启"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#fff" }
+                    MouseArea {
+                        id: forceExclMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            exclusiveDialog.close()
+                            musicManager.forceWasapiExclusive()  // 跳过探测强制开启，若仍失败信号会重新弹出
+                        }
+                    }
+                }
             }
         }
     }
