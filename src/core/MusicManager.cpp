@@ -1759,7 +1759,16 @@ void MusicManager::next() {
     if (list.isEmpty()) return;
     int nextIdx;
     if (m_playMode == Shuffle) {
-        nextIdx = QRandomGenerator::global()->bounded(list.size());
+        // 随机模式下，确保不会随机到当前正在播放的歌曲（除非列表只有1首）
+        if (list.size() <= 1) {
+            nextIdx = 0;
+        } else if (m_currentIndex < 0 || m_currentIndex >= list.size()) {
+            nextIdx = QRandomGenerator::global()->bounded(list.size());
+        } else {
+            // 在 [0, size-1) 范围内随机，然后跳过当前索引
+            nextIdx = QRandomGenerator::global()->bounded(list.size() - 1);
+            if (nextIdx >= m_currentIndex) nextIdx++;
+        }
     } else {
         nextIdx = (m_currentIndex + 1) % list.size();
     }
