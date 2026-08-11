@@ -179,6 +179,7 @@ static void updateImmersiveTitleBar(HWND hwnd, MusicManager *mgr) {
 #include "core/SMTCManager.h"
 #include "core/HotkeyManager.h"
 #include "core/UpdateChecker.h"
+#include "core/BugReporter.h"
 #include "services/LyricServer.h"
 
 // ============================================================
@@ -396,6 +397,10 @@ int main(int argc, char *argv[])
     app.setApplicationName("Just Solo");
     app.setApplicationDisplayName("Just Solo");
 
+    // 安装全局错误拦截：Qt 消息处理器（QtCriticalMsg/QtFatalMsg）+ 未捕获异常处理
+    // 必须在 QApplication 创建后尽早安装，以捕获后续初始化中的严重错误
+    BugReporter::installGlobalHandler();
+
     // 注册内置字体二进制资源（data/font 字体较大，不嵌入 C++ 避免编译器堆不足）
     // 必须在 MusicManager 注册应用字体、QML FontLoader 加载字体之前完成
     const QString fontsRcc = QCoreApplication::applicationDirPath() + "/fonts.rcc";
@@ -503,6 +508,9 @@ int main(int argc, char *argv[])
     UpdateChecker *updateChecker = new UpdateChecker(QString(APP_VERSION_DISPLAY), &app);
     engine.rootContext()->setContextProperty("updateChecker", updateChecker);
 
+    // 运行日志上报器（单例）：在 QML 中可通过 bugReporter.report(type, content, traceback) 调用
+    engine.rootContext()->setContextProperty("bugReporter", BugReporter::instance());
+
     // 从 QML 模块加载主界面
     const QUrl url(QStringLiteral("qrc:/qt/qml/JustSolo/src/qml/main.qml"));
     QObject::connect(
@@ -516,6 +524,36 @@ int main(int argc, char *argv[])
     // 关闭窗口时退出进程 — 备注：关闭事件已被 QML onClosing 拦截（隐藏到托盘），
     // 此连接仅在系统托盘「退出」菜单或 Qt.quit() 调用时生效
     QObject::connect(&engine, &QQmlApplicationEngine::quit, &app, &QApplication::quit);
+
+    // 捕获 QML 运行时错误（ReferenceError / TypeError 等）并上报
+    // 这些错误不会经过 qInstallMessageHandler，必须通过 QQmlEngine::warnings 信号捕获
+    QObject::connect(&engine, &QQmlApplicationEngine::warnings, &app,
+        [](const QList<QQmlError> &warnings) {
+            for (const QQmlError &err : warnings) {
+                // 只上报 Warning 及以上级别（跳过 Info/Debug）
+                QtMsgType mt = err.messageType();
+                if (mt != QtWarningMsg && mt != QtCriticalMsg && mt != QtFatalMsg)
+                    continue;
+
+                QString typeStr;
+                switch (mt) {
+                case QtWarningMsg:  typeStr = QStringLiteral("QML 警告"); break;
+                case QtCriticalMsg: typeStr = QStringLiteral("QML 严重错误"); break;
+                case QtFatalMsg:    typeStr = QStringLiteral("QML 致命错误"); break;
+                default: continue;
+                }
+
+                QString content = err.description();
+                QString traceback;
+                if (!err.url().isEmpty()) {
+                    traceback = QStringLiteral("%1:%2:%3")
+                                    .arg(err.url().toString())
+                                    .arg(err.line())
+                                    .arg(err.column());
+                }
+                BugReporter::submit(typeStr, content, traceback);
+            }
+        });
 
     engine.load(url);
 

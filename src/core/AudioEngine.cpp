@@ -4,6 +4,7 @@
 
 #include "AudioEngine.h"
 #include "TimeStretchSource.h"
+#include "BugReporter.h"
 #include <QDebug>
 #include <QFileInfo>
 #include <QTimer>
@@ -68,6 +69,8 @@ bool AudioEngine::initAudioDevice()
     ma_context_config contextConfig = ma_context_config_init();
     if (ma_context_init(nullptr, 0, &contextConfig, m_context) != MA_SUCCESS) {
         qWarning("AudioEngine: Failed to initialize miniaudio context");
+        BugReporter::submit(QStringLiteral("音频引擎初始化失败"),
+                            QStringLiteral("miniaudio context 初始化失败 (exclusive=%1)").arg(m_exclusive));
         goto on_fail;
     }
 
@@ -86,6 +89,8 @@ bool AudioEngine::initAudioDevice()
 
         if (ma_device_init(m_context, &deviceConfig, m_device) != MA_SUCCESS) {
             qWarning("AudioEngine: Failed to initialize device (exclusive=%d)", m_exclusive);
+            BugReporter::submit(QStringLiteral("音频引擎初始化失败"),
+                                QStringLiteral("miniaudio device 初始化失败 (exclusive=%1)").arg(m_exclusive));
             ma_context_uninit(m_context);
             goto on_fail;
         }
@@ -104,6 +109,8 @@ bool AudioEngine::initAudioDevice()
             sizeof(pCustomBackends) / sizeof(pCustomBackends[0]);
         if (ma_resource_manager_init(&rmConfig, m_resourceManager) != MA_SUCCESS) {
             qWarning("AudioEngine: Failed to initialize resource manager");
+            BugReporter::submit(QStringLiteral("音频引擎初始化失败"),
+                                QStringLiteral("miniaudio resource manager 初始化失败"));
             ma_device_uninit(m_device);
             ma_context_uninit(m_context);
             delete m_resourceManager;
@@ -120,6 +127,8 @@ bool AudioEngine::initAudioDevice()
         config.pResourceManager = m_resourceManager;
         if (ma_engine_init(&config, m_engine) != MA_SUCCESS) {
             qWarning("AudioEngine: Failed to initialize miniaudio engine");
+            BugReporter::submit(QStringLiteral("音频引擎初始化失败"),
+                                QStringLiteral("miniaudio engine 初始化失败 (exclusive=%1)").arg(m_exclusive));
             ma_device_uninit(m_device);
             ma_context_uninit(m_context);
             ma_resource_manager_uninit(m_resourceManager);
@@ -399,6 +408,7 @@ bool AudioEngine::setExclusiveMode(bool exclusive, bool force)
     if (exclusive && !force && audioChannelInUse()) {
         // 独占通道被其他客户端实际占用：不强制开启，重建共享引擎并恢复现场，由上层弹窗询问
         qWarning("AudioEngine: audio channel in use, not switching to exclusive mode");
+        // WASAPI 独占失败属于预期环境问题，不视为代码 bug，不上报
         m_exclusive = false;
         initAudioDevice();
     } else {
@@ -406,6 +416,7 @@ bool AudioEngine::setExclusiveMode(bool exclusive, bool force)
         m_exclusive = exclusive;
         if (!initAudioDevice()) {
             qWarning("AudioEngine: failed to init in requested mode, falling back to shared mode");
+            // WASAPI 独占失败属于预期环境问题，不视为代码 bug，不上报
             m_exclusive = false;
             initAudioDevice();
         }
@@ -482,6 +493,12 @@ bool AudioEngine::load(const QString &filePath)
 
     if (result != MA_SUCCESS) {
         qWarning() << "AudioEngine: Failed to load file:" << filePath << "error:" << result;
+        // 上报加载失败（节流机制会防止热插拔重试期间刷屏）
+        BugReporter::submit(QStringLiteral("音频加载失败"),
+                            QStringLiteral("无法加载文件: %1 [错误码: %2]").arg(filePath).arg(result),
+                            QStringLiteral("hotplug=%1 exclusive=%2")
+                                .arg(!m_currentFilePath.isEmpty() ? QStringLiteral("true") : QStringLiteral("false"))
+                                .arg(m_exclusive));
         // 释放失败的时间拉伸数据源
         m_stretchSource.reset();
         m_usingStretchSource = false;

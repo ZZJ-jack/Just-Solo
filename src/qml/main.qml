@@ -3606,4 +3606,112 @@ Window {
             }
         }
     }
+
+    // ============================================================
+    // 全局错误弹窗 — 监听 bugReporter.errorOccurred 信号
+    // 当 C++ 端发生严重错误（代码异常、加载失败等）时弹出提示
+    // ============================================================
+    Connections {
+        target: bugReporter
+        function onErrorOccurred(type, content, traceback) {
+            errorDialog._errorType = type
+            errorDialog._errorContent = content
+            errorDialog._errorTraceback = traceback || ""
+            errorDialog.open()
+        }
+    }
+
+    Dialog {
+        id: errorDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 480
+        padding: 26
+
+        property string _errorType: ""
+        property string _errorContent: ""
+        property string _errorTraceback: ""
+
+        Overlay.modal: Rectangle { color: "transparent" }
+
+        background: Rectangle {
+            color: "#222222"
+            radius: 10
+            border.color: "#5A2A2A"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            // 标题行：错误图标 + 类型
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                Label {
+                    text: "⚠"
+                    font.pixelSize: 20
+                    color: "#FF6B6B"
+                }
+                Label {
+                    text: errorDialog._errorType || "错误"
+                    font.family: appFont.name
+                    font.pixelSize: 17
+                    font.bold: true
+                    color: "#FF6B6B"
+                    Layout.fillWidth: true
+                }
+            }
+
+            // 错误内容
+            Label {
+                text: errorDialog._errorContent
+                font.family: appFont.name
+                font.pixelSize: 13
+                color: "#dddddd"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            // 调试信息（可折叠）
+            Label {
+                visible: errorDialog._errorTraceback.length > 0
+                text: errorDialog._errorTraceback
+                font.family: appFont.name
+                font.pixelSize: 11
+                color: "#888888"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+            }
+
+            Label {
+                text: "此错误已自动上报，将帮助改进软件。"
+                font.family: appFont.name
+                font.pixelSize: 11
+                color: "#666666"
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                spacing: 10
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 88; radius: 6
+                    color: errorCloseMA.containsMouse ? "#3A3A3A" : "#1E1E1E"
+                    border.color: "#3A3A3A"; border.width: 1
+                    Label { text: "关闭"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#ccc" }
+                    MouseArea {
+                        id: errorCloseMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: errorDialog.close()
+                    }
+                }
+            }
+        }
+    }
 }
