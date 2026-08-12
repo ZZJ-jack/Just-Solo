@@ -1281,6 +1281,10 @@ void MusicManager::processNextPending() {
         if (shouldAdd) {
             m_library.prepend(track);
             m_playlist.prepend(track);
+            // 播放中（来源为音乐库）导入新歌时列表整体后移，同步修正当前索引；
+            // source≠0 时 m_currentIndex 指向收藏/历史，不受 prepend 影响，不能加
+            if (m_playlistSource == 0 && m_currentIndex >= 0)
+                m_currentIndex++;
             playlistModified = true;
         }
 
@@ -1787,6 +1791,9 @@ void MusicManager::previous() {
     QVariantList &list = currentPlaylist();
     if (list.isEmpty()) return;
     int prevIdx = m_currentIndex <= 0 ? list.size() - 1 : m_currentIndex - 1;
+    // 防御：索引被异常污染（如历史 bug 导致越界）时夹取到合法范围，
+    // 避免 playIndex 的边界检查直接吞掉，用户点上一曲却毫无反应
+    prevIdx = qBound(0, prevIdx, list.size() - 1);
     playIndex(prevIdx);
 }
 
