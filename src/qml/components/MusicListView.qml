@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 // ============================================================
 // 通用歌曲列表组件（全局复用）
-// 所有音乐 / 自定义列表共用，通过 songList 切换数据源
+// 所有音乐 / 自建歌单共用，通过 songList 切换数据源
 // ============================================================
 ColumnLayout {
     id: root
@@ -17,9 +17,9 @@ ColumnLayout {
     property int rightClickedIndex: -1
     property string fontFamily: ""
 
-    // 可重载：自定义列表时传入不同的歌曲列表
+    // 可重载：自建歌单时传入不同的歌曲列表
     property var songList: musicManager.library
-    // 自定义列表索引（-1 = 普通模式，> = 自建列表）
+    // 自建歌单索引（-1 = 普通模式，> = 自建列表）
     property int customPlaylistIndex: -1
     // 当前页面的列表索引（-1=未设置, 0=库, 1=收藏, 2=历史, 3+n=自定义）
     property int pageListIndex: -1
@@ -133,7 +133,7 @@ ColumnLayout {
         }
     }
 
-    // 同一 HomePage 实例切换 songList（所有音乐↔自定义列表）时触发定位
+    // 同一 HomePage 实例切换 songList（所有音乐↔自建歌单）时触发定位
     onSongListChanged: {
         if (_suppressAutoScroll) {
             // reorder 使 C++ 返回新 QVariantList → 模型替换 → contentY 会重置为 0
@@ -705,7 +705,7 @@ ColumnLayout {
             }
 
             Label {
-                text: "我们不会从磁盘删除此歌曲文件，可通过「添加本地音乐」或「从音乐库导入」重新加回。\n\n此操作会同步删除历史记录、播放列表、收藏列表及所有自定义列表（在所有播放列表中删除的话）中的此歌曲。"
+                text: "我们不会从磁盘删除此歌曲文件，可通过「添加本地音乐」或「从音乐库导入」重新加回。\n\n此操作会同步删除历史、播放列表、收藏及所有自建歌单（在所有音乐中删除的话）中的此歌曲。"
                 font.family: fontFamily
                 font.pixelSize: 13
                 lineHeight: 1.5
