@@ -43,7 +43,7 @@ Window {
     readonly property int playerBarHeight: 75
 
     // ---- 视图路由 ----
-    property string currentMenu: ""              // 空串 = 未选择，不加载页面
+    property string currentMenu: "welcome"           // 首页（欢迎页）
     property string settingsSubMenu: "appearance"
 
     // ---- 播放详情页控制 ----
@@ -382,6 +382,14 @@ Window {
 
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/home.png"
+                        label: "首页"
+                        iconW: 28; iconH: 28; iconSrcSize: 20
+                        active: currentMenu === "welcome"
+                        fontFamily: appFont.name
+                        onClicked: currentMenu = "welcome"
+                    }
+                    NavItem {
+                        iconSource: "qrc:/qt/qml/JustSolo/data/image/AllMusic.png"
                         label: "所有音乐"
                         iconW: 28; iconH: 28; iconSrcSize: 20
                         active: currentMenu === "home"
@@ -923,6 +931,7 @@ Window {
                     visible: true
 
                     Rectangle {
+                        id: searchBox
                         Layout.preferredWidth: Math.min(mainWindow.width * 0.35, 420)
                         Layout.minimumWidth: 200
                         Layout.preferredHeight: 42
@@ -930,6 +939,8 @@ Window {
                         color: "#1E1E1E"
                         border.color: "#3A3A3A"
                         border.width: 1
+                        // 仅当鼠标点击进入搜索框且框内有文字时才打开下拉
+                        property bool _mouseEntered: false
 
                         RowLayout {
                             anchors.fill: parent
@@ -954,14 +965,16 @@ Window {
                                 verticalAlignment: TextInput.AlignVCenter
                                 onTextChanged: {
                                     mainWindow.updateSearch(text)
-                                    if (text.trim().length > 0 && !musicManager.isLoading)
+                                    // 仅在鼠标点击进入搜索框后，随输入实时更新下拉
+                                    if (searchBox._mouseEntered && text.trim().length > 0 && !musicManager.isLoading)
                                         searchPopup.open()
                                     else
                                         searchPopup.close()
                                 }
                                 onActiveFocusChanged: {
-                                    if (activeFocus && text.trim().length > 0)
-                                        searchPopup.open()
+                                    // 焦点离开（点击结果、Tab 移走等）后撤销鼠标点击标记
+                                    if (!activeFocus)
+                                        searchBox._mouseEntered = false
                                 }
 
                                 Text {
@@ -1124,6 +1137,16 @@ Window {
                                 }
                             }
                         }
+
+                        // 鼠标点击进入搜索框（与 TextInput 事件共存，不干扰光标定位/文字编辑）
+                        TapHandler {
+                            onTapped: {
+                                searchBox._mouseEntered = true
+                                searchInput.forceActiveFocus()
+                                if (searchInput.text.trim().length > 0 && !musicManager.isLoading)
+                                    searchPopup.open()
+                            }
+                        }
                     }
 
                     Item { Layout.fillWidth: true }
@@ -1140,7 +1163,8 @@ Window {
                         width: 30; height: 30
                         Image {
                             anchors.centerIn: parent
-                    source: currentMenu === "home" ? "qrc:/qt/qml/JustSolo/data/image/home.png"
+                    source: currentMenu === "welcome" ? "qrc:/qt/qml/JustSolo/data/image/home.png"
+                           : currentMenu === "home" ? "qrc:/qt/qml/JustSolo/data/image/AllMusic.png"
                            : currentMenu === "playlist" ? "qrc:/qt/qml/JustSolo/data/image/PlayList.png"
                            : currentMenu === "favorite" ? "qrc:/qt/qml/JustSolo/data/image/mylike.png"
                            : currentMenu === "history" ? "qrc:/qt/qml/JustSolo/data/image/history.png"
@@ -1163,7 +1187,7 @@ Window {
                     }
 
                     Label {
-                        text: currentMenu === "" ? "欢迎使用 Just Solo"
+                        text: currentMenu === "welcome" ? "欢迎使用 Just Solo"
                               : currentMenu === "home" ? "所有音乐"
                               : currentMenu === "playlist" ? "播放列表"
                               : currentMenu === "favorite" ? "收藏"
@@ -1301,11 +1325,11 @@ Window {
                     }
                 }
 
-                // 欢迎页提示语（仅无菜单时显示）
+                // 欢迎页提示语（仅首页显示）
                 Label {
                     text: "点击左侧列表开始使用"
                     font.family: appFont.name; font.pixelSize: 15; color: "#888"
-                    visible: currentMenu === ""
+                    visible: currentMenu === "welcome"
                     Layout.alignment: Qt.AlignLeft
                     Layout.leftMargin: 40
                 }
