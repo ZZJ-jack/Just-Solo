@@ -836,8 +836,6 @@ Window {
                         color: "#1E1E1E"
                         border.color: "#3A3A3A"
                         border.width: 1
-                        // 仅当鼠标点击进入搜索框且框内有文字时才打开下拉
-                        property bool _mouseEntered: false
 
                         RowLayout {
                             anchors.fill: parent
@@ -862,16 +860,29 @@ Window {
                                 verticalAlignment: TextInput.AlignVCenter
                                 onTextChanged: {
                                     mainWindow.updateSearch(text)
-                                    // 仅在鼠标点击进入搜索框后，随输入实时更新下拉
-                                    if (searchBox._mouseEntered && text.trim().length > 0 && !musicManager.isLoading)
+                                    // 输入非空时实时刷新下拉，清空时收起
+                                    if (text.trim().length > 0 && !musicManager.isLoading)
                                         searchPopup.open()
                                     else
                                         searchPopup.close()
                                 }
                                 onActiveFocusChanged: {
-                                    // 焦点离开（点击结果、Tab 移走等）后撤销鼠标点击标记
-                                    if (!activeFocus)
-                                        searchBox._mouseEntered = false
+                                    // 获得焦点且有文字时弹出下拉；失去焦点时收起
+                                    if (activeFocus) {
+                                        if (text.trim().length > 0 && !musicManager.isLoading)
+                                            searchPopup.open()
+                                    } else {
+                                        searchPopup.close()
+                                    }
+                                }
+
+                                // 点击搜索框文字区域时弹出下拉（与 TextInput 光标定位共存）
+                                TapHandler {
+                                    onTapped: {
+                                        searchInput.forceActiveFocus()
+                                        if (searchInput.text.trim().length > 0 && !musicManager.isLoading)
+                                            searchPopup.open()
+                                    }
                                 }
 
                                 Text {
@@ -1035,10 +1046,9 @@ Window {
                             }
                         }
 
-                        // 鼠标点击进入搜索框（与 TextInput 事件共存，不干扰光标定位/文字编辑）
+                        // 点击搜索框空白区域（图标/留白）时也弹出下拉
                         TapHandler {
                             onTapped: {
-                                searchBox._mouseEntered = true
                                 searchInput.forceActiveFocus()
                                 if (searchInput.text.trim().length > 0 && !musicManager.isLoading)
                                     searchPopup.open()
