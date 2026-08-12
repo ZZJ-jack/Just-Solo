@@ -40,8 +40,8 @@
     zzjjack@zzjjack.us.kg
 
 【项目地址】
-    GitCode：https://gitcode.com/ZZJ-JACK/Just-Solo
     GitHub：https://github.com/ZZJ-jack/Just-Solo
+    GitCode：https://gitcode.com/ZZJ-JACK/Just-Solo
 
 【许可证】
 

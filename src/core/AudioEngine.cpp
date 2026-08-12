@@ -162,6 +162,11 @@ on_fail:
     delete m_device;
     delete m_context;
     delete m_engine;
+    // 补漏：ma_context_init / ma_device_init 失败路径上 m_resourceManager 已在第 67 行分配
+    // 但从未 ma_resource_manager_init（前两个失败分支在 goto 前已删除并置空，此处不会重复释放）。
+    // 不补会覆盖指针（如 setExclusiveMode 独占失败回退共享时二次 initAudioDevice），造成泄漏
+    delete m_resourceManager;
+    m_resourceManager = nullptr;
     m_device = nullptr;
     m_context = nullptr;
     m_engine = nullptr;

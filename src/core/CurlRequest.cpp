@@ -24,7 +24,15 @@ CurlRequest::~CurlRequest()
 {
     m_timer.stop();
     if (m_multi) {
+        // curl_multi_cleanup 不会释放仍在队列中的 easy handle，须先手动清理，
+        // 否则请求未完成时销毁对象（如退出时更新检查仍在进行）会泄漏句柄
+        if (m_easy) {
+            curl_multi_remove_handle(m_multi, m_easy);
+            curl_easy_cleanup(m_easy);
+            m_easy = nullptr;
+        }
         curl_multi_cleanup(m_multi);
+        m_multi = nullptr;
     }
     curl_global_cleanup();
 }
@@ -32,6 +40,13 @@ CurlRequest::~CurlRequest()
 void CurlRequest::get(const QString &url, const QString &userAgent)
 {
     m_response.clear();
+
+    // 防御：上一次请求尚未完成时（正常流程不会发生，调用方有重入保护），先释放旧句柄
+    if (m_easy) {
+        curl_multi_remove_handle(m_multi, m_easy);
+        curl_easy_cleanup(m_easy);
+        m_easy = nullptr;
+    }
 
     CURL *easy = curl_easy_init();
     if (!easy) {
@@ -63,6 +78,7 @@ void CurlRequest::get(const QString &url, const QString &userAgent)
     curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT, 15L);
 
     curl_multi_add_handle(m_multi, easy);
+    m_easy = easy;
     m_timer.start();
 }
 
@@ -72,6 +88,12 @@ void CurlRequest::onTimeout()
     CURLMcode mc = curl_multi_perform(m_multi, &running);
     if (mc != CURLM_OK) {
         m_timer.stop();
+        // 释放失败请求的句柄，避免残留到析构
+        if (m_easy) {
+            curl_multi_remove_handle(m_multi, m_easy);
+            curl_easy_cleanup(m_easy);
+            m_easy = nullptr;
+        }
         emit finished(false, QByteArray(),
                       QString::fromUtf8(curl_multi_strerror(mc)), 0);
         return;
@@ -107,6 +129,7 @@ void CurlRequest::onTimeout()
                 curl_easy_cleanup(easy);
             }
         }
+        m_easy = nullptr;  // 本次请求句柄已在循环中释放
 
         emit finished(success, m_response, errorStr, httpStatus);
     }

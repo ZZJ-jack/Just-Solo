@@ -24,6 +24,7 @@ private:
     void onTimeout();
 
     CURLM *m_multi = nullptr;
+    CURL *m_easy = nullptr;   // 当前进行中的请求句柄，析构时须手动清理（multi 不负责释放）
     QTimer m_timer;
     QByteArray m_response;
 };

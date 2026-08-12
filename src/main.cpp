@@ -205,6 +205,11 @@ static void setupSystemTray(QQuickWindow *window, MusicManager *mgr) {
 
     tray->setContextMenu(menu);
 
+    // QSystemTrayIcon::setContextMenu 不接管菜单所有权（Qt6 文档），而 QMenu 是 QWidget，
+    // 无法挂靠到 QQuickWindow/QSystemTrayIcon 下，故在应用退出时同步释放，避免每次启动泄漏
+    // （不用 deleteLater：aboutToQuit 时主事件循环已停止，延迟删除不会被执行）
+    QObject::connect(qApp, &QCoreApplication::aboutToQuit, [menu]() { delete menu; });
+
     // 更新暂停/播放按钮文字
     QObject::connect(mgr, &MusicManager::playbackStateChanged, [playPauseAction, mgr]() {
         playPauseAction->setText(mgr->isPlaying() ? "暂停" : "播放");

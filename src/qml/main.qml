@@ -395,7 +395,7 @@ Window {
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/home.png"
                         label: "首页"
-                        iconSrcSize: 16
+                        iconSrcSize: 20
                         active: currentMenu === "welcome"
                         fontFamily: appFont.name
                         onClicked: currentMenu = "welcome"
@@ -419,7 +419,7 @@ Window {
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/mylike.png"
                         label: "收藏"
-                        iconSrcSize: 24
+                        iconSrcSize: 20
                         active: currentMenu === "favorite"
                         fontFamily: appFont.name
                         onClicked: currentMenu = "favorite"
