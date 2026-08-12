@@ -1135,14 +1135,16 @@ QVariantList MusicManager::availableArtists() const {
     return result;
 }
 
-void MusicManager::createArtistPlaylist(const QString &artist) {
+void MusicManager::createArtistPlaylist(const QString &artist, const QString &name) {
     QString a = artist.trimmed();
     if (a.isEmpty()) return;
-    // 检查重复：同名歌手列表或同名任意列表
+    QString n = name.trimmed();
+    if (n.isEmpty()) n = a;   // 未指定名称时使用歌手名
+    // 检查重复：同名歌手列表（按 artist 判断）或同名任意列表（按 name 判断）
     for (const QVariant &pl : m_customPlaylists) {
         QVariantMap m = pl.toMap();
         if (m["type"].toString() == QStringLiteral("artist") && m["artist"].toString() == a) return;
-        if (m["name"].toString() == a) return;
+        if (m["name"].toString() == n) return;
     }
     // 从音乐库收集该歌手的所有歌曲
     QVariantList songs;
@@ -1156,7 +1158,7 @@ void MusicManager::createArtistPlaylist(const QString &artist) {
     QVariantMap pl;
     pl["type"] = QStringLiteral("artist");
     pl["artist"] = a;
-    pl["name"] = a;
+    pl["name"] = n;
     pl["songs"] = songs;
     m_customPlaylists.append(pl);
     saveCustomPlaylists();

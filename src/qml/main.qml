@@ -64,6 +64,7 @@ Window {
     property var _artistPlaylistIndices: []    // 歌手歌单在 customPlaylists 中的索引
     property var _allPlaylistIndices: []       // 全部自建歌单索引（侧边栏合并显示用）
     property var _artistDialogFilter: []       // 歌手选择对话框的过滤后列表
+    property string _pendingArtist: ""          // 歌手选择对话框中当前选中的歌手（空=未选中）
     property string _connectedClientName: ""  // LyricServer 连接的客户端名称
     property var _existingArtistNames: ({})    // 已创建歌手歌单的歌手名集合（去重标记）
 
@@ -219,6 +220,18 @@ Window {
             if (_libSelectedSet.hasOwnProperty(k)) count++
         }
         return count
+    }
+
+    // 勾选某歌手的全部歌曲（用于从音乐库导入弹窗的「选择歌手」）
+    function _selectLibSongsByArtist(artist) {
+        var lib = musicManager.library
+        for (var i = 0; i < lib.length; i++) {
+            var p = lib[i].path || ""
+            if (_libAlreadyInPlaylistSet[p]) continue
+            if ((lib[i].artist || "") === artist)
+                _libSelectedSet[i] = true
+        }
+        _libSelectedVersion++
     }
 
     function _doImport() {
@@ -2816,11 +2829,22 @@ Window {
         id: artistSelectDialog
         parent: Overlay.overlay
         modal: true
+        property bool _pickerMode: false   // true=从音乐库导入弹窗选歌手，点击后直接勾选歌曲并返回
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
         width: Math.min(parent.width * 0.8, 540)
         height: Math.min(parent.height * 0.8, 460)
         padding: 0
+
+        onOpened: {
+            // 每次打开重置选中状态与名称输入
+            mainWindow._pendingArtist = ""
+            artistNameField.text = ""
+            artistSearchField.text = ""
+            _artistDialogFilter = musicManager.availableArtists()
+        }
+
+        onClosed: artistSelectDialog._pickerMode = false
 
         Overlay.modal: Rectangle { color: "#80000000" }
 
@@ -2850,6 +2874,20 @@ Window {
                         }
                         font.family: appFont.name; font.pixelSize: 12; color: "#00d4ff"
                         visible: mainWindow._artistPlaylistIndices.length > 0
+                    }
+                    // 右上角关闭按钮（picker 模式隐藏底部栏时仍可关闭）
+                    Rectangle {
+                        Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 6
+                        color: artistDlgCloseMA.containsMouse ? "#33ffffff" : "transparent"
+                        Label {
+                            anchors.centerIn: parent
+                            text: "✕"
+                            font.pixelSize: 14; color: "#999"
+                        }
+                        MouseArea {
+                            id: artistDlgCloseMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: artistSelectDialog.close()
+                        }
                     }
                 }
             }
@@ -2922,7 +2960,7 @@ Window {
                     id: arItemRoot
                     width: artistDlgListView.width; height: 44; color: "transparent"
 
-                    readonly property bool _added: mainWindow._existingArtistNames[modelData] === true
+                    readonly property bool _added: !artistSelectDialog._pickerMode && mainWindow._existingArtistNames[modelData] === true
 
                     RowLayout {
                         anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 14; spacing: 10
@@ -2931,10 +2969,12 @@ Window {
                         Rectangle {
                             Layout.preferredWidth: 28; Layout.preferredHeight: 28; radius: 4
                             color: arItemRoot._added ? "#1E1E1E" : "#2C2C2C"
-                            Label {
+                            Image {
                                 anchors.centerIn: parent
-                                text: "🎤"
-                                font.pixelSize: 15
+                                source: "qrc:/qt/qml/JustSolo/data/image/singer_list.png"
+                                sourceSize.width: 20
+                                sourceSize.height: 20
+                                fillMode: Image.PreserveAspectFit
                                 opacity: arItemRoot._added ? 0.4 : 1.0
                             }
                         }
@@ -2970,32 +3010,69 @@ Window {
                         cursorShape: arItemRoot._added ? Qt.ArrowCursor : Qt.PointingHandCursor
                         enabled: !arItemRoot._added
                         onClicked: {
-                            musicManager.createArtistPlaylist(modelData)
-                            artistSelectDialog.close()
+                            // picker 模式：直接勾选该歌手的全部歌曲并返回
+                            if (artistSelectDialog._pickerMode) {
+                                mainWindow._selectLibSongsByArtist(modelData)
+                                artistSelectDialog.close()
+                                return
+                            }
+                            // 选中歌手：填入默认列表名，待用户点「确定」后创建
+                            mainWindow._pendingArtist = modelData
+                            // 再次点击同一歌手时保留已修改的名称
+                            if (artistNameField.text !== modelData)
+                                artistNameField.text = modelData
+                            artistNameField.forceActiveFocus()
                         }
                     }
                 }
             }
 
-            // 底部按钮
+            // 底部栏：列表名称输入 + 操作按钮（picker 模式隐藏）
             Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 52; radius: 10
                 color: "#222222"
+                visible: !artistSelectDialog._pickerMode
                 Rectangle { width: parent.width; height: 10; color: "#222222"; anchors.top: parent.top }
                 Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.top: parent.top }
 
                 RowLayout {
-                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                    anchors.rightMargin: 16; spacing: 10
+                    anchors.left: parent.left; anchors.right: parent.right
+                    anchors.leftMargin: 16; anchors.rightMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
 
+                    // 左下：列表名称输入框（选中歌手后出现，可修改）
+                    TextField {
+                        id: artistNameField
+                        Layout.fillWidth: true; Layout.preferredHeight: 36
+                        visible: mainWindow._pendingArtist !== ""
+                        placeholderText: "列表名称"
+                        placeholderTextColor: "#888"
+                        font.family: appFont.name; font.pixelSize: 13; color: "#ddd"
+                        leftPadding: 10; rightPadding: 10
+                        verticalAlignment: TextInput.AlignVCenter
+                        selectByMouse: true
+                        background: Rectangle { radius: 6; color: "#333333"; border.color: "#3A3A3A" }
+                        onAccepted: {
+                            if (mainWindow._pendingArtist !== "")
+                                mainWindow.doArtistConfirm()
+                        }
+                    }
+
+                    // 右下按钮：未选中歌手时「关闭」，选中后变为「确定」
                     Rectangle {
                         Layout.preferredHeight: 34; Layout.preferredWidth: 80; radius: 6
-                        color: artistDlgCancelMA.containsMouse ? "#333333" : "#1E1E1E"
+                        color: mainWindow._pendingArtist !== "" ? (artistDlgActionMA.containsMouse ? "#5B9EF6" : "#3B82F6") : (artistDlgActionMA.containsMouse ? "#333333" : "#1E1E1E")
                         border.color: "#3A3A3A"; border.width: 1
-                        Label { anchors.centerIn: parent; text: "关闭"; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                        Label {
+                            anchors.centerIn: parent
+                            text: mainWindow._pendingArtist !== "" ? "确定" : "关闭"
+                            font.family: appFont.name; font.pixelSize: 13
+                            color: mainWindow._pendingArtist !== "" ? "#fff" : "#999"
+                        }
                         MouseArea {
-                            id: artistDlgCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: artistSelectDialog.close()
+                            id: artistDlgActionMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: mainWindow.doArtistConfirm()
                         }
                     }
                 }
@@ -3233,8 +3310,38 @@ Window {
                 Rectangle { width: parent.width; height: 1; color: "#3A3A3A"; anchors.top: parent.top }
 
                 RowLayout {
-                    anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                    anchors.rightMargin: 16; spacing: 10
+                    anchors.left: parent.left; anchors.right: parent.right
+                    anchors.leftMargin: 16; anchors.rightMargin: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
+
+                    // 左下：选择歌手（勾选该歌手的全部歌曲）
+                    Rectangle {
+                        Layout.preferredHeight: 34; Layout.preferredWidth: 100; radius: 6
+                        color: pickArtistMA.containsMouse ? "#333333" : "#1E1E1E"
+                        border.color: "#3A3A3A"; border.width: 1
+                        RowLayout {
+                            anchors.centerIn: parent; spacing: 6
+                            Image {
+                                source: "qrc:/qt/qml/JustSolo/data/image/singer_list.png"
+                                sourceSize.width: 16; sourceSize.height: 16
+                                fillMode: Image.PreserveAspectFit
+                            }
+                            Label {
+                                text: "选择歌手快速导入"
+                                font.family: appFont.name; font.pixelSize: 13; color: "#ccc"
+                            }
+                        }
+                        MouseArea {
+                            id: pickArtistMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                artistSelectDialog._pickerMode = true
+                                artistSelectDialog.open()
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
 
                     Rectangle {
                         Layout.preferredHeight: 34; Layout.preferredWidth: 80; radius: 6
@@ -3562,12 +3669,20 @@ Window {
         }
     }
 
+    // 歌手选择对话框「确定」：以选中歌手 + 自定义名称创建列表
+    function doArtistConfirm() {
+        if (mainWindow._pendingArtist === "") {
+            artistSelectDialog.close()
+            return
+        }
+        musicManager.createArtistPlaylist(mainWindow._pendingArtist, artistNameField.text)
+        artistSelectDialog.close()
+    }
+
     function doCreateList() {
         // 歌手歌单：关闭本弹窗，进入歌手选择
         if (createListDialog._createListType === "artist") {
             createListDialog.close()
-            _artistDialogFilter = musicManager.availableArtists()
-            artistSearchField.text = ""
             artistSelectDialog.open()
             return
         }
@@ -3707,7 +3822,7 @@ Window {
         id: dropOverlay
         anchors.fill: parent
         z: 9998
-        color: "#121212A0"
+        color: "#80808080"
         visible: false
 
         Behavior on opacity { NumberAnimation { duration: 150 } }

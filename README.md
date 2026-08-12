@@ -3,7 +3,7 @@
 
 <img src="./data/image/logo.png" alt="Just Solo" width="200" />
 
-**Just Solo** —— 纯粹轻量的本地音乐播放器
+**Just Solo** —— 纯粹、轻量的本地音乐播放器
 
 [![Qt](https://img.shields.io/badge/Qt-6.8.3-brightgreen?logo=qt)](https://www.qt.io)
 [![C++](https://img.shields.io/badge/C++-17-blue?logo=cplusplus)](https://isocpp.org)
@@ -40,11 +40,11 @@
 > **仓库**： [GitHub](https://github.com/ZZJ-jack/Just-Solo) | [GitCode(镜像仓库)](https://gitcode.com/ZZJ-JACK/Just-Solo)
 > （本项目只在Github和GitCode上发布，其他渠道均非官方仓库，请不要轻信其他渠道的代码）
 
-Just Solo 是一款追求简洁、高性能的本地音乐播放器。采用 C++ 高性能核心 + QML 现代界面，无 Electron 依赖，内存占用低，冷启动迅速。
+Just Solo 是一款纯粹、轻量的本地音乐播放器。采用 C++ 高性能核心 + QML 现代界面，无 Electron 依赖。致力于提供一个简洁、高性能的本地音乐播放器。
 
-原生适配 Windows SMTC 系统媒体控件 并支持 Just Solo LyricServer 媒体信息传输协议（基于 WebSocket），深度适配 [NSD 灵动岛](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen](https://github.com/GEORGEWWWU) 开发）。
+Just Solo 原生适配 **Windows SMTC 系统媒体控件** 并支持 **Just Solo LyricServer 媒体信息传输协议**，深度适配 [NSD 灵动岛](https://github.com/GEORGEWWWU/NetSpeed-Dynamic)（由 [Ryenryen](https://github.com/GEORGEWWWU) 开发）。
 
-仅对Windows 平台提供支持并深度适配，专注于纯本地音乐播放。内置OTA在线更新功能，支持检查更新并下载安装最新版本。请前往 [Releases](releases) 下载最新安装包。
+仅对Windows平台提供支持并深度适配，内置OTA在线更新功能，支持检查更新并下载安装最新版本。前往 [Releases](releases) 下载最新安装包。
 
 本项目的知识产权说明、免责声明等详见文末。
 
@@ -322,11 +322,11 @@ cmake --build build --config Release
 ## FAQ
 
 - **这个项目支持哪些平台？**：
-  - 仅对Windows平台提供支持并深度适配，版本为Windows10/11（构建为64位版本）（win7暂未测试）
+  - 仅对Windows平台提供支持并深度适配，版本为Windows10/11（构建为64位版本）（Windows7暂未测试）
   - 不计划支持其他平台，仅对Windows平台进行适配。
   - 我们欢迎其他平台的贡献，但是目前没有计划支持其他平台。
 - **这个项目对比AnyListen等其他音乐播放器有什么区别？**：
-  - 这个项目的初衷是为了提供一个纯粹、轻量的音乐播放器。
+  - 开发这个项目的初衷是为了提供一个纯粹、轻量的本地音乐播放器。
   - 对比AnyListen等其他使用Electron框架的音乐播放器，我们的项目使用的是Qt框架，聚焦高性能、低占用。
   - 这个项目以本地音乐播放为核心，内置 OTA 在线更新功能，但不提供音乐下载等网络服务。（推荐使用 LX Music 下载音乐）
 - **这个项目会维护多久？**：
@@ -336,6 +336,8 @@ cmake --build build --config Release
 - **这个项目的代码是否开源？**：
   - 是的，我们的代码是永久开源免费的，我们秉持开源精神，不会将此项目用于商业用途
   - 本项目在 `MIT License` 下开源，在多个平台上提供镜像仓库
+- **这个项目的代码是否使用了AI生成？**：
+  - 是的，我们的部分代码是使用AI生成的，AI能辅助我们快速实现功能/修复bug（尤其是找bug），但我们的代码质量会严格要求，反复测试再发布正式版本。
 
 ---
 
