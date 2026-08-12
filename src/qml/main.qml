@@ -3059,6 +3059,12 @@ Window {
                         }
                     }
 
+                    // 未选中歌手时：左侧占位，将「关闭」按钮强制推到右下角
+                    Item {
+                        Layout.fillWidth: true
+                        visible: mainWindow._pendingArtist === ""
+                    }
+
                     // 右下按钮：未选中歌手时「关闭」，选中后变为「确定」
                     Rectangle {
                         Layout.preferredHeight: 34; Layout.preferredWidth: 80; radius: 6
@@ -3317,7 +3323,7 @@ Window {
 
                     // 左下：选择歌手（勾选该歌手的全部歌曲）
                     Rectangle {
-                        Layout.preferredHeight: 34; Layout.preferredWidth: 100; radius: 6
+                        Layout.preferredHeight: 34; Layout.preferredWidth: 138; radius: 6
                         color: pickArtistMA.containsMouse ? "#333333" : "#1E1E1E"
                         border.color: "#3A3A3A"; border.width: 1
                         RowLayout {
