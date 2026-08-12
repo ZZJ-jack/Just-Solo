@@ -952,7 +952,13 @@ Window {
                                 font.pixelSize: 15
                                 clip: true
                                 verticalAlignment: TextInput.AlignVCenter
-                                onTextChanged: mainWindow.updateSearch(text)
+                                onTextChanged: {
+                                    mainWindow.updateSearch(text)
+                                    if (text.trim().length > 0 && !musicManager.isLoading)
+                                        searchPopup.open()
+                                    else
+                                        searchPopup.close()
+                                }
                                 onActiveFocusChanged: {
                                     if (activeFocus && text.trim().length > 0)
                                         searchPopup.open()
@@ -975,7 +981,6 @@ Window {
                                 width: Math.max(parent.width + 120, 420)
                                 padding: 0
                                 closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                                visible: searchInput.text.trim().length > 0 && !musicManager.isLoading
 
                                 background: Rectangle {
                                     color: "#181818"
