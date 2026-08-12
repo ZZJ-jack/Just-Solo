@@ -39,7 +39,7 @@ Window {
     }
 
     // ---- 布局常量 ----
-    readonly property int sidebarWidth: 260
+    readonly property int sidebarWidth: 200
     readonly property int playerBarHeight: 75
 
     // ---- 视图路由 ----
@@ -277,33 +277,40 @@ Window {
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 4
                         spacing: 10
+                        Layout.alignment: Qt.AlignHCenter
+                        layoutDirection: Qt.LeftToRight
 
-                        Image {
-                            source: "qrc:/qt/qml/JustSolo/data/image/logo2.png"
-                            sourceSize.width: 28
-                            sourceSize.height: 28
-                            fillMode: Image.PreserveAspectFit
-                        }
+                        // 图标 + 标题整体水平居中
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            spacing: 10
 
-                        Column {
-                            Layout.alignment: Qt.AlignVCenter
-                            spacing: 2
-
-                            Label {
-                                text: "Just Solo"
-                                font.family: appFont.name
-                                font.pixelSize: 18
-                                font.bold: true
-                                color: "#cccccc"
+                            Image {
+                                source: "qrc:/qt/qml/JustSolo/data/image/logo2.png"
+                                sourceSize.width: 28
+                                sourceSize.height: 28
+                                fillMode: Image.PreserveAspectFit
                             }
 
-                            Label {
-                                text: APP_VERSION
-                                font.family: appFont.name
-                                font.pixelSize: 10
-                                color: "#999"
+                            Column {
+                                Layout.alignment: Qt.AlignVCenter
+                                spacing: 2
+
+                                Label {
+                                    text: "Just Solo"
+                                    font.family: appFont.name
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                    color: "#cccccc"
+                                }
+
+                                Label {
+                                    text: APP_VERSION
+                                    font.family: appFont.name
+                                    font.pixelSize: 10
+                                    color: "#999"
+                                }
                             }
                         }
                     }

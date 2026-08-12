@@ -14,6 +14,7 @@
 
 #include <exception>      // std::set_terminate
 #include <cstdlib>        // abort
+#include <mutex>          // std::once_flag / std::call_once
 
 // 后端日志收集服务 Base URL
 static const char *kBaseUrl = "https://justsolobug.zzjjack.us.kg";
@@ -25,11 +26,15 @@ static const char *kUserAgent = "Pvz-Game/" APP_VERSION_DISPLAY;
 
 BugReporter *BugReporter::instance()
 {
+    // std::call_once 保证多线程首次并发调用只初始化一次（消除数据竞争）
+    // 注意：不能改成带父对象的函数内静态（Meyers）单例——退出时会被父对象
+    // delete 后又在静态析构阶段二次析构，造成双重释放
+    static std::once_flag s_flag;
     static BugReporter *s_inst = nullptr;
-    if (!s_inst) {
+    std::call_once(s_flag, []() {
         // 必须在 QCoreApplication 存在后调用
         s_inst = new BugReporter(QCoreApplication::instance());
-    }
+    });
     return s_inst;
 }
 

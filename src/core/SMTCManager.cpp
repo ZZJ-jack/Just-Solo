@@ -138,6 +138,9 @@ SMTCManager::SMTCManager(MusicManager *manager, HWND hwnd, QObject *parent)
 
 SMTCManager::~SMTCManager()
 {
+    // 先置位销毁标志：COM 回调线程可能正在执行，据此丢弃后续按钮事件，
+    // 避免已入队的 lambda 在对象析构后访问 this / m_musicManager
+    m_destroying = true;
     if (m_impl && m_impl->controls) {
         m_impl->controls->remove_ButtonPressed(m_impl->buttonToken);
     }
@@ -192,6 +195,9 @@ HRESULT SMTCManager::initialize(HWND hwnd)
     ([this](ISystemMediaTransportControls *,
             ISystemMediaTransportControlsButtonPressedEventArgs *args) -> HRESULT
     {
+        // 析构中：直接丢弃，避免在销毁窗口期投递 lambda
+        if (m_destroying) return S_OK;
+
         SystemMediaTransportControlsButton button;
         HRESULT hrBtn = args->get_Button(&button);
         if (FAILED(hrBtn)) return hrBtn;

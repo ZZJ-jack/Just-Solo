@@ -94,7 +94,9 @@ HotkeyManager::HotkeyManager(const QString &cacheDir, QObject *parent)
 HotkeyManager::~HotkeyManager()
 {
 #ifdef Q_OS_WIN
-    QCoreApplication::instance()->removeNativeEventFilter(this);
+    // 退出时 app 可能已析构（QCoreApplication::instance() 返回 nullptr），必须判空
+    if (auto *app = QCoreApplication::instance())
+        app->removeNativeEventFilter(this);
 #endif
     unregisterAll();
 }

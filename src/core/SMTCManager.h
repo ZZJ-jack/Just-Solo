@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QTimer>
+#include <atomic>
 #include <windows.h>
 
 // 前向声明 WRL COM 智能指针，避免在头文件中引入 WRL 头
@@ -43,6 +44,7 @@ private:
     MusicManager *m_musicManager;
     QTimer *m_timelineTimer = nullptr;   // 定时更新播放位置 (~500ms)
     qint64 m_cachedDuration = 0;         // 缓存歌曲总时长，非活页每次查
+    std::atomic<bool> m_destroying{false};  // 析构前置位，拦截 COM 回调线程的后续投递
 
     // PIMPL — 把 Windows COM 细节封在 .cpp 里
     struct Impl;
