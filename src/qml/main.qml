@@ -39,7 +39,7 @@ Window {
     }
 
     // ---- 布局常量 ----
-    readonly property int sidebarWidth: 200
+    readonly property int sidebarWidth: 260
     readonly property int playerBarHeight: 75
 
     // ---- 视图路由 ----
@@ -336,7 +336,8 @@ Window {
                         Rectangle {
                             width: 28; height: 28; radius: 4; color: "transparent"
                             Image {
-                                anchors.centerIn: parent
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
                                 source: "qrc:/qt/qml/JustSolo/data/image/setting.png"
                                 sourceSize.width: 24
                                 sourceSize.height: 24
@@ -383,7 +384,7 @@ Window {
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/home.png"
                         label: "首页"
-                        iconW: 24; iconH: 24; iconSrcSize: 16
+                        iconSrcSize: 16
                         active: currentMenu === "welcome"
                         fontFamily: appFont.name
                         onClicked: currentMenu = "welcome"
@@ -391,7 +392,7 @@ Window {
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/AllMusic.png"
                         label: "所有音乐"
-                        iconW: 28; iconH: 28; iconSrcSize: 20
+                        iconSrcSize: 20
                         active: currentMenu === "home"
                         fontFamily: appFont.name
                         onClicked: currentMenu = "home"
@@ -399,7 +400,7 @@ Window {
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/PlayList.png"
                         label: "播放列表"
-                        iconW: 28; iconH: 28; iconSrcSize: 20
+                        iconSrcSize: 20
                         active: currentMenu === "playlist"
                         fontFamily: appFont.name
                         onClicked: currentMenu = "playlist"
@@ -407,7 +408,7 @@ Window {
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/mylike.png"
                         label: "收藏"
-                        iconW: 32; iconH: 32; iconSrcSize: 24
+                        iconSrcSize: 24
                         active: currentMenu === "favorite"
                         fontFamily: appFont.name
                         onClicked: currentMenu = "favorite"
@@ -415,7 +416,7 @@ Window {
                     NavItem {
                         iconSource: "qrc:/qt/qml/JustSolo/data/image/history.png"
                         label: "历史"
-                        iconW: 28; iconH: 28; iconSrcSize: 20
+                        iconSrcSize: 20
                         active: currentMenu === "history"
                         fontFamily: appFont.name
                         onClicked: currentMenu = "history"

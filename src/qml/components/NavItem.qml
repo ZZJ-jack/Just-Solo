@@ -7,8 +7,6 @@ Rectangle {
     property string iconSource: ""
     property string iconColor: ""
     property string label: ""
-    property int iconW: 28
-    property int iconH: 28
     property int iconSrcSize: 20
     property bool active: false
     property string fontFamily: ""
@@ -27,10 +25,12 @@ Rectangle {
         spacing: 10
 
         Rectangle {
-            width: iconW; height: iconH; radius: 4; color: "transparent"
+            // 图标容器统一 28×28，图标左对齐，保证文字起点固定
+            width: 28; height: 28; radius: 4; color: "transparent"
 
             Image {
-                anchors.centerIn: parent
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
                 source: iconSource
                 sourceSize.width: iconSrcSize
                 sourceSize.height: iconSrcSize
