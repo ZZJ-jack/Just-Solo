@@ -3846,7 +3846,7 @@ Window {
         Rectangle {
             anchors.centerIn: parent
             width: 260; height: 200; radius: 20
-            color: "#1e1e2e"
+            color: "#555555"
             border.color: "#00d4ff"
             border.width: 2
 
