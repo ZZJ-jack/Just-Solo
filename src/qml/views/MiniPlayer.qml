@@ -126,6 +126,7 @@ Window {
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
                 sourceSize: Qt.size(200, 200)  // 显示仅 100px，限制解码尺寸降低图像缓存内存
+                cache: false   // 切歌换封面旧图立即释放，不进全局图片缓存
                 visible: source !== ""
                 opacity: status === Image.Ready ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 200 } }

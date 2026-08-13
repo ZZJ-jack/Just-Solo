@@ -1671,6 +1671,7 @@ Window {
                     sourceSize.height: 40
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    cache: false   // 切歌换封面旧图立即释放，不进全局图片缓存
                     visible: musicManager.currentCover !== ""
                     opacity: 0
                     Behavior on opacity { NumberAnimation { duration: 200 } }

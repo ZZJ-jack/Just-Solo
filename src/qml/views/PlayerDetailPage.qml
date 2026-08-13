@@ -540,6 +540,7 @@ Item {
                     source: (typeof musicManager !== "undefined" && musicManager) ? (musicManager.currentCover || "") : ""
                     fillMode: Image.PreserveAspectFit; asynchronous: true
                     sourceSize: Qt.size(640, 640)  // 限制解码尺寸，避免全尺寸封面位图占用内存
+                    cache: false   // 切歌换封面时旧图立即释放，不进全局图片缓存（防止 1.6MB/张 累积）
                     visible: source !== ""
                     opacity: status === Image.Ready ? 1 : 0
 
