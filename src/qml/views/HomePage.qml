@@ -212,7 +212,14 @@ Item {
                 onRunningChanged: {
                     if (!circleShiftAnim.running) {
                         circleShift.x = 0
-                        musicManager.playFromLibrary(circlesRow.shiftTarget)
+                        // 点击滑动是主动选择：动画结束立即更新封面窗口起点（跳过 0.5s 节流），
+                        // 与 x 归零同步，避免"弹回后内容滞后 500ms 再跳变"的闪烁
+                        if (circlesRow.shiftTarget >= 0) {
+                            circlesRow.displayIndex = circlesRow.shiftTarget
+                            circlesRow.pendingIndex = -1
+                            circlesRow.coverThrottle.stop()
+                            musicManager.playFromLibrary(circlesRow.shiftTarget)
+                        }
                     }
                 }
             }
