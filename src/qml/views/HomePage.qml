@@ -40,6 +40,18 @@ Item {
             return 0
         }
 
+        // 封面节流：快速连续切歌时 0.5s 内最多更新一次封面墙，
+        // 避免连切时堆积封面解码任务（pendingIndex 只保留最后一次）
+        onBlockSongIndexChanged: {
+            var idx = blockSongIndex
+            if (idx < 0) idx = 0
+            if (idx !== circlesRow.displayIndex) {
+                circlesRow.pendingIndex = idx
+                if (!circlesRow.coverThrottle.running) circlesRow.coverThrottle.start()
+                else circlesRow.coverThrottle.restart()
+            }
+        }
+
         // 播放/暂停指定下标的歌曲（与封面点击行为一致）
         function toggleOrPlay(idx) {
             if (idx < 0) return
@@ -168,6 +180,21 @@ Item {
             transform: Translate { id: circleShift; x: 0 }
 
             property int shiftTarget: -1   // 动画结束后要播放的歌曲真实下标
+            // 封面节流显示：displayIndex 为封面墙当前窗口起点（0.5s 节流后更新），
+            // pendingIndex 为待更新的最新歌曲；快速连切只保留最后一次更新
+            property int displayIndex: homeCoverStrip.blockSongIndex >= 0 ? homeCoverStrip.blockSongIndex : 0
+            property int pendingIndex: -1
+            Timer {
+                id: coverThrottle
+                interval: 500
+                repeat: false
+                onTriggered: {
+                    if (circlesRow.pendingIndex >= 0) {
+                        circlesRow.displayIndex = circlesRow.pendingIndex
+                        circlesRow.pendingIndex = -1
+                    }
+                }
+            }
             // 固定窗口：常驻 9 个圆。delegate 数量恒定，切歌时仅更新封面内容
             // （见 delegate 内 songIndex 绑定 + Image.cache:false 自动清理旧图），
             // 不销毁/创建对象，避免切歌产生垃圾与纹理缓存累积
@@ -210,11 +237,12 @@ Item {
                     border.width: 6
                     Behavior on border.color { ColorAnimation { duration: 150 } }
 
-                    // 窗口内第 index 个圆对应的音乐库真实下标（随当前歌曲循环移动）
+                    // 窗口内第 index 个圆对应的音乐库真实下标
+                    // （起点用节流后的 displayIndex，快速连切时封面不频繁跳动）
                     readonly property int songIndex: {
                         var n = musicManager.library.length
                         if (n === 0) return -1
-                        var start = homeCoverStrip.blockSongIndex
+                        var start = circlesRow.displayIndex
                         if (start < 0) start = 0
                         return (start + index) % n
                     }
