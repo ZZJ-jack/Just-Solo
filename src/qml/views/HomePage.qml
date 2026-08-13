@@ -184,8 +184,10 @@ Item {
             // pendingIndex 为待更新的最新歌曲；快速连切只保留最后一次更新
             property int displayIndex: homeCoverStrip.blockSongIndex >= 0 ? homeCoverStrip.blockSongIndex : 0
             property int pendingIndex: -1
+            // 别名暴露子 Timer，供外部（onBlockSongIndexChanged）访问；QML 中 id 不可跨作用域链式访问
+            property alias coverThrottle: coverThrottleTimer
             Timer {
-                id: coverThrottle
+                id: coverThrottleTimer
                 interval: 500
                 repeat: false
                 onTriggered: {
