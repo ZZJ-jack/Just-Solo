@@ -1955,6 +1955,19 @@ QString MusicManager::coverColorOfSong(int libraryIndex) {
     return extractCoverColor(cover);
 }
 
+// 按歌曲路径取封面主色（封面墙跟随当前播放列表时，playlist 下标 ≠ library 下标，须按路径查）
+QString MusicManager::coverColorOfPath(const QString &path) {
+    if (path.isEmpty()) return QString();
+    for (const QVariant &v : m_library) {
+        const QVariantMap m = v.toMap();
+        if (m.value("path").toString() == path) {
+            QString cover = m.value("cover").toString();
+            return cover.isEmpty() ? QString() : extractCoverColor(cover);
+        }
+    }
+    return QString();
+}
+
 // ---- C++ 端计算歌词索引（纯整数比较，零分配） ----
 void MusicManager::updateLyricIndex() {
     if (m_lyricCache.isEmpty()) {

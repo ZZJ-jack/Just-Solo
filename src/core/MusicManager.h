@@ -239,6 +239,7 @@ public:
     Q_INVOKABLE bool isDirectory(const QString &path) const;
     Q_INVOKABLE bool isAudioFile(const QString &path) const;
     Q_INVOKABLE QString coverColorOfSong(int libraryIndex); // 提取音乐库指定歌曲封面主色调（不依赖播放状态）
+    Q_INVOKABLE QString coverColorOfPath(const QString &path); // 按歌曲路径取封面主色（封面墙跟随播放列表时用）
 
 signals:
     void playlistChanged();

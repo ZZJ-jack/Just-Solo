@@ -54,6 +54,8 @@ Window {
     // ---- 迷你小窗 ----
     property var _miniWindow: null
     property bool _pendingMiniExit: false
+    // 退出至托盘后，下次从托盘恢复主窗口时自动打开播放详情页
+    property bool _pendingDetailOnShow: false
 
     // ---- 自定义播放列表 ----
     property int currentCustomPlaylistIndex: -1
@@ -1247,6 +1249,15 @@ Window {
                         anchors.fill: parent
                         active: currentMenu === "home"
                         fontFamily: appFont.name
+                        // 封面墙跟随"当前播放/查看的列表"：
+                        // playingListIndex 1=收藏 2=历史（实际播放列表是 favorites/history，playlist 属性≠）
+                        // 0=音乐库、3+n=自定义列表（m_playlist 已是对应列表，playlist 属性即正确）
+                        sourceList: {
+                            var pl = musicManager.playingListIndex
+                            if (pl === 1) return musicManager.favorites
+                            if (pl === 2) return musicManager.history
+                            return musicManager.playlist
+                        }
                     }
 
                     // 全局通用歌曲列表（所有音乐 & 自建列表共用）
@@ -1412,6 +1423,12 @@ Window {
     // 隐藏到系统托盘（音乐继续播放），由 onClosing 和托盘菜单共用
     function hideToTray() {
         _detailWasOpen = playerDetail.visible  // 记忆详情页状态，回到前台恢复
+        _pendingDetailOnShow = true            // 本次退出到托盘：从托盘恢复时自动打开播放详情页
+        // 若迷你小窗开着，一并退出（否则小窗残留，用户看到"退出到托盘失效"）
+        if (_miniWindow) {
+            _miniWindow.destroy()
+            _miniWindow = null
+        }
         mainWindow.hide()
         playerDetail.visible = false      // 关 ShaderEffectSource live
     }
@@ -1443,10 +1460,11 @@ Window {
             _miniWindow.destroy()
             _miniWindow = null
         }
-        // 回到前台：若后台时详情页是打开的（或从小窗退出），自动拉回
-        if (_pendingMiniExit || _detailWasOpen) {
+        // 回到前台：若后台时详情页是打开的（或从小窗退出、或退出至托盘后恢复），自动拉回
+        if (_pendingMiniExit || _detailWasOpen || _pendingDetailOnShow) {
             _pendingMiniExit = false
             _detailWasOpen = false
+            _pendingDetailOnShow = false
             // 用系统动画拉起主窗口后打开详情页
             showPlayerDetail = true
             playerDetail.reopen()

@@ -5,7 +5,8 @@ import QtQuick.Effects
 // ============================================================
 // 主页 — 首页封面墙：正方形方块 + 大圆封面
 // 方块 210×210 显示歌名/歌手与播放按钮，右缘盖住第一个圆的一半
-// 圆形封面 140×140 显示专辑封面，按音乐库顺序向右逐个排开
+// 圆形封面 140×140 显示专辑封面，按当前播放列表顺序向右逐个排开
+// （跟随 currentPlaylist：切换播放列表时主页同步更新）
 // 沉浸背景模式下方块跟随当前歌曲主色
 // ============================================================
 Item {
@@ -14,8 +15,11 @@ Item {
     // 由 main.qml 控制：true=当前显示主页
     property bool active: false
     property string fontFamily
+    // 封面墙数据源（当前播放/查看的列表）：由 main.qml 按播放来源传入
+    // （注意 root.sourceList 属性只读 m_playlist，收藏/历史播放时≠实际播放列表，勿直接用）
+    property var sourceList: []
 
-    visible: active && musicManager.library.length > 0
+    visible: active && sourceList.length > 0
 
     Row {
         id: homeCoverStrip
@@ -29,30 +33,54 @@ Item {
         readonly property int roundSize: 140 // 圆尺寸
         readonly property int circleSpacing: 14 // 圆间距
 
-        // 方块展示的歌曲：优先当前播放（且在音乐库中），否则第一首
+        // 方块展示的歌曲：优先当前播放（且在播放列表中），否则第一首
         readonly property int blockSongIndex: {
-            var lib = musicManager.library
-            if (lib.length === 0) return -1
+            var list = root.sourceList
+            if (list.length === 0) return -1
             var p = musicManager.currentPath || ""
-            for (var i = 0; i < lib.length; i++) {
-                if (lib[i].path === p) return i
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].path === p) return i
             }
             return 0
         }
 
-        // 封面节流：快速连续切歌时 0.5s 内最多更新一次封面墙，
-        // 避免连切时堆积封面解码任务（pendingIndex 只保留最后一次）
+        // 切歌方向检测：驱动封面圆"移动动画"（下一首左滑一格 / 上一首右滑一格）。
+        // 仅在"同一播放列表内"切歌时滑动；列表切换/点击圆引发的切歌直接更新窗口
+        property int _prevBlockIndex: -1
+        property string _prevListKey: ""
         onBlockSongIndexChanged: {
-            var idx = blockSongIndex
-            if (idx < 0) idx = 0
-            if (idx !== circlesRow.displayIndex) {
-                circlesRow.pendingIndex = idx
-                if (!circlesRow.coverThrottle.running) circlesRow.coverThrottle.start()
-                else circlesRow.coverThrottle.restart()
+            var cur = blockSongIndex
+            if (cur < 0) { homeCoverStrip._prevBlockIndex = cur; return }
+            var listKey = root.sourceList.length > 0 ? (root.sourceList[0].path || "") : ""
+            var listSwitched = (listKey !== homeCoverStrip._prevListKey)
+            homeCoverStrip._prevListKey = listKey
+            var prev = homeCoverStrip._prevBlockIndex
+            homeCoverStrip._prevBlockIndex = cur
+            // 播放列表切换：内容直接更新，不滑动
+            if (listSwitched) { circlesRow.commitDisplay(cur); return }
+            // 点击封面圆引发：点击圆动画已自带滑动，这里直接同步窗口
+            if (Date.now() - circlesRow._lastCircleClickAt < 500) { circlesRow.commitDisplay(cur); return }
+            // 同一列表内切歌：启动滑动动画（动画期间旧窗口滑出，结束 commitDisplay 新窗口滑入）
+            if (prev >= 0) {
+                var n = root.sourceList.length
+                if (n > 1) {
+                    var delta = cur - prev
+                    // 循环取最短方向（如 80→0 视为 +1 而非 -80）
+                    if (delta > n / 2) delta -= n
+                    else if (delta < -n / 2) delta += n
+                    if (delta !== 0)
+                        circlesRow.playSwitchSlide(delta)
+                    else
+                        circlesRow.commitDisplay(cur)
+                } else {
+                    circlesRow.commitDisplay(cur)
+                }
+            } else {
+                circlesRow.commitDisplay(cur)
             }
         }
 
-        // 播放/暂停指定下标的歌曲（与封面点击行为一致）
+        // 播放/暂停指定下标的歌曲（与封面点击行为一致，下标为当前播放列表下标）
         property double lastToggle: 0   // 方块/首圆点击防抖时间戳
         function toggleOrPlay(idx) {
             if (idx < 0) return
@@ -60,12 +88,12 @@ Item {
             var now = Date.now()
             if (now - homeCoverStrip.lastToggle < 500) return
             homeCoverStrip.lastToggle = now
-            var song = musicManager.library[idx]
+            var song = root.sourceList[idx]
             if (musicManager.currentPath === song.path) {
                 if (musicManager.isPlaying) musicManager.pause()
                 else musicManager.play()
             } else {
-                musicManager.playFromLibrary(idx)
+                musicManager.playIndex(idx)
             }
         }
 
@@ -83,8 +111,11 @@ Item {
                          ? musicManager.playbackBackground : 0
                 if (bg !== 1) return "#2C2C2C"
                 var idx = homeCoverStrip.blockSongIndex
-                var c = (idx >= 0 && musicManager.library.length > 0)
-                        ? musicManager.coverColorOfSong(idx) : ""
+                var c = ""
+                if (idx >= 0 && idx < root.sourceList.length) {
+                    var song = root.sourceList[idx]
+                    c = (song && song.path) ? musicManager.coverColorOfPath(song.path) : ""
+                }
                 return c !== "" ? c : "#2C2C2C"
             }
             Behavior on color { ColorAnimation { duration: 600 } }
@@ -101,7 +132,7 @@ Item {
                 Label {
                     width: parent.width
                     text: homeCoverStrip.blockSongIndex >= 0
-                          ? (musicManager.library[homeCoverStrip.blockSongIndex].name || "未知歌曲") : ""
+                          ? (root.sourceList[homeCoverStrip.blockSongIndex].name || "未知歌曲") : ""
                     font.family: root.fontFamily
                     font.pixelSize: 27
                     font.bold: true
@@ -112,7 +143,7 @@ Item {
                 Label {
                     width: parent.width
                     text: homeCoverStrip.blockSongIndex >= 0
-                          ? (musicManager.library[homeCoverStrip.blockSongIndex].artist || "未知歌手") : ""
+                          ? (root.sourceList[homeCoverStrip.blockSongIndex].artist || "未知歌手") : ""
                     font.family: root.fontFamily
                     font.pixelSize: 20
                     color: "#dddddd"
@@ -157,7 +188,8 @@ Item {
                     anchors.leftMargin: 1
                     source: {
                         var idx = homeCoverStrip.blockSongIndex
-                        var isCur = idx >= 0 && musicManager.currentPath === musicManager.library[idx].path
+                        var isCur = idx >= 0 && idx < root.sourceList.length
+                                   && musicManager.currentPath === root.sourceList[idx].path
                         return (isCur && musicManager.isPlaying)
                                ? "qrc:/qt/qml/JustSolo/data/image/playing.png"
                                : "qrc:/qt/qml/JustSolo/data/image/play.png"
@@ -186,27 +218,44 @@ Item {
 
             property int shiftTarget: -1   // 动画结束后要播放的歌曲真实下标
             property double lastCircleClick: 0   // 封面圆点击防抖时间戳（0.5s 内忽略重复点击）
-            // 封面节流显示：displayIndex 为封面墙当前窗口起点（0.5s 节流后更新），
-            // pendingIndex 为待更新的最新歌曲；快速连切只保留最后一次更新
+            property double _lastCircleClickAt: 0  // 点击圆时间戳：其引发的切歌不再触发切歌滑动（避免多滑一格）
+            // 封面墙"显示起点"：delegate 绑定它而非 blockSongIndex——
+            // 滑动动画期间保持旧窗口内容，动画结束(commitDisplay)才切换到新窗口，实现"旧排滑出→新排滑入"
             property int displayIndex: homeCoverStrip.blockSongIndex >= 0 ? homeCoverStrip.blockSongIndex : 0
-            property int pendingIndex: -1
-            // 别名暴露子 Timer，供外部（onBlockSongIndexChanged）访问；QML 中 id 不可跨作用域链式访问
-            property alias coverThrottle: coverThrottleTimer
-            Timer {
-                id: coverThrottleTimer
-                interval: 500
-                repeat: false
-                onTriggered: {
-                    if (circlesRow.pendingIndex >= 0) {
-                        circlesRow.displayIndex = circlesRow.pendingIndex
-                        circlesRow.pendingIndex = -1
-                    }
-                }
+            property int _pendingDisplayIndex: -1   // 动画结束后要应用的新窗口起点
+            function commitDisplay(idx) {
+                circlesRow.displayIndex = idx
+                circlesRow._pendingDisplayIndex = -1
             }
             // 固定窗口：常驻 9 个圆。delegate 数量恒定，切歌时仅更新封面内容
             // （见 delegate 内 songIndex 绑定 + Image.cache:false 自动清理旧图），
             // 不销毁/创建对象，避免切歌产生垃圾与纹理缓存累积
             readonly property int windowSize: 9
+
+            // ---- 切歌移动动画：旧窗口向切换方向滑一格，结束后切换到新窗口（下一首左滑/上一首右滑）----
+            NumberAnimation {
+                id: circleSwitchAnim
+                target: circleShift
+                property: "x"
+                duration: 260
+                easing.type: Easing.OutCubic
+                onRunningChanged: {
+                    if (!circleSwitchAnim.running) {
+                        circleShift.x = 0
+                        if (circlesRow._pendingDisplayIndex >= 0)
+                            circlesRow.commitDisplay(circlesRow._pendingDisplayIndex)
+                    }
+                }
+            }
+            function playSwitchSlide(delta) {
+                if (delta === 0) return
+                circlesRow._pendingDisplayIndex = homeCoverStrip.blockSongIndex  // 动画结束后窗口起点=新当前歌
+                circleSwitchAnim.stop()
+                circleShiftAnim.stop()   // 互斥：切歌滑动打断点击滑动
+                circleShift.x = 0
+                circleSwitchAnim.to = -delta * (homeCoverStrip.roundSize + homeCoverStrip.circleSpacing)
+                circleSwitchAnim.start()
+            }
 
             // 点击后面的圆：整排圆向左滑，被点的圆滑到封面位置
             NumberAnimation {
@@ -218,13 +267,11 @@ Item {
                 onRunningChanged: {
                     if (!circleShiftAnim.running) {
                         circleShift.x = 0
-                        // 点击滑动是主动选择：动画结束立即更新封面窗口起点（跳过 0.5s 节流），
-                        // 与 x 归零同步，避免"弹回后内容滞后 500ms 再跳变"的闪烁
-                        if (circlesRow.shiftTarget >= 0) {
-                            circlesRow.displayIndex = circlesRow.shiftTarget
-                            circlesRow.pendingIndex = -1
-                            circlesRow.coverThrottle.stop()
-                            musicManager.playFromLibrary(circlesRow.shiftTarget)
+                        var t = circlesRow.shiftTarget
+                        circlesRow.shiftTarget = -1   // 消费目标，防止被 stop() 误触发重复播放
+                        if (t >= 0) {
+                            circlesRow.commitDisplay(t)  // 新窗口以目标歌为起点
+                            musicManager.playIndex(t)
                         }
                     }
                 }
@@ -232,10 +279,10 @@ Item {
 
             Repeater {
                 // model 固定为窗口索引 [0..windowSize)：delegate 数量恒定、永不销毁重建。
-                // 切歌时 homeCoverStrip.blockSongIndex 变化 → delegate 内 songIndex 绑定重算
+                // 切歌/切播放列表时 blockSongIndex 变化 → delegate 内 songIndex 绑定重算
                 // → Image.source 原位更新为新歌曲封面（旧图随 cache:false 立即释放）
                 model: {
-                    var n = musicManager.library.length
+                    var n = root.sourceList.length
                     if (n === 0) return []
                     var arr = []
                     var count = Math.min(circlesRow.windowSize, n)
@@ -252,18 +299,18 @@ Item {
                     border.width: 6
                     Behavior on border.color { ColorAnimation { duration: 150 } }
 
-                    // 窗口内第 index 个圆对应的音乐库真实下标
-                    // （起点用节流后的 displayIndex，快速连切时封面不频繁跳动）
+                    // 窗口内第 index 个圆对应的播放列表真实下标
+                    // （起点用 displayIndex：滑动动画期间保持旧窗口，动画结束 commitDisplay 后切换新窗口）
                     readonly property int songIndex: {
-                        var n = musicManager.library.length
+                        var n = root.sourceList.length
                         if (n === 0) return -1
                         var start = circlesRow.displayIndex
                         if (start < 0) start = 0
                         return (start + index) % n
                     }
                     // 当前圆显示的歌曲对象（不存在返回 null，供 source/visible 判断）
-                    readonly property var song: songIndex >= 0 && songIndex < musicManager.library.length
-                                               ? musicManager.library[songIndex] : null
+                    readonly property var song: songIndex >= 0 && songIndex < root.sourceList.length
+                                               ? root.sourceList[songIndex] : null
 
                     Image {
                         anchors.fill: parent
@@ -275,6 +322,9 @@ Item {
                         asynchronous: true
                         cache: false   // 不进全局图片缓存：切歌换封面时旧图立即释放，防止内存累积
                         visible: song && song.cover && song.cover !== ""
+                        // 切歌动画：封面切换时淡出→淡入（status 变化驱动）
+                        opacity: status === Image.Ready ? 1 : 0
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
                         layer.enabled: true
                         layer.effect: MultiEffect {
                             maskEnabled: true
@@ -307,8 +357,9 @@ Item {
                             var now = Date.now()
                             if (now - circlesRow.lastCircleClick < 500) return
                             circlesRow.lastCircleClick = now
-                            // 圆圈按循环顺序排列，点击时映射回音乐库真实下标
-                            var n = musicManager.library.length
+                            circlesRow._lastCircleClickAt = now   // 抑制本次点击引发的切歌滑动动画
+                            // 圆圈按循环顺序排列，点击时映射回播放列表真实下标
+                            var n = root.sourceList.length
                             if (n === 0 || songIndex < 0) return
                             var realIndex = songIndex
                             if (index === 0) {
@@ -318,6 +369,7 @@ Item {
                                 // 点击后面的圆：动画滑到封面位置后再播放
                                 circlesRow.shiftTarget = realIndex
                                 circleShift.x = 0
+                                circleSwitchAnim.stop()   // 互斥：点击滑动打断切歌滑动
                                 circleShiftAnim.to = -index * (homeCoverStrip.roundSize + homeCoverStrip.circleSpacing)
                                 circleShiftAnim.start()
                             }
