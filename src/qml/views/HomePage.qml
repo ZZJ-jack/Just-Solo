@@ -168,6 +168,10 @@ Item {
             transform: Translate { id: circleShift; x: 0 }
 
             property int shiftTarget: -1   // 动画结束后要播放的歌曲真实下标
+            // 固定窗口：常驻 9 个圆。delegate 数量恒定，切歌时仅更新封面内容
+            // （见 delegate 内 songIndex 绑定 + Image.cache:false 自动清理旧图），
+            // 不销毁/创建对象，避免切歌产生垃圾与纹理缓存累积
+            readonly property int windowSize: 9
 
             // 点击后面的圆：整排圆向左滑，被点的圆滑到封面位置
             NumberAnimation {
@@ -185,17 +189,15 @@ Item {
             }
 
             Repeater {
-                // 从方块当前歌曲开始，按音乐库顺序循环排列，最后一首后回到第一首
+                // model 固定为窗口索引 [0..windowSize)：delegate 数量恒定、永不销毁重建。
+                // 切歌时 homeCoverStrip.blockSongIndex 变化 → delegate 内 songIndex 绑定重算
+                // → Image.source 原位更新为新歌曲封面（旧图随 cache:false 立即释放）
                 model: {
-                    var lib = musicManager.library
-                    var n = lib.length
+                    var n = musicManager.library.length
                     if (n === 0) return []
-                    var start = homeCoverStrip.blockSongIndex
-                    if (start < 0) start = 0
                     var arr = []
-                    for (var i = 0; i < n; i++) {
-                        arr.push(lib[(start + i) % n])
-                    }
+                    var count = Math.min(circlesRow.windowSize, n)
+                    for (var i = 0; i < count; i++) arr.push(i)
                     return arr
                 }
 
@@ -208,15 +210,28 @@ Item {
                     border.width: 6
                     Behavior on border.color { ColorAnimation { duration: 150 } }
 
+                    // 窗口内第 index 个圆对应的音乐库真实下标（随当前歌曲循环移动）
+                    readonly property int songIndex: {
+                        var n = musicManager.library.length
+                        if (n === 0) return -1
+                        var start = homeCoverStrip.blockSongIndex
+                        if (start < 0) start = 0
+                        return (start + index) % n
+                    }
+                    // 当前圆显示的歌曲对象（不存在返回 null，供 source/visible 判断）
+                    readonly property var song: songIndex >= 0 && songIndex < musicManager.library.length
+                                               ? musicManager.library[songIndex] : null
+
                     Image {
                         anchors.fill: parent
                         anchors.margins: 6
-                        source: modelData.cover || ""
+                        source: (song && song.cover) ? song.cover : ""
                         sourceSize.width: 128
                         sourceSize.height: 128
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
-                        visible: modelData.cover && modelData.cover !== ""
+                        cache: false   // 不进全局图片缓存：切歌换封面时旧图立即释放，防止内存累积
+                        visible: song && song.cover && song.cover !== ""
                         layer.enabled: true
                         layer.effect: MultiEffect {
                             maskEnabled: true
@@ -237,7 +252,7 @@ Item {
                         font.family: root.fontFamily
                         font.pixelSize: 36
                         color: "#666"
-                        visible: !modelData.cover || modelData.cover === ""
+                        visible: !song || !song.cover || song.cover === ""
                     }
 
                     MouseArea {
@@ -247,11 +262,11 @@ Item {
                         onClicked: {
                             // 圆圈按循环顺序排列，点击时映射回音乐库真实下标
                             var n = musicManager.library.length
-                            if (n === 0) return
-                            var realIndex = (homeCoverStrip.blockSongIndex + index) % n
+                            if (n === 0 || songIndex < 0) return
+                            var realIndex = songIndex
                             if (index === 0) {
                                 // 第一个圆与封面是同一首歌：当作点击封面，播放/暂停
-                                homeCoverStrip.toggleOrPlay(homeCoverStrip.blockSongIndex)
+                                homeCoverStrip.toggleOrPlay(realIndex)
                             } else {
                                 // 点击后面的圆：动画滑到封面位置后再播放
                                 circlesRow.shiftTarget = realIndex
