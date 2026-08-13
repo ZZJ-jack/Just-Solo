@@ -1900,6 +1900,13 @@ QString MusicManager::extractCoverColor(const QString &coverUrl) {
     int g = int(gSum[bestIdx] / quint64(bestCount));
     int b = int(bSum[bestIdx] / quint64(bestCount));
 
+    // 对偏纯红的颜色做橙红偏移（提升 G 通道），避免背景过于正红
+    // 当 R 明显高于 G 且 G 较低时，将 G 拉高到 R 的 ~55%
+    if (r > g + 40 && g < 100) {
+        int targetG = int(r * 0.55);
+        if (targetG > g) g = targetG;
+    }
+
     // 对偏亮的颜色做压暗，避免作为背景时发白（限制最大通道值 ≤ 140，即 V ≤ 0.55）
     int maxC = r > g ? (r > b ? r : b) : (g > b ? g : b);
     const int MAX_V = 140;

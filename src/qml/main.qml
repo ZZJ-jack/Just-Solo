@@ -1232,15 +1232,6 @@ Window {
                     }
                 }
 
-                // 欢迎页提示语（仅首页显示）
-                Label {
-                    text: "点击左侧列表开始使用"
-                    font.family: appFont.name; font.pixelSize: 15; color: "#888"
-                    visible: currentMenu === "welcome"
-                    Layout.alignment: Qt.AlignLeft
-                    Layout.leftMargin: 40
-                }
-
                 Item { Layout.preferredHeight: 16 }
 
                 // ==================================================
@@ -1266,7 +1257,9 @@ Window {
                             anchors.left: parent.left
                             anchors.leftMargin: 40
                             anchors.verticalCenter: parent.verticalCenter
-                            anchors.verticalCenterOffset: -40   // 整体上移
+                            anchors.verticalCenterOffset: -80   // 整体上移
+                            anchors.left: parent.left
+                            anchors.leftMargin: 20// 与左侧边距
                             spacing: -homeCoverStrip.blockSize / 2   // 负间距让方块盖住第一个圆的一半
 
                             readonly property int blockSize: 170
