@@ -53,8 +53,13 @@ Item {
         }
 
         // 播放/暂停指定下标的歌曲（与封面点击行为一致）
+        property double lastToggle: 0   // 方块/首圆点击防抖时间戳
         function toggleOrPlay(idx) {
             if (idx < 0) return
+            // 防抖：0.5s 内重复点击直接忽略（防止快速双击导致播放/暂停抖动）
+            var now = Date.now()
+            if (now - homeCoverStrip.lastToggle < 500) return
+            homeCoverStrip.lastToggle = now
             var song = musicManager.library[idx]
             if (musicManager.currentPath === song.path) {
                 if (musicManager.isPlaying) musicManager.pause()
@@ -180,6 +185,7 @@ Item {
             transform: Translate { id: circleShift; x: 0 }
 
             property int shiftTarget: -1   // 动画结束后要播放的歌曲真实下标
+            property double lastCircleClick: 0   // 封面圆点击防抖时间戳（0.5s 内忽略重复点击）
             // 封面节流显示：displayIndex 为封面墙当前窗口起点（0.5s 节流后更新），
             // pendingIndex 为待更新的最新歌曲；快速连切只保留最后一次更新
             property int displayIndex: homeCoverStrip.blockSongIndex >= 0 ? homeCoverStrip.blockSongIndex : 0
@@ -297,6 +303,10 @@ Item {
                         anchors.fill: parent; hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
+                            // 点击防抖：0.5s 内重复点击忽略（防止滑动动画叠加/错乱）
+                            var now = Date.now()
+                            if (now - circlesRow.lastCircleClick < 500) return
+                            circlesRow.lastCircleClick = now
                             // 圆圈按循环顺序排列，点击时映射回音乐库真实下标
                             var n = musicManager.library.length
                             if (n === 0 || songIndex < 0) return
