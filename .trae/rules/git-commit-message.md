@@ -2,7 +2,6 @@
 alwaysApply: true
 scene: git_message
 ---
-
 全部用中文书写提交描述
 每个提交信息占一行
 提交信息前添加提交类型（如：feat、fix、docs 等），提交信息后添加提交描述。

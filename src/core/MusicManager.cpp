@@ -1864,7 +1864,7 @@ QString MusicManager::extractCoverColor(const QString &coverUrl) {
             qreal v = maxC / 255.0;
             qreal s = maxC > 0 ? (maxC - minC) / qreal(maxC) : 0.0;
 
-            if (v < 0.15 || v > 0.95 || s < 0.25) continue;
+            if (v < 0.12 || v > 0.97 || s < 0.12) continue;
 
             int ri = r >> 4;  // r / 16
             int gi = g >> 4;
@@ -1881,13 +1881,13 @@ QString MusicManager::extractCoverColor(const QString &coverUrl) {
 
     if (validPixels == 0) return QString();
 
-    // 用饱和度立方加权评分：score = count * avgSat^3，鲜艳颜色优先
+    // 评分：count * avgSat，兼顾面积与饱和度（避免小面积高饱和色块主导）
     int bestIdx = 0;
     qreal bestScore = 0.0;
     for (int i = 0; i < count.size(); ++i) {
         if (count[i] == 0) continue;
         qreal avgS = sSum[i] / count[i];
-        qreal score = count[i] * avgS * avgS * avgS;
+        qreal score = count[i] * avgS;
         if (score > bestScore) {
             bestScore = score;
             bestIdx = i;

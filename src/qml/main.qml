@@ -1094,7 +1094,7 @@ Window {
                     }
 
                     Label {
-                        text: currentMenu === "welcome" ? "欢迎使用 Just Solo"
+                        text: currentMenu === "welcome" ? "主页"
                               : currentMenu === "home" ? "所有音乐"
                               : currentMenu === "playlist" ? "播放列表"
                               : currentMenu === "favorite" ? "收藏"
@@ -1250,6 +1250,212 @@ Window {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
+
+                    // ==================================================
+                    // 首页（欢迎页）封面墙：正方形方块 + 大圆封面
+                    // 方块 170×170 显示歌名/歌手与播放按钮，右缘盖住第一个圆的一半
+                    // 圆形封面与方块同尺寸，按音乐库顺序向右逐个排开
+                    // 沉浸背景模式下方块跟随当前歌曲主色
+                    // ==================================================
+                    Item {
+                        anchors.fill: parent
+                        visible: currentMenu === "welcome" && musicManager.library.length > 0
+
+                        Row {
+                            id: homeCoverStrip
+                            anchors.left: parent.left
+                            anchors.leftMargin: 40
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.verticalCenterOffset: -40   // 整体上移
+                            spacing: -homeCoverStrip.blockSize / 2   // 负间距让方块盖住第一个圆的一半
+
+                            readonly property int blockSize: 170
+
+                            // 方块展示的歌曲：优先当前播放（且在音乐库中），否则第一首
+                            readonly property int blockSongIndex: {
+                                var lib = musicManager.library
+                                if (lib.length === 0) return -1
+                                var p = musicManager.currentPath || ""
+                                for (var i = 0; i < lib.length; i++) {
+                                    if (lib[i].path === p) return i
+                                }
+                                return 0
+                            }
+
+                            // ---- 正方形方块 ----
+                            Rectangle {
+                                id: homeBlock
+                                width: homeCoverStrip.blockSize
+                                height: homeCoverStrip.blockSize
+                                radius: 12
+                                z: 3    // 盖在第一个圆的上面
+
+                                // 沉浸背景模式：跟随当前歌曲主色，否则默认深色
+                                color: {
+                                    var bg = (typeof musicManager !== "undefined" && musicManager)
+                                             ? musicManager.playbackBackground : 0
+                                    if (bg !== 1) return "#2C2C2C"
+                                    var c = musicManager.currentCoverColor || ""
+                                    return c !== "" ? c : "#2C2C2C"
+                                }
+                                Behavior on color { ColorAnimation { duration: 600 } }
+
+                                // ---- 歌名 / 歌手 ----
+                                Column {
+                                    anchors.top: parent.top
+                                    anchors.left: parent.left
+                                    anchors.topMargin: 18
+                                    anchors.leftMargin: 16
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 24
+                                    spacing: 6
+
+                                    Label {
+                                        width: parent.width
+                                        text: homeCoverStrip.blockSongIndex >= 0
+                                              ? (musicManager.library[homeCoverStrip.blockSongIndex].name || "未知歌曲") : ""
+                                        font.family: appFont.name
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        color: "#ffffff"
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Label {
+                                        width: parent.width
+                                        text: homeCoverStrip.blockSongIndex >= 0
+                                              ? (musicManager.library[homeCoverStrip.blockSongIndex].artist || "未知歌手") : ""
+                                        font.family: appFont.name
+                                        font.pixelSize: 12
+                                        color: "#dddddd"
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                // ---- 播放 / 暂停按钮 ----
+                                Rectangle {
+                                    id: homePlayBtn
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    y: parent.height * 0.62
+                                    width: 48
+                                    height: 48
+                                    radius: 24
+                                    color: homePlayMA.containsMouse ? "#59ffffff" : "#40ffffff"
+                                    border.color: "#66ffffff"
+                                    border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+
+                                    Image {
+                                        anchors.centerIn: parent
+                                        source: {
+                                            var idx = homeCoverStrip.blockSongIndex
+                                            var isCur = idx >= 0 && musicManager.currentPath === musicManager.library[idx].path
+                                            return (isCur && musicManager.isPlaying)
+                                                   ? "qrc:/qt/qml/JustSolo/data/image/playing.png"
+                                                   : "qrc:/qt/qml/JustSolo/data/image/play.png"
+                                        }
+                                        width: 24
+                                        height: 24
+                                        fillMode: Image.PreserveAspectFit
+                                    }
+
+                                    MouseArea {
+                                        id: homePlayMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            var idx = homeCoverStrip.blockSongIndex
+                                            if (idx < 0) return
+                                            var song = musicManager.library[idx]
+                                            if (musicManager.currentPath === song.path) {
+                                                if (musicManager.isPlaying) musicManager.pause()
+                                                else musicManager.play()
+                                            } else {
+                                                musicManager.playFromLibrary(idx)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ---- 封面圆 ----
+                            Row {
+                                spacing: 14
+
+                                Repeater {
+                                    // 从方块当前歌曲开始，按音乐库顺序循环排列，最后一首后回到第一首
+                                    model: {
+                                        var lib = musicManager.library
+                                        var n = lib.length
+                                        if (n === 0) return []
+                                        var start = homeCoverStrip.blockSongIndex
+                                        if (start < 0) start = 0
+                                        var arr = []
+                                        for (var i = 0; i < n; i++) {
+                                            arr.push(lib[(start + i) % n])
+                                        }
+                                        return arr
+                                    }
+
+                                    delegate: Rectangle {
+                                        width: homeCoverStrip.blockSize
+                                        height: homeCoverStrip.blockSize
+                                        radius: width / 2
+                                        color: "#3A3A3A"
+                                        border.color: circleHover.containsMouse ? "#ffffff" : "#dddddd"
+                                        border.width: 6
+                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                                        Image {
+                                            anchors.fill: parent
+                                            anchors.margins: 6
+                                            source: modelData.cover || ""
+                                            sourceSize.width: 128
+                                            sourceSize.height: 128
+                                            fillMode: Image.PreserveAspectCrop
+                                            asynchronous: true
+                                            visible: modelData.cover && modelData.cover !== ""
+                                            layer.enabled: true
+                                            layer.effect: MultiEffect {
+                                                maskEnabled: true
+                                                maskSource: circleCoverMask
+                                            }
+                                            Rectangle {
+                                                id: circleCoverMask
+                                                anchors.fill: parent
+                                                radius: width / 2
+                                                visible: false
+                                                layer.enabled: true
+                                            }
+                                        }
+
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "\u266B"
+                                            font.family: appFont.name
+                                            font.pixelSize: 36
+                                            color: "#666"
+                                            visible: !modelData.cover || modelData.cover === ""
+                                        }
+
+                                        MouseArea {
+                                            id: circleHover
+                                            anchors.fill: parent; hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                // 圆圈是按循环顺序排列的，点击时映射回音乐库真实下标
+                                                var n = musicManager.library.length
+                                                if (n === 0) return
+                                                var realIndex = (homeCoverStrip.blockSongIndex + index) % n
+                                                musicManager.playFromLibrary(realIndex)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // 全局通用歌曲列表（所有音乐 & 自建列表共用）
                     HomePage {
