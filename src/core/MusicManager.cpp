@@ -33,6 +33,8 @@
 #include <QButtonGroup>
 #include <QPushButton>
 
+QHash<QString, QString> MusicManager::s_coverColorCache;  // 封面取色缓存（静态成员定义）
+
 // ============================================================
 // 工具函数
 // ============================================================
@@ -1355,6 +1357,10 @@ void MusicManager::deleteSongByPath(const QString &path) {
     // 从音乐库删除
     for (int i = 0; i < m_library.size(); i++) {
         if (m_library[i].toMap()["path"].toString() == path) {
+            // 清理该歌曲封面的取色缓存，避免残留条目
+            QString cover = m_library[i].toMap()["cover"].toString();
+            if (!cover.isEmpty())
+                s_coverColorCache.remove(cover);
             m_library.removeAt(i);
             emit libraryChanged();
             break;
@@ -1828,6 +1834,12 @@ void MusicManager::updateCurrentTrack() {
 QString MusicManager::extractCoverColor(const QString &coverUrl) {
     if (coverUrl.isEmpty()) return QString();
 
+    // 主色缓存：同一封面只解码一次。切歌取色（updateCurrentCoverColor）与
+    // HomePage 方块取色（coverColorOfSong）共用，消除重复解码
+    auto cached = s_coverColorCache.constFind(coverUrl);
+    if (cached != s_coverColorCache.constEnd())
+        return cached.value();
+
     QString path = QUrl(coverUrl).toLocalFile();
     if (path.isEmpty()) return QString();
 
@@ -1917,10 +1929,12 @@ QString MusicManager::extractCoverColor(const QString &coverUrl) {
         b = int(b * scale);
     }
 
-    return QString("#%1%2%3")
+    QString color = QString("#%1%2%3")
         .arg(r, 2, 16, QChar('0'))
         .arg(g, 2, 16, QChar('0'))
         .arg(b, 2, 16, QChar('0'));
+    s_coverColorCache.insert(coverUrl, color);
+    return color;
 }
 
 // 根据当前 m_currentCover 提取主色调，变化时发出通知

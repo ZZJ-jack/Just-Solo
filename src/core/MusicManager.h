@@ -7,6 +7,7 @@
 #include <QStringList>
 #include <QVector>
 #include <QMap>
+#include <QHash>
 #include "AudioEngine.h"
 #include <QFileInfo>
 #include <QDir>
@@ -290,6 +291,7 @@ private:
     void updateCurrentTrack();
     void updateCurrentCoverColor();          // 从 m_currentCover 提取主色调
     static QString extractCoverColor(const QString &coverUrl);
+    static QHash<QString, QString> s_coverColorCache;  // 封面URL -> 主色，同一封面只解码一次
     void registerBuiltinFonts();             // 启动时注册当前选用的内置字体，其余按需注册
     void ensureFontRegistered(const QString &file);  // 按需注册内置歌词字体（已注册则跳过）
     static QString builtinFontPath(const QString &file);  // 内置字体 qrc 路径

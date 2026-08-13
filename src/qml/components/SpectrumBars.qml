@@ -24,10 +24,12 @@ Row {
     property real phase: 0
 
     Timer {
-        interval: 33
+        // 80ms ≈ 12.5fps：相比 33ms 减少约 60% 的绑定求值/渲染压力，内存与 CPU 都更省；
+        // 相位步进按比例放大（0.15 × 80/33）保持原律动节奏
+        interval: 80
         repeat: true
         running: root.running && root.visible
-        onTriggered: root.phase += 0.15
+        onTriggered: root.phase += 0.36
     }
 
     Repeater {
