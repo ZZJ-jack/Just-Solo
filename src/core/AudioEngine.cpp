@@ -52,9 +52,10 @@ AudioEngine::~AudioEngine()
 void AudioEngine::deviceDataCallback(ma_device *pDevice, void *pFramesOut,
                                      const void *pFramesIn, unsigned int frameCount)
 {
-    ma_engine *pEngine = static_cast<ma_engine *>(pDevice->pUserData);
     (void)pFramesIn;
-    ma_engine_read_pcm_frames(pEngine, pFramesOut, frameCount, nullptr);
+    AudioEngine *self = static_cast<AudioEngine *>(pDevice->pUserData);
+    if (!self || !self->m_engine) return;
+    ma_engine_read_pcm_frames(self->m_engine, pFramesOut, frameCount, nullptr);
 }
 
 bool AudioEngine::initAudioDevice()
@@ -88,7 +89,7 @@ bool AudioEngine::initAudioDevice()
         deviceConfig.playback.shareMode = m_exclusive ? ma_share_mode_exclusive
                                                       : ma_share_mode_shared;
         deviceConfig.dataCallback = AudioEngine::deviceDataCallback;
-        deviceConfig.pUserData = m_engine;
+        deviceConfig.pUserData = this;
         deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;      // 引擎总是写满输出帧
         deviceConfig.noClip = MA_TRUE;                         // 削波由引擎自己处理
 

@@ -181,29 +181,36 @@ Just Solo 原生适配 **Windows SMTC 系统媒体控件** 并支持 **Just Solo
 
 ---
 
+## Just Solo LyricServer 协议文档
+
+[Just-Solo-LyricServer.md](docs/Just-Solo-LyricServer.md)
+
+---
+
 ## 项目结构
 
 ```
 Just-Solo/
-├── CMakeLists.txt              # CMake 构建配置
+├── CMakeLists.txt                  # CMake 构建配置
 ├── .gitignore
-├── LICENSE                     # MIT 许可证
+├── LICENSE                         # MIT 许可证
 ├── README.md
-├── CHANGELOG.md                # 版本更新日志
-├── 安装说明.txt                 # 安装与部署说明
-├── run.ps1                     # 编译 + 部署 + 运行脚本
-├── package.ps1                 # 一键打包脚本
-├── setup.iss                   # InnoSetup 安装包脚本
-├── lyric_client_test.html      # Just Solo LyricServer协议 测试页面（仅作参考，实际延迟需要调试）
+├── CHANGELOG.md                    # 版本更新日志
+├── 安装说明.txt                     # 安装与部署说明
+├── run.ps1                         # 编译 + 部署 + 运行脚本
+├── package.ps1                     # 一键打包脚本
+├── setup.iss                       # InnoSetup 安装包脚本
+├── lyric_client_test.html          # Just Solo LyricServer协议 测试页面（仅作参考，实际延迟需要调试）
 ├── cmake/
-│   └── GenerateVersion.ps1    # 自动生成版本号
+│   └── GenerateVersion.ps1         # 自动生成版本号
 ├── docs/
-│   ├── BugList.txt             # 已知问题列表
-│   └── Just-Solo-LyricServer.md # LyricServer 协议文档
+│   ├── BugList.txt                 # 已知问题列表
+│   └── Just-Solo-LyricServer.md    # LyricServer 协议文档
 ├── src/
-│   ├── main.cpp                # 程序入口（单实例检测、DWM 标题栏、Tray、SMTC、HotkeyManager）
+│   ├── main.cpp                    # 程序入口（单实例检测、DWM 标题栏、Tray、SMTC、HotkeyManager）
 │   ├── core/
 │   │   ├── AudioEngine.h/cpp       # 音频引擎（基于 miniaudio）
+│   │   ├── TimeStretchSource.h/cpp # 时间拉伸数据源（变速不变调，基于 SoundTouch）
 │   │   ├── decoder_backends.h      # 自定义解码后端注册接口（Opus/AAC/ALAC）
 │   │   ├── ma_opus_decoder.c       # Opus 解码后端（libopus + libopusfile）
 │   │   ├── ma_fdkaac_decoder.c     # AAC/ALAC 解码后端（fdk-aac + 苹果 ALAC，含 ADTS 与 MP4 解封装）
@@ -215,20 +222,23 @@ Just-Solo/
 │   │   ├── CurlRequest.h/cpp       # libcurl 网络请求封装
 │   │   ├── UpdateChecker.h/cpp     # OTA 在线更新检查
 │   │   ├── MarkdownHelper.h/cpp    # Markdown → 富文本 HTML 转换（基于 cmark-gfm）
+│   │   ├── BugReporter.h/cpp       # 运行日志异步上报（错误收集服务）
 │   │   └── miniaudio.h             # miniaudio 单头文件库
 │   ├── services/
 │   │   ├── LyricServer.h/cpp       # LyricServer WebSocket 歌词推送服务
 │   └── qml/
-│       ├── main.qml            # 主窗口 —— 侧边栏、播放栏、路由控制
+│       ├── main.qml                # 主窗口 —— 侧边栏、播放栏、路由控制
 │       ├── components/
-│       │   ├── NavItem.qml     #   侧边栏主菜单项
-│       │   ├── SubNavItem.qml  #   设置页子菜单项
-│       │   ├── SongRow.qml     #   歌曲列表行共享组件
-│       │   ├── MusicListView.qml # 通用歌曲列表组件（列头+列表+滚动+右键/弹窗）
-│       │   └── ToggleSwitch.qml # 自定义小号圆球滑动开关（左右滑动动画 + 变色过渡）
-│       └── views/              # 页面（预创建，切换时仅切换 visible，零闪屏）
-│           ├── HomePage.qml        # 所有音乐 / 自定义列表（统一组件）
-│           ├── PlaylistPage.qml    # 播放列表页
+│       │   ├── NavItem.qml         # 侧边栏主菜单项
+│       │   ├── SubNavItem.qml      # 设置页子菜单项
+│       │   ├── SongRow.qml         # 歌曲列表行共享组件
+│       │   ├── MusicListView.qml   # 通用歌曲列表组件（列头+列表+滚动+右键/弹窗）
+│       │   ├── ToggleSwitch.qml    # 自定义小号圆球滑动开关（左右滑动动画 + 变色过渡）
+│       │   └── SpectrumBars.qml    # 频谱律动柱状组件（12 条模拟循环动画）
+│       └── views/                  # 页面（预创建，切换时仅切换 visible，零闪屏）
+│           ├── AllMusicPage.qml    # 所有音乐页（音乐库全部歌曲）
+│           ├── HomePage.qml        # 主页（封面墙：方块 + 大圆封面 + 频谱律动）
+│           ├── PlaylistPage.qml    # 播放列表页（跟随播放来源）
 │           ├── FavoritePage.qml    # 收藏页
 │           ├── HistoryPage.qml     # 历史页
 │           ├── SettingsPage.qml    # 设置页
@@ -237,13 +247,14 @@ Just-Solo/
 ├── data/
 │   ├── image/
 │   │   ├── logo.ico / logo.png / logo2.png  # 程序图标
-│   │   ├── home.png / mylike.png / mylike-on.png / mylike-off.png / history.png / PlayList.png / AddToPlayList.png # 导航与操作图标
+│   │   ├── home.png / AllMusic.png / mylike.png / mylike-on.png / mylike-off.png / history.png / PlayList.png / AddToPlayList.png / singer_list.png # 导航与操作图标
 │   │   ├── creatList.png                    # 自建列表图标
 │   │   ├── setting.png / menu.png / drag.png # 设置、菜单、拖放提示图标
-│   │   ├── mini-enter.png / mini-exit.png # 迷你播放器相关图标
+│   │   ├── mini-enter.png / mini-exit.png / Biggest-enter.png / Biggest-exit.png # 迷你播放器与最大化图标
 │   │   ├── play.png / playing.png / next.png / prve.png / back.png / volume-logo.png # 播放控制与音量图标
 │   │   ├── mode_sequential.png / mode_loop.png / mode_single.png / mode_shuffle.png / mode_stop.png # 播放模式图标
-│   │   └── photo-1.png / photo-2.png / photo-3.png / switch.png  # 展示图与切换图标
+│   │   ├── sort.png / speed_change.png      # 排序与变速图标
+│   │   └── photo-1.png / photo-2.png / photo-3.png / photo-4.png / photo-5.png / switch.png # 展示图与切换图标
 │   └── font/
 │       ├── HarmonyOS_Sans_SC_Regular.ttf    # 默认字体（HarmonyOS Sans SC）
 │       ├── AaZhuNiWoMingMeiXiangChunTian-2.ttf  # 内置部分字体（独立 rcc 运行时加载，按需注册）
@@ -338,6 +349,18 @@ cmake --build build --config Release
   - 本项目在 `MIT License` 下开源，在多个平台上提供镜像仓库
 - **这个项目的代码是否使用了AI生成？**：
   - 是的，我们的部分代码是使用AI生成的，AI能辅助我们快速实现功能/修复bug（尤其是找bug），但我们的代码质量会严格要求，反复测试再发布正式版本。
+
+---
+
+## 贡献者
+
+感谢所有为本项目做出贡献的开发者！
+
+<div align="left">
+  <a href="https://github.com/ZZJ-jack/Just-Solo/graphs/contributors">
+    <img src="https://contrib.rocks/image?repo=ZZJ-jack/Just-Solo" alt="Contributors" />
+  </a>
+</div>
 
 ---
 

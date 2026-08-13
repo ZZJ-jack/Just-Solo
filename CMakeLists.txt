@@ -5,7 +5,7 @@ project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 set(APP_VERSION_MAJOR 1)   # X：主版本号
 set(APP_VERSION_MINOR 3)   # Y：次版本号
 set(APP_VERSION_PATCH 0)   # Z：修订版本号
-set(APP_VERSION_PRE   10)   # N：0=正式版, >0=beta.N
+set(APP_VERSION_PRE   11)   # N：0=正式版, >0=beta.N
 # 版本号格式: vX.Y.Z-beta.N
 
 # 格式化显示版本: vX.Y.Z 或 vX.Y.Z-beta.N
@@ -179,11 +179,13 @@ qt_add_qml_module(JustSolo
     VERSION 1.0
     QML_FILES
         src/qml/main.qml
-        src/qml/components/NavItem.qml
-        src/qml/components/SubNavItem.qml
-        src/qml/components/SongRow.qml
         src/qml/components/MusicListView.qml
+        src/qml/components/NavItem.qml
+        src/qml/components/SongRow.qml
+        src/qml/components/SpectrumBars.qml
+        src/qml/components/SubNavItem.qml
         src/qml/components/ToggleSwitch.qml
+        src/qml/views/AllMusicPage.qml
         src/qml/views/HomePage.qml
         src/qml/views/PlaylistPage.qml
         src/qml/views/FavoritePage.qml

@@ -1932,6 +1932,15 @@ void MusicManager::updateCurrentCoverColor() {
     }
 }
 
+// 提取音乐库指定歌曲封面的主色调，供首页方块在未播放时也能变色
+QString MusicManager::coverColorOfSong(int libraryIndex) {
+    if (libraryIndex < 0 || libraryIndex >= m_library.size()) return QString();
+    QVariantMap song = m_library.at(libraryIndex).toMap();
+    QString cover = song.value("cover").toString();
+    if (cover.isEmpty()) return QString();
+    return extractCoverColor(cover);
+}
+
 // ---- C++ 端计算歌词索引（纯整数比较，零分配） ----
 void MusicManager::updateLyricIndex() {
     if (m_lyricCache.isEmpty()) {

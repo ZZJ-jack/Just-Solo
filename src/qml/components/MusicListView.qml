@@ -133,7 +133,7 @@ ColumnLayout {
         }
     }
 
-    // 同一 HomePage 实例切换 songList（所有音乐↔自建歌单）时触发定位
+    // 同一 AllMusicPage 实例切换 songList（所有音乐↔自建歌单）时触发定位
     onSongListChanged: {
         if (_suppressAutoScroll) {
             // reorder 使 C++ 返回新 QVariantList → 模型替换 → contentY 会重置为 0
