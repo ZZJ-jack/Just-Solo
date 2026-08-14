@@ -1,0 +1,22 @@
+name: Sync to GitCode
+
+on:
+  push:
+    branches: [ main, master ]   # 监听 main 或 master 分支推送
+  workflow_dispatch:             # 支持手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # 拉取完整历史，保证 mirror 完整
+
+      - name: Push to GitCode
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+        run: |
+          git remote add gitcode https://ZZJ-JACK:${GITCODE_TOKEN}@gitcode.com/ZZJ-JACK/Just-Solo.git
+          git push -f --mirror gitcode

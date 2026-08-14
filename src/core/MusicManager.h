@@ -60,6 +60,9 @@ class MusicManager : public QObject
     Q_PROPERTY(QVariantList customPlaylists READ customPlaylists NOTIFY customPlaylistsChanged)
     Q_PROPERTY(int playingListIndex READ playingListIndex NOTIFY playingListIndexChanged)  // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义
 
+    // ---- 自定义排序（保存手动排序的顺序） ----
+    Q_PROPERTY(QVariantList sortModes READ sortModes NOTIFY sortModesChanged)
+
 public:
     explicit MusicManager(QObject *parent = nullptr);
 
@@ -198,6 +201,14 @@ public:
     int playingListIndex() const { return m_playingListIndex; }
     QVariantList customPlaylists() const { return m_customPlaylists; }
 
+    // ---- 自定义排序 ----
+    QVariantList sortModes() const { return m_sortModes; }
+    Q_INVOKABLE void createSortMode(const QString &name, const QVariantList &paths);   // 新建排序（按当前顺序保存）
+    Q_INVOKABLE void updateSortModeOrder(int index, const QVariantList &paths);        // 覆盖现有排序的顺序
+    Q_INVOKABLE void renameSortMode(int index, const QString &newName);
+    Q_INVOKABLE void deleteSortMode(int index);
+    Q_INVOKABLE bool isValidSortName(const QString &name) const;
+
     // ---- 歌手列表（复用自定义列表基础设施，type="artist"） ----
     Q_INVOKABLE QVariantList availableArtists() const;              // 从音乐库扫描去重后的歌手名列表
     Q_INVOKABLE void createArtistPlaylist(const QString &artist, const QString &name = QString());   // 以歌手名创建列表，name 可自定义列表显示名（默认用歌手名）
@@ -274,6 +285,7 @@ signals:
     void exclusiveConfirmRequested();  // 启动时保存了开启独占：QML 先弹窗提示（识别精度有限），用户确认后再真正开启
     void audioInitFailed();  // 共享模式音频初始化失败：QML 弹窗提示用户检查并重启
     void customPlaylistsChanged();
+    void sortModesChanged();
     void playingListIndexChanged();
     void positionChanged(qint64 ms);
     void durationChanged();
@@ -312,6 +324,10 @@ private:
     void loadHistory();
     void saveCustomPlaylists();
     void loadCustomPlaylists();
+    void saveSortModes();
+    void loadSortModes();
+    void savePlaylistState();   // 退出时保存播放列表与当前播放歌曲
+    void loadPlaylistState();   // 启动时恢复播放列表与当前播放歌曲（旧版无缓存则置空）
     void shrinkLegacyCoverCache();   // 历史版本缓存的封面是全尺寸，启动时把 >512px 的在位重写为缩略图
     QString m_cacheDir;          // 缓存目录（如 %APPDATA%/Just Solo）
     bool m_useCache = false;     // 开发者模式=false，非开发者模式=true
@@ -342,6 +358,7 @@ private:
     int m_seekStep = 5;              // 快进/快退步长（秒），范围 1~10
     QMap<QString, QString> m_builtinFontFamilies;  // 内置字体 qrc 路径 -> 族名
     QVariantList m_customPlaylists;         // 自定义播放列表
+    QVariantList m_sortModes;               // 自定义排序 [{name, order:[path,...]}]
     int m_playingListIndex = -1;            // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义
     void loadSettings();
     void saveSettings();

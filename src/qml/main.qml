@@ -70,6 +70,12 @@ Window {
     property string _connectedClientName: ""  // LyricServer 连接的客户端名称
     property var _existingArtistNames: ({})    // 已创建歌手歌单的歌手名集合（去重标记）
 
+    // ---- 排序模式 ----
+    property string sortMode: "name"           // "name"=按名称, "time"=添加时间, "custom:N"=自定义排序
+    property var _manualSortOrder: []          // 手动拖拽后的路径顺序（待保存）
+    property bool _manualSortPending: false    // 是否存在待保存的手动排序
+    property int _rightClickedSortIndex: -1    // 排序菜单中右键的自定义排序索引
+
     // 判断 customPlaylists 中某索引是否为歌手歌单
     function _isArtistList(index) {
         return index >= 0 && index < musicManager.customPlaylists.length
@@ -96,6 +102,283 @@ Window {
     function _isCurrentArtistList() {
         if (currentMenu !== "customPlaylist" || currentCustomPlaylistIndex < 0) return false
         return _isArtistList(currentCustomPlaylistIndex)
+    }
+
+    // ============================================================
+    // 排序模式辅助函数
+    // ============================================================
+
+    // 当前生效的自定义排序索引（-1 = 未处于自定义排序）
+    function currentCustomSortIndex() {
+        if (sortMode.indexOf("custom:") !== 0) return -1
+        var idx = parseInt(sortMode.substring(7))
+        if (isNaN(idx) || idx < 0 || idx >= musicManager.sortModes.length) return -1
+        return idx
+    }
+
+    // 当前自定义排序的路径顺序
+    function sortModeOrder() {
+        var ci = currentCustomSortIndex()
+        if (ci < 0) return []
+        return musicManager.sortModes[ci].order || []
+    }
+
+    // 按路径顺序重排列表（未出现的路径按原顺序追加末尾）
+    function reorderByPaths(list, order) {
+        var byPath = {}
+        for (var i = 0; i < list.length; i++)
+            byPath[list[i].path] = list[i]
+        var res = []
+        var added = {}
+        for (var j = 0; j < order.length; j++) {
+            var p = order[j]
+            if (byPath[p] && !added[p]) {
+                res.push(byPath[p])
+                added[p] = true
+            }
+        }
+        for (var k = 0; k < list.length; k++) {
+            if (!added[list[k].path]) res.push(list[k])
+        }
+        return res
+    }
+
+    // 按当前排序模式重排基础列表（返回新数组，不改动原数据）
+    function applySortMode(list) {
+        var arr
+        if (sortMode === "name") {
+            arr = list.slice()
+            arr.sort(function(a, b) {
+                var na = String(a.name || "").toLowerCase()
+                var nb = String(b.name || "").toLowerCase()
+                if (na !== nb) return na < nb ? -1 : 1
+                var aa = String(a.artist || "").toLowerCase()
+                var ab = String(b.artist || "").toLowerCase()
+                if (aa !== ab) return aa < ab ? -1 : 1
+                return 0
+            })
+            return arr
+        }
+        if (sortMode === "time") {
+            arr = list.slice()
+            arr.sort(function(a, b) {
+                var ta = Number(a.addTime || 0)
+                var tb = Number(b.addTime || 0)
+                if (ta !== tb) return ta - tb
+                return 0
+            })
+            return arr
+        }
+        return reorderByPaths(list, sortModeOrder())
+    }
+
+    // 显示用列表：有未保存的手动排序时优先显示手动顺序
+    function displaySorted(base) {
+        if (_manualSortPending) return reorderByPaths(base, _manualSortOrder)
+        return applySortMode(base)
+    }
+
+    // 切换排序模式：有未保存的手动排序时先弹窗询问（丢弃/覆盖/新建）
+    property string _pendingSortMode: "name"
+
+    function applySort(mode) {
+        if (_manualSortPending) {
+            _pendingSortMode = mode
+            sortMenu.close()
+            saveSortDialog.open()
+        } else {
+            sortMode = mode
+            sortMenu.close()
+        }
+    }
+
+    // 丢弃未保存排序并直接切换到目标模式
+    function applySortDirect(mode) {
+        discardManualSort()
+        sortMode = mode
+        sortMenu.close()
+        saveSortDialog.close()
+    }
+
+    // 放弃未保存的手动排序
+    function discardManualSort() {
+        _manualSortPending = false
+        _manualSortOrder = []
+    }
+
+    // 手动拖拽排序（由 MusicListView.onReorderRequest 回调）
+    // srcList 为当前页面的显示列表（排序后），缺省用所有音乐页
+    function handleManualReorder(fromIdx, toIdx, srcList) {
+        var list = srcList || allMusicPage.songList
+        if (!list || fromIdx < 0 || toIdx < 0) return
+        var paths = []
+        for (var i = 0; i < list.length; i++) paths.push(list[i].path || "")
+        if (fromIdx >= paths.length || toIdx >= paths.length) return
+        var item = paths.splice(fromIdx, 1)[0]
+        var adj = toIdx > fromIdx ? toIdx - 1 : toIdx
+        paths.splice(adj, 0, item)
+        _manualSortOrder = paths
+        _manualSortPending = true
+        // 不弹窗：显示歌曲列表上方的提示行等待用户选择
+    }
+
+    // 从提示行/弹窗打开新建排序窗口
+    function openCreateSortDialog() {
+        createSortField.text = ""
+        createSortHint.text = ""
+        createSortDialog.open()
+    }
+
+    // 保存新排序（新建成功后停在新排序）
+    function doSaveNewSort() {
+        var name = createSortField.text.trim()
+        if (name.length === 0) return
+        if (!musicManager.isValidSortName(name)) {
+            createSortHint.text = "仅支持中英文、数字、- 和 _"
+            return
+        }
+        var modes = musicManager.sortModes
+        for (var i = 0; i < modes.length; i++) {
+            if (modes[i].name === name) {
+                createSortHint.text = "已存在同名排序"
+                return
+            }
+        }
+        musicManager.createSortMode(name, _manualSortOrder)
+        // 新排序索引 = sortModes.length - 1
+        sortMode = "custom:" + (musicManager.sortModes.length - 1)
+        discardManualSort()
+        createSortDialog.close()
+        saveSortDialog.close()
+    }
+
+    // 覆盖现有排序（仅当前处于自定义排序时可用）
+    // switchTo 可选：覆盖后切换到的排序模式（弹窗场景），内联提示行不传
+    function doOverwriteSort(switchTo) {
+        var ci = currentCustomSortIndex()
+        if (ci < 0) return
+        musicManager.updateSortModeOrder(ci, _manualSortOrder)
+        discardManualSort()
+        if (switchTo) sortMode = switchTo
+        saveSortDialog.close()
+    }
+
+    // 重命名自定义排序
+    function doRenameSort() {
+        var name = sortRenameField.text.trim()
+        var idx = _rightClickedSortIndex
+        if (name.length === 0 || idx < 0 || idx >= musicManager.sortModes.length) return
+        if (!musicManager.isValidSortName(name)) {
+            sortRenameHint.text = "仅支持中英文、数字、- 和 _"
+            return
+        }
+        for (var i = 0; i < musicManager.sortModes.length; i++) {
+            if (i !== idx && musicManager.sortModes[i].name === name) {
+                sortRenameHint.text = "已存在同名排序"
+                return
+            }
+        }
+        musicManager.renameSortMode(idx, name)
+        sortRenameField.text = ""
+        sortRenameDialog.close()
+    }
+
+    // 排序模式下点击歌曲：按路径映射到真实索引再播放
+    // target: "library"（所有音乐）/ "custom"（自建歌单）/ "favorites"（收藏）
+    function handleSortedLeftClick(index, target) {
+        var dl = allMusicPage.songList
+        if (target === "favorites") dl = favoritePage ? favoritePage.songList : []
+        if (!dl || index < 0 || index >= dl.length) return
+        var t = dl[index]
+        if (!t) return
+        var path = t.path || ""
+
+        // 收藏页：映射到收藏真实索引
+        if (target === "favorites") {
+            var fav = musicManager.favorites
+            var fi = -1
+            for (var k = 0; k < fav.length; k++) {
+                if ((fav[k].path || "") === path) { fi = k; break }
+            }
+            if (fi < 0) return
+            if (musicManager.playlistSource === 1) {
+                if (musicManager.currentIndex === fi) {
+                    if (musicManager.isPlaying) musicManager.pause()
+                    else musicManager.play()
+                } else {
+                    musicManager.playIndex(fi)
+                }
+            } else {
+                if (musicManager.currentIndex < 0) {
+                    musicManager.playlistSource = 1
+                    musicManager.playIndex(fi)
+                } else {
+                    favoritePage.openSwitchDialog("switch", 1, fi)
+                }
+            }
+            return
+        }
+
+        // 自建歌单
+        if (target === "custom" && currentCustomPlaylistIndex >= 0) {
+            var songs = musicManager.customPlaylists[currentCustomPlaylistIndex].songs || []
+            var realIdx = -1
+            for (var i = 0; i < songs.length; i++) {
+                if ((songs[i].path || "") === path) { realIdx = i; break }
+            }
+            if (realIdx < 0) return
+            var thisCustomIdx = 3 + currentCustomPlaylistIndex
+            if (musicManager.currentIndex < 0) {
+                musicManager.playCustomPlaylist(currentCustomPlaylistIndex, realIdx)
+            } else if (musicManager.playingListIndex === thisCustomIdx) {
+                if (musicManager.currentIndex === realIdx) {
+                    if (musicManager.isPlaying) musicManager.pause()
+                    else musicManager.play()
+                } else {
+                    musicManager.playCustomPlaylist(currentCustomPlaylistIndex, realIdx)
+                }
+            } else {
+                allMusicPage.openSwitchDialog("custom", -1, realIdx)
+            }
+            return
+        }
+
+        // 所有音乐：映射到库真实索引
+        var lib = musicManager.library
+        var li = -1
+        for (var j = 0; j < lib.length; j++) {
+            if ((lib[j].path || "") === path) { li = j; break }
+        }
+        if (li < 0) return
+        if (musicManager.playlistSource === 0) {
+            if (path === allMusicPage.playingPath) {
+                if (musicManager.isPlaying) musicManager.pause()
+                else musicManager.play()
+            } else {
+                musicManager.playFromLibrary(li)
+            }
+        } else {
+            if (musicManager.currentIndex < 0) {
+                musicManager.playlistSource = 0
+                musicManager.playFromLibrary(li)
+            } else {
+                allMusicPage.openSwitchDialog("home", -1, li)
+            }
+        }
+    }
+
+    // 搜索结果滚动：把库索引转换为当前排序显示索引
+    function _sortScrollIndex() {
+        if (searchScrollIndex < 0) return -1
+        var lib = musicManager.library
+        if (searchScrollIndex >= lib.length) return -1
+        var path = lib[searchScrollIndex].path || ""
+        if (!path) return -1
+        var dl = allMusicPage ? allMusicPage.songList : []
+        for (var i = 0; i < dl.length; i++) {
+            if (dl[i].path === path) return i
+        }
+        return -1
     }
 
     // ---- 搜索 ----
@@ -1232,6 +1515,194 @@ Window {
                             onClicked: musicManager.refreshArtistPlaylist(currentCustomPlaylistIndex)
                         }
                     }
+
+                    // ---- 排序按钮（所有音乐 / 自建歌单 / 收藏，放标题栏最右） ----
+                    Rectangle {
+                        Layout.preferredHeight: 28; radius: 6
+                        Layout.preferredWidth: sortBtnText.contentWidth + 38
+                        Layout.alignment: Qt.AlignVCenter
+                        color: sortBtnMA.containsMouse || sortMenu.visible ? "#4A4A4A" : "#333333"
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        visible: currentMenu === "allMusic" || currentMenu === "customPlaylist" || currentMenu === "favorite"
+                        RowLayout {
+                            anchors.centerIn: parent; spacing: 6
+                            Image {
+                                source: "qrc:/qt/qml/JustSolo/data/image/sort.png"
+                                sourceSize.width: 14; sourceSize.height: 14
+                                fillMode: Image.PreserveAspectFit
+                            }
+                            Label {
+                                id: sortBtnText
+                                text: "排序"
+                                font.family: appFont.name; font.pixelSize: 13; color: "#cccccc"
+                            }
+                        }
+                        MouseArea {
+                            id: sortBtnMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: sortMenu.visible ? sortMenu.close() : sortMenu.open()
+                        }
+
+                        // ---- 排序菜单弹窗 ----
+                        Popup {
+                            id: sortMenu
+                            width: 200
+                            x: parent.width - width
+                            y: parent.height + 6
+                            padding: 0
+                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                            background: Rectangle {
+                                color: "#222222"
+                                border.color: "#3A3A3A"
+                                border.width: 1
+                                radius: 8
+                            }
+
+                            contentItem: Column {
+                                width: 200
+                                spacing: 0
+
+                                // ---- 按名称 ----
+                                Rectangle {
+                                    id: sortNameRow
+                                    width: parent.width; height: 34
+                                    color: sortNameRowMA.containsMouse ? "#333333" : "transparent"
+                                    property bool active: mainWindow.sortMode === "name"
+                                    RowLayout {
+                                        anchors.left: parent.left; anchors.right: parent.right
+                                        anchors.leftMargin: 12; anchors.rightMargin: 10
+                                        anchors.verticalCenter: parent.verticalCenter; spacing: 6
+                                        Label {
+                                            text: "按名称"; font.family: appFont.name; font.pixelSize: 13
+                                            color: sortNameRow.active ? "#3B82F6" : "#cccccc"
+                                            Layout.fillWidth: true
+                                        }
+                                        Label {
+                                            text: "✓"; font.pixelSize: 12; color: "#3B82F6"
+                                            visible: sortNameRow.active
+                                        }
+                                    }
+                                    MouseArea {
+                                        id: sortNameRowMA; anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: mainWindow.applySort("name")
+                                    }
+                                }
+
+                                // ---- 添加时间 ----
+                                Rectangle {
+                                    id: sortTimeRow
+                                    width: parent.width; height: 34
+                                    color: sortTimeRowMA.containsMouse ? "#333333" : "transparent"
+                                    property bool active: mainWindow.sortMode === "time"
+                                    RowLayout {
+                                        anchors.left: parent.left; anchors.right: parent.right
+                                        anchors.leftMargin: 12; anchors.rightMargin: 10
+                                        anchors.verticalCenter: parent.verticalCenter; spacing: 6
+                                        Label {
+                                            text: "添加时间"; font.family: appFont.name; font.pixelSize: 13
+                                            color: sortTimeRow.active ? "#3B82F6" : "#cccccc"
+                                            Layout.fillWidth: true
+                                        }
+                                        Label {
+                                            text: "✓"; font.pixelSize: 12; color: "#3B82F6"
+                                            visible: sortTimeRow.active
+                                        }
+                                    }
+                                    MouseArea {
+                                        id: sortTimeRowMA; anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: mainWindow.applySort("time")
+                                    }
+                                }
+
+                                // ---- 分隔线 ----
+                                Rectangle { width: parent.width; height: 1; color: "#3A3A3A" }
+
+                                // ---- 自定义排序标题 ----
+                                Rectangle {
+                                    width: parent.width; height: 30
+                                    color: "transparent"
+                                    Label {
+                                        anchors.left: parent.left; anchors.leftMargin: 12
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "自定义排序"
+                                        font.family: appFont.name; font.pixelSize: 12
+                                        color: "#888"
+                                    }
+                                }
+
+                                // ---- 自定义排序列表（右键可重命名/删除） ----
+                                ListView {
+                                    id: customSortList
+                                    width: parent.width
+                                    height: musicManager.sortModes.length * 34
+                                    model: musicManager.sortModes
+                                    interactive: false
+                                    delegate: Rectangle {
+                                        id: sortRow
+                                        width: customSortList.width; height: 34
+                                        color: sortRowMA.containsMouse ? "#333333" : "transparent"
+                                        readonly property bool active: mainWindow.sortMode === "custom:" + index
+
+                                        RowLayout {
+                                            anchors.left: parent.left; anchors.right: parent.right
+                                            anchors.leftMargin: 12; anchors.rightMargin: 10
+                                            anchors.verticalCenter: parent.verticalCenter; spacing: 6
+                                            Label {
+                                                text: modelData.name || ""
+                                                font.family: appFont.name; font.pixelSize: 13
+                                                color: sortRow.active ? "#3B82F6" : "#cccccc"
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+                                            Label {
+                                                text: "✓"; font.pixelSize: 12; color: "#3B82F6"
+                                                visible: sortRow.active
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: sortRowMA
+                                            anchors.fill: parent; hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                            onClicked: function(mouse) {
+                                                if (mouse.button === Qt.RightButton) {
+                                                    mainWindow._rightClickedSortIndex = index
+                                                    sortItemMenu.popup()
+                                                } else {
+                                                    mainWindow.applySort("custom:" + index)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ---- 无自定义排序提示 ----
+                                Label {
+                                    width: parent.width; height: 30
+                                    text: "暂无自定义排序"
+                                    font.family: appFont.name; font.pixelSize: 12; color: "#666"
+                                    verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                    visible: musicManager.sortModes.length === 0
+                                }
+
+                                // ---- 底部提示 ----
+                                Rectangle {
+                                    width: parent.width; height: 1; color: "#3A3A3A"
+                                    visible: musicManager.sortModes.length > 0
+                                }
+                                Label {
+                                    width: parent.width; height: 28
+                                    text: "拖动歌曲可手动调整顺序"
+                                    font.family: appFont.name; font.pixelSize: 11; color: "#777"
+                                    verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Item { Layout.preferredHeight: 16 }
@@ -1262,35 +1733,51 @@ Window {
 
                     // 全局通用歌曲列表（所有音乐 & 自建列表共用）
                     AllMusicPage {
+                        id: allMusicPage
                         anchors.fill: parent
                         visible: currentMenu === "allMusic" || currentMenu === "customPlaylist"
                         sidebarWidth: mainWindow.sidebarWidth
                         windowWidth: mainWindow.width
                         fontFamily: appFont.name
-                        scrollToIndex: currentMenu === "allMusic" ? mainWindow.searchScrollIndex : -1
+                        scrollToIndex: currentMenu === "allMusic" ? mainWindow._sortScrollIndex() : -1
                         customPlaylistIndex: currentMenu === "customPlaylist" ? currentCustomPlaylistIndex : -1
                         pageListIndex: currentMenu === "customPlaylist" ? 3 + currentCustomPlaylistIndex : 0
                         emptyHint: currentMenu === "customPlaylist" ? (_isCurrentArtistList() ? "此歌手暂无歌曲" : "此列表还没有歌曲") : "还没有音乐"
                         emptySubHint: currentMenu === "customPlaylist" ? (_isCurrentArtistList() ? "右键侧边栏列表可刷新歌曲" : "请到侧边栏右键本列表添加音乐") : "点击上方「添加音乐」导入本地文件"
+                        // 排序模式：显示顺序按当前排序模式重排（不动底层数据）
                         songList: {
                             if (currentMenu === "customPlaylist" && currentCustomPlaylistIndex >= 0
                                 && currentCustomPlaylistIndex < musicManager.customPlaylists.length) {
                                 var raw = musicManager.customPlaylists[currentCustomPlaylistIndex].songs || []
                                 var lib = musicManager.library
-                                var result = []
+                                var base = []
                                 for (var i = 0; i < raw.length; i++) {
                                     var path = raw[i].path || ""
                                     for (var j = 0; j < lib.length; j++) {
                                         if (lib[j].path === path) {
-                                            result.push(lib[j])
+                                            base.push(lib[j])
                                             break
                                         }
                                     }
                                 }
-                                return result
+                                return mainWindow.displaySorted(base)
                             }
-                            return musicManager.library
+                            return mainWindow.displaySorted(musicManager.library)
                         }
+                        // 排序模式下点击歌曲：按路径映射真实索引播放
+                        onLeftClick: function(index) {
+                            mainWindow.handleSortedLeftClick(index,
+                                currentMenu === "customPlaylist" ? "custom" : "library")
+                        }
+                        // 排序模式下拖拽排序：由 mainWindow 接管（显示提示行等待保存/覆盖）
+                        onReorderRequest: function(fromIdx, toIdx) {
+                            mainWindow.handleManualReorder(fromIdx, toIdx, allMusicPage.songList)
+                        }
+                        // 排序修改提示行（手动拖拽后出现）
+                        showReorderBanner: mainWindow._manualSortPending
+                        reorderBannerCanOverwrite: mainWindow.currentCustomSortIndex() >= 0
+                        onBannerOverwrite: function() { mainWindow.doOverwriteSort() }
+                        onBannerCreate: function() { mainWindow.openCreateSortDialog() }
                     }
                     PlaylistPage {
                         anchors.fill: parent
@@ -1300,11 +1787,25 @@ Window {
                         fontFamily: appFont.name
                     }
                     FavoritePage {
+                        id: favoritePage
                         anchors.fill: parent
                         visible: currentMenu === "favorite"
                         sidebarWidth: mainWindow.sidebarWidth
                         windowWidth: mainWindow.width
                         fontFamily: appFont.name
+                        // 排序模式：显示顺序按当前排序模式重排（不动底层数据）
+                        songList: mainWindow.displaySorted(musicManager.favorites)
+                        // 排序模式：点击歌曲按路径映射到收藏真实索引再播放
+                        onLeftClick: function(index) { mainWindow.handleSortedLeftClick(index, "favorites") }
+                        // 排序模式：拖拽排序由 mainWindow 接管（显示提示行等待保存/覆盖）
+                        onReorderRequest: function(fromIdx, toIdx) {
+                            mainWindow.handleManualReorder(fromIdx, toIdx, favoritePage.songList)
+                        }
+                        // 排序修改提示行（手动拖拽后出现）
+                        showReorderBanner: mainWindow._manualSortPending
+                        reorderBannerCanOverwrite: mainWindow.currentCustomSortIndex() >= 0
+                        onBannerOverwrite: function() { mainWindow.doOverwriteSort() }
+                        onBannerCreate: function() { mainWindow.openCreateSortDialog() }
                     }
                     HistoryPage {
                         anchors.fill: parent
@@ -2754,6 +3255,354 @@ Window {
                     MouseArea {
                         id: renameConfirmMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                         onClicked: doRename()
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // 排序模式：自定义排序右键菜单 + 相关弹窗
+    // ============================================================
+
+    // ---- 自定义排序右键菜单（重命名 / 删除） ----
+    Menu {
+        id: sortItemMenu
+        background: Rectangle { color: "#222222"; border.color: "#3A3A3A"; radius: 6; implicitWidth: 150 }
+        topPadding: 0; bottomPadding: 0
+
+        MenuItem {
+            text: "重命名排序"
+            contentItem: Label { text: "重命名排序"; font.family: appFont.name; font.pixelSize: 14; color: "#cccccc"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+            background: Rectangle { color: parent.hovered ? "#333333" : "transparent"; radius: 4 }
+            onClicked: {
+                var idx = mainWindow._rightClickedSortIndex
+                if (idx >= 0 && idx < musicManager.sortModes.length) {
+                    sortRenameField.text = musicManager.sortModes[idx].name || ""
+                    sortRenameHint.text = ""
+                    sortRenameDialog.open()
+                }
+            }
+        }
+        MenuItem {
+            text: "删除排序"
+            contentItem: Label { text: "删除排序"; font.family: appFont.name; font.pixelSize: 14; color: "#e06666"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+            background: Rectangle { color: parent.hovered ? "#333333" : "transparent"; radius: 4 }
+            onClicked: {
+                var idx = mainWindow._rightClickedSortIndex
+                if (idx >= 0 && idx < musicManager.sortModes.length) {
+                    musicManager.deleteSortMode(idx)
+                    // 删除后索引可能错位，若当前正应用自定义排序则回退到按名称
+                    if (mainWindow.sortMode.indexOf("custom:") === 0)
+                        mainWindow.sortMode = "name"
+                }
+            }
+        }
+    }
+
+    // ---- 排序未保存弹窗（切换排序模式时询问：丢弃 / 覆盖 / 新建） ----
+    Dialog {
+        id: saveSortDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 360
+        padding: 28
+
+        Overlay.modal: Rectangle { color: "#40000000" }
+
+        background: Rectangle {
+            color: "#222222"
+            radius: 10
+            border.color: "#3A3A3A"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+
+            Label {
+                text: "排序未保存"
+                font.family: appFont.name
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+                Layout.bottomMargin: 2
+            }
+
+            Label {
+                text: "检测到列表排序修改，请选择："
+                font.family: appFont.name
+                font.pixelSize: 14
+                color: "#aaaaaa"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                spacing: 10
+
+                // 丢弃（不保存，直接切换）
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 38; radius: 6
+                    color: saveDiscardMA.containsMouse ? "#3A3A3A" : "#2A2A2A"
+                    border.color: "#3A3A3A"; border.width: 1
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Label {
+                        anchors.centerIn: parent
+                        text: "丢弃排序并切换"
+                        font.family: appFont.name; font.pixelSize: 14
+                        color: "#cccccc"
+                    }
+                    MouseArea {
+                        id: saveDiscardMA; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: mainWindow.applySortDirect(mainWindow._pendingSortMode)
+                    }
+                }
+
+                // 保存新排序（打开新建窗口）
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 38; radius: 6
+                    color: saveNewMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Label {
+                        anchors.centerIn: parent
+                        text: "保存新排序"
+                        font.family: appFont.name; font.pixelSize: 14
+                        color: "#eee"
+                    }
+                    MouseArea {
+                        id: saveNewMA; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            saveSortDialog.close()
+                            mainWindow.openCreateSortDialog()
+                        }
+                    }
+                }
+
+                // 覆盖现有排序（没有当前自定义排序时置灰，只能新建）
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 38; radius: 6
+                    color: saveOverwriteMA.containsMouse && saveOverwriteMA.enabled ? "#333333" : "#2A2A2A"
+                    border.color: "#3A3A3A"; border.width: 1
+                    opacity: mainWindow.currentCustomSortIndex() >= 0 ? 1.0 : 0.45
+                    Behavior on opacity { NumberAnimation { duration: 120 } }
+                    Label {
+                        anchors.centerIn: parent
+                        text: "覆盖现有排序"
+                        font.family: appFont.name; font.pixelSize: 14
+                        color: mainWindow.currentCustomSortIndex() >= 0 ? "#cccccc" : "#777777"
+                    }
+                    MouseArea {
+                        id: saveOverwriteMA
+                        anchors.fill: parent; hoverEnabled: true
+                        enabled: mainWindow.currentCustomSortIndex() >= 0
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: mainWindow.doOverwriteSort(mainWindow._pendingSortMode)
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 12
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: saveCancelMA.containsMouse ? "#333333" : "#1E1E1E"
+                    border.color: "#3A3A3A"; border.width: 1
+                    Label { text: "取消"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: saveCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        // 取消：不丢弃不保存，关闭弹窗继续等待用户处理
+                        onClicked: saveSortDialog.close()
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- 新建排序弹窗（设置排序名称） ----
+    Dialog {
+        id: createSortDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 340
+        padding: 28
+
+        Overlay.modal: Rectangle { color: "#40000000" }
+
+        background: Rectangle {
+            color: "#222222"
+            radius: 10
+            border.color: "#3A3A3A"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+
+            Label {
+                text: "新建排序"
+                font.family: appFont.name
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+                Layout.bottomMargin: 4
+            }
+
+            TextField {
+                id: createSortField
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                leftPadding: 12; rightPadding: 12
+                placeholderText: "输入排序名称"
+                placeholderTextColor: "#aaa"
+                font.family: appFont.name
+                font.pixelSize: 15
+                color: "#ddd"
+                background: Rectangle {
+                    radius: 6
+                    color: "#1E1E1E"
+                    border.color: "#3A3A3A"
+                    border.width: 1
+                }
+                onTextChanged: createSortHint.text = ""
+                Keys.onReturnPressed: doSaveNewSort()
+                Keys.onEnterPressed: doSaveNewSort()
+            }
+
+            Label {
+                id: createSortHint
+                text: ""
+                font.family: appFont.name; font.pixelSize: 11; color: "#cc5555"
+                Layout.topMargin: -4
+                visible: text.length > 0
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 12
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: createSortCancelMA.containsMouse ? "#333333" : "#1E1E1E"
+                    border.color: "#3A3A3A"; border.width: 1
+                    Label { text: "取消"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: createSortCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: createSortDialog.close()
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: createSortConfirmMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                    Label { text: "确定"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#ddd" }
+                    MouseArea {
+                        id: createSortConfirmMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: doSaveNewSort()
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- 重命名排序弹窗 ----
+    Dialog {
+        id: sortRenameDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 340
+        padding: 28
+
+        Overlay.modal: Rectangle { color: "#40000000" }
+
+        background: Rectangle {
+            color: "#222222"
+            radius: 10
+            border.color: "#3A3A3A"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 14
+
+            Label {
+                text: "重命名排序"
+                font.family: appFont.name
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+                Layout.bottomMargin: 4
+            }
+
+            TextField {
+                id: sortRenameField
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                leftPadding: 12; rightPadding: 12
+                placeholderText: "输入新名称"
+                placeholderTextColor: "#aaa"
+                font.family: appFont.name
+                font.pixelSize: 15
+                color: "#ddd"
+                background: Rectangle {
+                    radius: 6
+                    color: "#1E1E1E"
+                    border.color: "#3A3A3A"
+                    border.width: 1
+                }
+                onTextChanged: sortRenameHint.text = ""
+                Keys.onReturnPressed: doRenameSort()
+                Keys.onEnterPressed: doRenameSort()
+            }
+
+            Label {
+                id: sortRenameHint
+                text: ""
+                font.family: appFont.name; font.pixelSize: 11; color: "#cc5555"
+                Layout.topMargin: -4
+                visible: text.length > 0
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 12
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: sortRenameCancelMA.containsMouse ? "#333333" : "#1E1E1E"
+                    border.color: "#3A3A3A"; border.width: 1
+                    Label { text: "取消"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#999" }
+                    MouseArea {
+                        id: sortRenameCancelMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: { sortRenameField.text = ""; sortRenameDialog.close() }
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 76; radius: 6
+                    color: sortRenameConfirmMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                    Label { text: "确定"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#ddd" }
+                    MouseArea {
+                        id: sortRenameConfirmMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: doRenameSort()
                     }
                 }
             }

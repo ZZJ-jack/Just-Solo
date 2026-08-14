@@ -28,6 +28,9 @@ ColumnLayout {
     // ---- 定制化接口 ----
     // 覆盖点击行为：function(index) { ... }。设了之后不走默认点击逻辑
     property var onLeftClick: undefined
+    // 覆盖拖拽排序行为：function(fromIdx, toIdx) { ... }。设了之后不走默认 reorderSong
+    // （排序模式下手动拖拽由外层接管，用于弹窗询问保存/覆盖）
+    property var onReorderRequest: undefined
     // 空列表提示文本
     property string emptyHint: "还没有音乐"
     property string emptySubHint: "点击上方「添加音乐」导入本地文件"
@@ -35,6 +38,13 @@ ColumnLayout {
     property var contextMenuExtra: []
     // 是否显示默认右键菜单项（收藏/取消收藏、删除此歌曲）
     property bool showDefaultContextMenu: true
+
+    // ---- 排序修改提示行（手动拖拽后显示，等待用户选择覆盖/新建） ----
+    property bool showReorderBanner: false
+    property bool reorderBannerCanOverwrite: false   // 无现有自定义排序时置灰
+    property var onBannerOverwrite: undefined
+    property var onBannerCreate: undefined
+    property string bannerText: "检测到列表排序修改，请选择："
 
     property int _pendingIndex: -1
 
@@ -175,6 +185,77 @@ ColumnLayout {
         switchSourceDialog.open()
     }
 
+    // ---- 排序修改提示行（手动拖拽后出现，等待用户选择覆盖/新建） ----
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 36
+        visible: root.showReorderBanner
+        color: "#2A2A38"
+        border.color: "#3B82F6"
+        border.width: 1
+        radius: 6
+        Layout.leftMargin: 8; Layout.rightMargin: 8
+        Layout.topMargin: 6
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 14; anchors.rightMargin: 8
+            spacing: 8
+
+            Label {
+                text: root.bannerText
+                font.family: root.fontFamily
+                font.pixelSize: 13
+                color: "#cccccc"
+                Layout.fillWidth: true
+            }
+
+            // 覆盖（左边）— 无现有自定义排序时置灰
+            Rectangle {
+                Layout.preferredHeight: 24; Layout.preferredWidth: 56; radius: 5
+                color: root.reorderBannerCanOverwrite
+                      ? (bannerOverwriteMA.containsMouse ? "#5B9EF6" : "#3B82F6")
+                      : "#2A2A2A"
+                border.color: root.reorderBannerCanOverwrite ? "#3B82F6" : "#3A3A3A"
+                border.width: 1
+                opacity: root.reorderBannerCanOverwrite ? 1.0 : 0.5
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Label {
+                    anchors.centerIn: parent
+                    text: "覆盖"
+                    font.family: root.fontFamily; font.pixelSize: 12
+                    color: root.reorderBannerCanOverwrite ? "#eee" : "#888"
+                }
+                MouseArea {
+                    id: bannerOverwriteMA
+                    anchors.fill: parent; hoverEnabled: true
+                    enabled: root.reorderBannerCanOverwrite
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: { if (root.onBannerOverwrite) root.onBannerOverwrite() }
+                }
+            }
+
+            // 新建（右边）
+            Rectangle {
+                Layout.preferredHeight: 24; Layout.preferredWidth: 56; radius: 5
+                color: bannerCreateMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Label {
+                    anchors.centerIn: parent
+                    text: "新建"
+                    font.family: root.fontFamily; font.pixelSize: 12
+                    color: "#eee"
+                }
+                MouseArea {
+                    id: bannerCreateMA
+                    anchors.fill: parent; hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: { if (root.onBannerCreate) root.onBannerCreate() }
+                }
+            }
+        }
+    }
+
     // ---- 歌曲列表 ----
     ListView {
         id: musicListView
@@ -294,7 +375,12 @@ ColumnLayout {
                     var savedY = musicListView.contentY
                     root._savedContentY = savedY
                     root._suppressAutoScroll = true
-                    root.reorderSong(finalFrom, finalTo)
+                    if (root.onReorderRequest) {
+                        // 排序模式：拖拽顺序由外层接管（弹窗询问保存/覆盖）
+                        root.onReorderRequest(finalFrom, finalTo)
+                    } else {
+                        root.reorderSong(finalFrom, finalTo)
+                    }
                 }
             }
 

@@ -5,6 +5,7 @@
 #include <QUrl>
 #include <QStandardPaths>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QImage>
 #include <QImageReader>
 #include <QTimer>
@@ -236,6 +237,7 @@ static QVariantMap buildTrack(const QString &filePath)
             track["cover"]        = cover;
             track["quality"]      = guessQualityFromExtension(fi);
             track["_infoInferred"] = !meta.tagFound;  // 无标签 → 歌手/歌名来自文件名推断
+            track["addTime"]      = QDateTime::currentMSecsSinceEpoch();  // 添加时间（排序用）
             return track;
         }
     }
@@ -315,6 +317,7 @@ static QVariantMap buildTrack(const QString &filePath)
         track["cover"] = ext.isEmpty() ? "" : QUrl::fromLocalFile(ext).toString();
     }
 
+    track["addTime"] = QDateTime::currentMSecsSinceEpoch();  // 添加时间（排序用）
     return track;
 }
 
@@ -380,6 +383,9 @@ MusicManager::MusicManager(QObject *parent)
     });
     // 嵌入式歌词提取
     connect(m_audioEngine, &AudioEngine::durationChanged, this, &MusicManager::onMetaDataChanged);
+
+    // 退出时保存播放列表与当前播放歌曲（覆盖所有正常退出路径）
+    connect(qApp, &QCoreApplication::aboutToQuit, this, &MusicManager::savePlaylistState);
 }
 
 // ============================================================
@@ -398,6 +404,8 @@ void MusicManager::setUseCache(bool use) {
     loadFavorites();
     loadHistory();
     loadCustomPlaylists();
+    loadSortModes();
+    loadPlaylistState();
     // 历史版本封面缓存是全尺寸（可达 36MB/张），启动后异步压缩到 512px 内
     if (use)
         QTimer::singleShot(0, this, &MusicManager::shrinkLegacyCoverCache);
@@ -874,6 +882,7 @@ void MusicManager::loadCache() {
     if (!m_useCache || m_cacheDir.isEmpty()) return;
     QVariantList list = readVariantListFromFile(m_cacheDir + "/playlist_cache.json");
     bool removed = false;
+    bool migrated = false;   // 旧版本缓存缺 addTime → 补写后回写缓存（自动迁移）
     for (const QVariant &item : list) {
         QVariantMap map = item.toMap();
         // 文件已被删除/移动 → 跳过
@@ -881,9 +890,14 @@ void MusicManager::loadCache() {
             removed = true;
             continue;
         }
+        // 旧版本缓存没有添加时间 → 用库内顺序兜底，保证「添加时间」排序稳定
+        if (!map.contains("addTime")) {
+            map["addTime"] = m_library.size();
+            migrated = true;
+        }
         m_library.append(map);
     }
-    if (removed) saveCache();
+    if (removed || migrated) saveCache();
     // 播放列表初始化为音乐库的副本
     m_playlist = m_library;
     // 播放列表未恢复时也同步（兜底）
@@ -936,6 +950,175 @@ void MusicManager::loadCustomPlaylists() {
     m_customPlaylists = readVariantListFromFile(m_cacheDir + "/custom_playlists.json");
     if (!m_customPlaylists.isEmpty())
         emit customPlaylistsChanged();
+}
+
+// ---- 自定义排序缓存 ----
+
+void MusicManager::saveSortModes() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    writeVariantListToFile(m_sortModes, m_cacheDir + "/sort_modes.json");
+}
+
+void MusicManager::loadSortModes() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    m_sortModes = readVariantListFromFile(m_cacheDir + "/sort_modes.json");
+    if (!m_sortModes.isEmpty())
+        emit sortModesChanged();
+}
+
+// ---- 播放列表状态缓存（退出保存 / 启动恢复）----
+// 记录上次退出时的播放列表（路径顺序）与当前播放歌曲，
+// 旧版本没有该缓存时播放列表与当前播放歌曲置空。
+
+void MusicManager::savePlaylistState() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    // 保存「退出时正在播放的播放列表」：以当前播放来源为准
+    // （收藏/历史/自定义歌单/播放列表），current 为正在播放的歌曲
+    const QVariantList &list = currentPlaylist();
+    QJsonObject obj;
+    QJsonArray arr;
+    for (const QVariant &item : list) {
+        QString p = item.toMap()["path"].toString();
+        if (!p.isEmpty())
+            arr.append(p);
+    }
+    obj["playlist"] = arr;
+    QString current;
+    if (m_currentIndex >= 0 && m_currentIndex < list.size())
+        current = list[m_currentIndex].toMap()["path"].toString();
+    obj["current"] = current;
+    QFile file(m_cacheDir + "/playlist_state.json");
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(QJsonDocument(obj).toJson());
+        file.close();
+    }
+}
+
+void MusicManager::loadPlaylistState() {
+    if (!m_useCache || m_cacheDir.isEmpty()) return;
+    QFile file(m_cacheDir + "/playlist_state.json");
+    if (!file.exists()) {
+        // 旧版本没有播放列表缓存 → 播放列表与当前播放歌曲置空
+        m_playlist.clear();
+        m_currentIndex = -1;
+        emit playlistChanged();
+        emit currentIndexChanged();
+        return;
+    }
+    if (!file.open(QIODevice::ReadOnly)) return;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    if (!doc.isObject()) return;
+    const QJsonObject obj = doc.object();
+
+    // 按路径从音乐库重建播放列表（保持保存时的顺序，跳过已删除/不在库中的歌曲）
+    QVariantList newPlaylist;
+    QStringList seen;
+    const QJsonArray arr = obj.value("playlist").toArray();
+    for (const QJsonValue &v : arr) {
+        const QString p = v.toString();
+        if (p.isEmpty() || seen.contains(p)) continue;
+        for (const QVariant &item : m_library) {
+            if (item.toMap()["path"].toString() == p) {
+                newPlaylist.append(item);
+                seen.append(p);
+                break;
+            }
+        }
+    }
+    m_playlist = newPlaylist;
+
+    // 恢复退出前播放的歌曲（找不到则从音乐库补入队列末尾）
+    m_currentIndex = -1;
+    const QString current = obj.value("current").toString();
+    if (!current.isEmpty()) {
+        for (int i = 0; i < m_playlist.size(); i++) {
+            if (m_playlist[i].toMap()["path"].toString() == current) {
+                m_currentIndex = i;
+                break;
+            }
+        }
+        if (m_currentIndex < 0) {
+            // 当前歌曲不在播放列表中（退出前在收藏/历史等源播放）→ 从音乐库补入队列
+            for (const QVariant &item : m_library) {
+                if (item.toMap()["path"].toString() == current) {
+                    m_playlist.append(item);
+                    m_currentIndex = m_playlist.size() - 1;
+                    break;
+                }
+            }
+        }
+    }
+    emit playlistChanged();
+    emit currentIndexChanged();
+    if (m_currentIndex >= 0)
+        updateCurrentTrack();  // 同步封面/歌词等界面信息（不自动播放）
+}
+
+// ---- 自定义排序操作 ----
+
+bool MusicManager::isValidSortName(const QString &name) const {
+    // 与歌单名同一校验规则：中英文 + 数字 + - + _
+    return isValidPlaylistName(name);
+}
+
+void MusicManager::createSortMode(const QString &name, const QVariantList &paths) {
+    QString n = name.trimmed();
+    if (!isValidSortName(n)) return;
+    // 检查重名
+    for (const QVariant &s : m_sortModes) {
+        if (s.toMap()["name"].toString() == n) return;
+    }
+    QVariantMap sort;
+    sort["name"] = n;
+    // 仅保留有效的文件路径（文件已删除的路径直接剔除）
+    QVariantList order;
+    for (const QVariant &p : paths) {
+        QString path = p.toString();
+        if (path.isEmpty()) continue;
+        order.append(path);
+    }
+    sort["order"] = order;
+    m_sortModes.append(sort);
+    saveSortModes();
+    emit sortModesChanged();
+}
+
+void MusicManager::updateSortModeOrder(int index, const QVariantList &paths) {
+    if (index < 0 || index >= m_sortModes.size()) return;
+    QVariantMap sort = m_sortModes[index].toMap();
+    QVariantList order;
+    for (const QVariant &p : paths) {
+        QString path = p.toString();
+        if (path.isEmpty()) continue;
+        order.append(path);
+    }
+    sort["order"] = order;
+    m_sortModes[index] = sort;
+    saveSortModes();
+    emit sortModesChanged();
+}
+
+void MusicManager::renameSortMode(int index, const QString &newName) {
+    QString n = newName.trimmed();
+    if (index < 0 || index >= m_sortModes.size() || n.isEmpty()) return;
+    if (!isValidSortName(n)) return;
+    // 检查重名（排除自己）
+    for (int i = 0; i < m_sortModes.size(); i++) {
+        if (i != index && m_sortModes[i].toMap()["name"].toString() == n) return;
+    }
+    QVariantMap sort = m_sortModes[index].toMap();
+    sort["name"] = n;
+    m_sortModes[index] = sort;
+    saveSortModes();
+    emit sortModesChanged();
+}
+
+void MusicManager::deleteSortMode(int index) {
+    if (index < 0 || index >= m_sortModes.size()) return;
+    m_sortModes.removeAt(index);
+    saveSortModes();
+    emit sortModesChanged();
 }
 
 // ---- 自定义播放列表操作 ----
@@ -1481,6 +1664,7 @@ void MusicManager::playIndex(int index) {
     m_audioEngine->play();
     emit currentIndexChanged();
     addToHistory(track);
+    savePlaylistState();   // 每次播放都更新缓存（崩溃时也能恢复最近播放的列表与歌曲）
 }
 
 void MusicManager::playFromLibrary(int libraryIndex) {
@@ -1521,6 +1705,7 @@ void MusicManager::addToPlaylist(const QVariantMap &track) {
     }
     m_playlist.append(track);
     saveCache();
+    savePlaylistState();
     emit playlistChanged();
 }
 
@@ -1541,6 +1726,7 @@ void MusicManager::removeFromPlaylist(const QVariantMap &track) {
             } else if (m_playlistSource == 0 && m_currentIndex > i) {
                 m_currentIndex--;
             }
+            savePlaylistState();
             emit playlistChanged();
             return;
         }
@@ -1726,14 +1912,16 @@ void MusicManager::moveSongInPlaylist(int from, int to) {
         }
     }
 
-    // 当 source 为 0 时，播放列表即音乐库，同步更新
-    if (m_playlistSource == 0) {
+    // 播放列表与音乐库等长（即全量库队列）时同步到库；
+    // 独立队列（恢复的缓存/增删过）拖拽仅调整队列，避免覆盖或截断音乐库
+    if (m_playlistSource == 0 && m_playlist.size() == m_library.size()) {
         m_library = m_playlist;
         saveCache();
         emit libraryChanged();
     }
 
     saveCache();
+    savePlaylistState();   // 队列顺序变化立即落盘（防崩溃丢失）
     emit playlistChanged();
 }
 
@@ -1761,12 +1949,10 @@ void MusicManager::shutdown() {
 }
 
 void MusicManager::next() {
-    // 所有音乐模式：确保 m_playlist 与音乐库同步（防止被自定义列表覆盖）
-    if (m_playlistSource == 0) {
-        if (m_playlist.size() != m_library.size()) {
-            m_playlist = m_library;
-            emit playlistChanged();
-        }
+    // 队列为空时回退到音乐库（兜底）；独立播放列表不再被强制重置为全库
+    if (m_playlistSource == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {
+        m_playlist = m_library;
+        emit playlistChanged();
     }
     QVariantList &list = currentPlaylist();
     if (list.isEmpty()) return;
@@ -1789,12 +1975,10 @@ void MusicManager::next() {
 }
 
 void MusicManager::previous() {
-    // 所有音乐模式：确保 m_playlist 与音乐库同步
-    if (m_playlistSource == 0) {
-        if (m_playlist.size() != m_library.size()) {
-            m_playlist = m_library;
-            emit playlistChanged();
-        }
+    // 队列为空时回退到音乐库（兜底）；独立播放列表不再被强制重置为全库
+    if (m_playlistSource == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {
+        m_playlist = m_library;
+        emit playlistChanged();
     }
     QVariantList &list = currentPlaylist();
     if (list.isEmpty()) return;
