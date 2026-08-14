@@ -1397,7 +1397,72 @@ Window {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    Item { Layout.fillWidth: true }
+                    // ---- 排序修改提示行（标题与右侧按钮之间；不占歌曲列表空间） ----
+                    RowLayout {
+                        id: sortBannerRow
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Layout.alignment: Qt.AlignVCenter
+                        visible: mainWindow._manualSortPending
+                            && (currentMenu === "allMusic" || currentMenu === "customPlaylist" || currentMenu === "favorite")
+
+                        Label {
+                            text: "检测到列表排序修改，请选择："
+                            font.family: appFont.name; font.pixelSize: 12; color: "#cccccc"
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                            horizontalAlignment: Text.AlignRight
+                        }
+                        // 覆盖（无现有自定义排序时置灰，只能新建）
+                        Rectangle {
+                            Layout.preferredHeight: 24; Layout.preferredWidth: 52; radius: 5
+                            color: headerOverwriteMA.enabled
+                                  ? (headerOverwriteMA.containsMouse ? "#5B9EF6" : "#3B82F6")
+                                  : "#2A2A2A"
+                            border.color: headerOverwriteMA.enabled ? "#3B82F6" : "#3A3A3A"
+                            border.width: 1
+                            opacity: headerOverwriteMA.enabled ? 1.0 : 0.5
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Label {
+                                anchors.centerIn: parent
+                                text: "覆盖"
+                                font.family: appFont.name; font.pixelSize: 12
+                                color: headerOverwriteMA.enabled ? "#eee" : "#888"
+                            }
+                            MouseArea {
+                                id: headerOverwriteMA
+                                anchors.fill: parent; hoverEnabled: true
+                                enabled: mainWindow.currentCustomSortIndex() >= 0
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: mainWindow.doOverwriteSort()
+                            }
+                        }
+                        // 新建
+                        Rectangle {
+                            Layout.preferredHeight: 24; Layout.preferredWidth: 52; radius: 5
+                            color: headerCreateMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Label {
+                                anchors.centerIn: parent
+                                text: "新建"
+                                font.family: appFont.name; font.pixelSize: 12
+                                color: "#eee"
+                            }
+                            MouseArea {
+                                id: headerCreateMA
+                                anchors.fill: parent; hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: mainWindow.openCreateSortDialog()
+                            }
+                        }
+                    }
+
+                    // 排序提示行隐藏时占位（互斥，保证提示行贴右侧按钮）
+                    Item {
+                        Layout.fillWidth: true
+                        visible: !sortBannerRow.visible
+                    }
 
                     // ---- 清除播放列表按钮（仅播放列表页） ----
                     Rectangle {
@@ -1773,11 +1838,6 @@ Window {
                         onReorderRequest: function(fromIdx, toIdx) {
                             mainWindow.handleManualReorder(fromIdx, toIdx, allMusicPage.songList)
                         }
-                        // 排序修改提示行（手动拖拽后出现）
-                        showReorderBanner: mainWindow._manualSortPending
-                        reorderBannerCanOverwrite: mainWindow.currentCustomSortIndex() >= 0
-                        onBannerOverwrite: function() { mainWindow.doOverwriteSort() }
-                        onBannerCreate: function() { mainWindow.openCreateSortDialog() }
                     }
                     PlaylistPage {
                         anchors.fill: parent
@@ -1801,11 +1861,6 @@ Window {
                         onReorderRequest: function(fromIdx, toIdx) {
                             mainWindow.handleManualReorder(fromIdx, toIdx, favoritePage.songList)
                         }
-                        // 排序修改提示行（手动拖拽后出现）
-                        showReorderBanner: mainWindow._manualSortPending
-                        reorderBannerCanOverwrite: mainWindow.currentCustomSortIndex() >= 0
-                        onBannerOverwrite: function() { mainWindow.doOverwriteSort() }
-                        onBannerCreate: function() { mainWindow.openCreateSortDialog() }
                     }
                     HistoryPage {
                         anchors.fill: parent
@@ -3364,7 +3419,33 @@ Window {
                     }
                 }
 
-                // 保存新排序（打开新建窗口）
+                // 覆盖现有排序（中间，蓝色；没有当前自定义排序时置灰，只能新建）
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 38; radius: 6
+                    color: saveOverwriteMA.enabled
+                          ? (saveOverwriteMA.containsMouse ? "#5B9EF6" : "#3B82F6")
+                          : "#2A2A2A"
+                    border.color: saveOverwriteMA.enabled ? "#3B82F6" : "#3A3A3A"
+                    border.width: 1
+                    opacity: saveOverwriteMA.enabled ? 1.0 : 0.45
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                    Label {
+                        anchors.centerIn: parent
+                        text: "覆盖现有排序"
+                        font.family: appFont.name; font.pixelSize: 14
+                        color: saveOverwriteMA.enabled ? "#eee" : "#888"
+                    }
+                    MouseArea {
+                        id: saveOverwriteMA
+                        anchors.fill: parent; hoverEnabled: true
+                        enabled: mainWindow.currentCustomSortIndex() >= 0
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: mainWindow.doOverwriteSort(mainWindow._pendingSortMode)
+                    }
+                }
+
+                // 保存新排序（下移，打开新建窗口）
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 38; radius: 6
@@ -3383,29 +3464,6 @@ Window {
                             saveSortDialog.close()
                             mainWindow.openCreateSortDialog()
                         }
-                    }
-                }
-
-                // 覆盖现有排序（没有当前自定义排序时置灰，只能新建）
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 38; radius: 6
-                    color: saveOverwriteMA.containsMouse && saveOverwriteMA.enabled ? "#333333" : "#2A2A2A"
-                    border.color: "#3A3A3A"; border.width: 1
-                    opacity: mainWindow.currentCustomSortIndex() >= 0 ? 1.0 : 0.45
-                    Behavior on opacity { NumberAnimation { duration: 120 } }
-                    Label {
-                        anchors.centerIn: parent
-                        text: "覆盖现有排序"
-                        font.family: appFont.name; font.pixelSize: 14
-                        color: mainWindow.currentCustomSortIndex() >= 0 ? "#cccccc" : "#777777"
-                    }
-                    MouseArea {
-                        id: saveOverwriteMA
-                        anchors.fill: parent; hoverEnabled: true
-                        enabled: mainWindow.currentCustomSortIndex() >= 0
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: mainWindow.doOverwriteSort(mainWindow._pendingSortMode)
                     }
                 }
             }

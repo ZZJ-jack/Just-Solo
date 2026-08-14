@@ -39,13 +39,6 @@ ColumnLayout {
     // 是否显示默认右键菜单项（收藏/取消收藏、删除此歌曲）
     property bool showDefaultContextMenu: true
 
-    // ---- 排序修改提示行（手动拖拽后显示，等待用户选择覆盖/新建） ----
-    property bool showReorderBanner: false
-    property bool reorderBannerCanOverwrite: false   // 无现有自定义排序时置灰
-    property var onBannerOverwrite: undefined
-    property var onBannerCreate: undefined
-    property string bannerText: "检测到列表排序修改，请选择："
-
     property int _pendingIndex: -1
 
     // ---- 右键菜单状态 ----
@@ -183,77 +176,6 @@ ColumnLayout {
         dialogMode = mode
         dialogTarget = target
         switchSourceDialog.open()
-    }
-
-    // ---- 排序修改提示行（手动拖拽后出现，等待用户选择覆盖/新建） ----
-    Rectangle {
-        Layout.fillWidth: true
-        Layout.preferredHeight: 36
-        visible: root.showReorderBanner
-        color: "#2A2A38"
-        border.color: "#3B82F6"
-        border.width: 1
-        radius: 6
-        Layout.leftMargin: 8; Layout.rightMargin: 8
-        Layout.topMargin: 6
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 14; anchors.rightMargin: 8
-            spacing: 8
-
-            Label {
-                text: root.bannerText
-                font.family: root.fontFamily
-                font.pixelSize: 13
-                color: "#cccccc"
-                Layout.fillWidth: true
-            }
-
-            // 覆盖（左边）— 无现有自定义排序时置灰
-            Rectangle {
-                Layout.preferredHeight: 24; Layout.preferredWidth: 56; radius: 5
-                color: root.reorderBannerCanOverwrite
-                      ? (bannerOverwriteMA.containsMouse ? "#5B9EF6" : "#3B82F6")
-                      : "#2A2A2A"
-                border.color: root.reorderBannerCanOverwrite ? "#3B82F6" : "#3A3A3A"
-                border.width: 1
-                opacity: root.reorderBannerCanOverwrite ? 1.0 : 0.5
-                Behavior on color { ColorAnimation { duration: 120 } }
-                Label {
-                    anchors.centerIn: parent
-                    text: "覆盖"
-                    font.family: root.fontFamily; font.pixelSize: 12
-                    color: root.reorderBannerCanOverwrite ? "#eee" : "#888"
-                }
-                MouseArea {
-                    id: bannerOverwriteMA
-                    anchors.fill: parent; hoverEnabled: true
-                    enabled: root.reorderBannerCanOverwrite
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: { if (root.onBannerOverwrite) root.onBannerOverwrite() }
-                }
-            }
-
-            // 新建（右边）
-            Rectangle {
-                Layout.preferredHeight: 24; Layout.preferredWidth: 56; radius: 5
-                color: bannerCreateMA.containsMouse ? "#5B9EF6" : "#3B82F6"
-                Behavior on color { ColorAnimation { duration: 120 } }
-                Label {
-                    anchors.centerIn: parent
-                    text: "新建"
-                    font.family: root.fontFamily; font.pixelSize: 12
-                    color: "#eee"
-                }
-                MouseArea {
-                    id: bannerCreateMA
-                    anchors.fill: parent; hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: { if (root.onBannerCreate) root.onBannerCreate() }
-                }
-            }
-        }
     }
 
     // ---- 歌曲列表 ----
