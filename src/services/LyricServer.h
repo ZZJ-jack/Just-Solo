@@ -51,6 +51,7 @@ private slots:
 private:
     void broadcast(const QByteArray &payload);
     QByteArray buildInitPayload() const;
+    QByteArray buildSpectrumPayload() const;  // 构建一帧 spectrum
     void sendProgress();         // 构建并广播一帧 progress
     void sendSpectrum();         // 构建并广播一帧 spectrum
 
