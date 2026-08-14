@@ -100,13 +100,13 @@ Rectangle {
                             Layout.fillWidth: true
                             Label { text: "软件版本"; font.family: updateFont.name; font.pixelSize: 15; color: "#ffffff"; Layout.preferredWidth: 72 }
                             Item { Layout.fillWidth: true }
-                            Label { text: APP_VERSION; font.family: updateFont.name; font.pixelSize: 15; font.bold: true; color: "#ffffff" }
+                            Label { text: APP_VERSION; font.family: updateFont.name; font.pixelSize: 15; font.bold: true; color: "#3B82F6" }
                         }
                         RowLayout {
                             Layout.fillWidth: true
                             Label { text: "构建版本"; font.family: updateFont.name; font.pixelSize: 13; color: "#777777"; Layout.preferredWidth: 72 }
                             Item { Layout.fillWidth: true }
-                            Label { text: BUILD_VERSION; font.family: updateFont.name; font.pixelSize: 13; color: "#ffffff" }
+                            Label { text: BUILD_VERSION; font.family: updateFont.name; font.pixelSize: 13; color: "#3B82F6" }
                         }
                     }
                 }
@@ -1369,8 +1369,8 @@ Rectangle {
         visible: settingsSubMenu === "about"
         Label { text: "Just Solo — 纯粹轻量的本地音乐播放器"; font.family: fontFamily; font.pixelSize: 17; color: "#ffffff" }
         Item { Layout.preferredHeight: 12 }
-        Label { text: "软件版本: " + (typeof APP_VERSION !== "undefined" ? APP_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#777777" }
-        Label { text: "构建版本: " + (typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#777777" }
+        Label { text: "软件版本: " + (typeof APP_VERSION !== "undefined" ? APP_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#3B82F6" }
+        Label { text: "构建版本: " + (typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : "未知"); font.family: fontFamily; font.pixelSize: 13; color: "#3B82F6" }
         Item { Layout.preferredHeight: 12 }
         Label { text: "作者: ZZJ-JACK"; font.family: fontFamily; font.pixelSize: 13; color: "#ffffff" }
         Label { text: `<a href="https://zzjjack.us.kg">https://zzjjack.us.kg</a>`; textFormat: Text.RichText; font.family: fontFamily; font.pixelSize: 13; color: "#3B82F6"; Layout.topMargin: 4; onLinkActivated: Qt.openUrlExternally(link) }
@@ -1427,7 +1427,7 @@ Rectangle {
                     text: lyricServer && lyricServer.running
                           ? "地址: ws://127.0.0.1:47290  |  协议版本: " + LYRICSERVER_VERSION
                           : "端口 47290 被占用或启动失败"
-                    font.family: fontFamily; font.pixelSize: 12; color: "#777777"
+                    font.family: fontFamily; font.pixelSize: 12; color: '#3B82F6'
                 }
             }
         }
@@ -1492,7 +1492,7 @@ Rectangle {
                     // 地址和端口
                     Label {
                         text: "地址: " + modelData.address + ":" + modelData.port
-                        font.family: fontFamily; font.pixelSize: 12; color: "#888"
+                        font.family: fontFamily; font.pixelSize: 12; color: "#ffffff"
                     }
                 }
             }

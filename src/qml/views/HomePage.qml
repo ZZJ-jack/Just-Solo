@@ -18,6 +18,9 @@ Item {
     // 封面墙数据源（当前播放/查看的列表）：由 main.qml 按播放来源传入
     // （注意 root.sourceList 属性只读 m_playlist，收藏/历史播放时≠实际播放列表，勿直接用）
     property var sourceList: []
+    // 原始（未排序）列表：与 sourceList 同内容仅顺序不同（当前排序模式已重排 sourceList）。
+    // 播放时把 sourceList 的显示下标映射回播放列表真实下标再调用 playIndex
+    property var rawSourceList: []
     // 当前列表名（收藏/历史/自定义歌单名/播放列表），由 main.qml 按播放来源传入
     property string listName: ""
 
@@ -93,6 +96,20 @@ Item {
 
         // 播放/暂停指定下标的歌曲（与封面点击行为一致，下标为当前播放列表下标）
         property double lastToggle: 0   // 方块/首圆点击防抖时间戳
+
+        // 把排序后的显示下标映射回播放列表真实下标（在 rawSourceList 中按路径定位，未找到返回 -1）
+        function toRealIndex(sortedIdx) {
+            if (sortedIdx < 0) return -1
+            var song = root.sourceList[sortedIdx]
+            if (!song) return -1
+            var path = song.path || ""
+            var raw = root.rawSourceList || []
+            for (var i = 0; i < raw.length; i++) {
+                if ((raw[i].path || "") === path) return i
+            }
+            return -1
+        }
+
         function toggleOrPlay(idx) {
             if (idx < 0) return
             // 防抖：0.5s 内重复点击直接忽略（防止快速双击导致播放/暂停抖动）
@@ -104,7 +121,9 @@ Item {
                 if (musicManager.isPlaying) musicManager.pause()
                 else musicManager.play()
             } else {
-                musicManager.playIndex(idx)
+                // sourceList 已按排序模式重排，需映射回播放列表真实下标再播放
+                var realIdx = homeCoverStrip.toRealIndex(idx)
+                if (realIdx >= 0) musicManager.playIndex(realIdx)
             }
         }
 
@@ -268,7 +287,8 @@ Item {
             spacing: homeCoverStrip.circleSpacing
             transform: Translate { id: circleShift; x: 0 }
 
-            property int shiftTarget: -1   // 动画结束后要播放的歌曲真实下标
+            property int shiftTarget: -1   // 动画结束后窗口起点（sourceList 显示下标）
+            property int shiftPlayTarget: -1   // 动画结束后要播放的歌曲真实下标（-1=仅滑动不播放）
             property double lastCircleClick: 0   // 封面圆点击防抖时间戳（0.5s 内忽略重复点击）
             property double _lastCircleClickAt: 0  // 点击圆时间戳：其引发的切歌不再触发切歌滑动（避免多滑一格）
             // 封面墙"显示起点"：delegate 绑定它而非 blockSongIndex——
@@ -320,10 +340,12 @@ Item {
                     if (!circleShiftAnim.running) {
                         circleShift.x = 0
                         var t = circlesRow.shiftTarget
+                        var p = circlesRow.shiftPlayTarget
                         circlesRow.shiftTarget = -1   // 消费目标，防止被 stop() 误触发重复播放
+                        circlesRow.shiftPlayTarget = -1
                         if (t >= 0) {
                             circlesRow.commitDisplay(t)  // 新窗口以目标歌为起点
-                            musicManager.playIndex(t)
+                            if (p >= 0) musicManager.playIndex(p)   // 用真实下标播放
                         }
                     }
                 }
@@ -419,7 +441,8 @@ Item {
                                 homeCoverStrip.toggleOrPlay(realIndex)
                             } else {
                                 // 点击后面的圆：动画滑到封面位置后再播放
-                                circlesRow.shiftTarget = realIndex
+                                circlesRow.shiftTarget = realIndex   // 显示下标（sourceList 排序后）
+                                circlesRow.shiftPlayTarget = homeCoverStrip.toRealIndex(realIndex)  // 真实播放下标
                                 circleShift.x = 0
                                 circleSwitchAnim.stop()   // 互斥：点击滑动打断切歌滑动
                                 circleShiftAnim.to = -index * (homeCoverStrip.roundSize + homeCoverStrip.circleSpacing)

@@ -1792,7 +1792,16 @@ Window {
                         // 封面墙跟随"当前播放/查看的列表"：
                         // playingListIndex 1=收藏 2=历史（实际播放列表是 favorites/history，playlist 属性≠）
                         // 0=音乐库、3+n=自定义列表（m_playlist 已是对应列表，playlist 属性即正确）
+                        // 显示顺序跟随对应列表页：收藏/音乐库/自定义列表按当前排序模式重排（displaySorted），
+                        // 历史页固定时间序不参与排序，保持原始顺序；播放时用 rawSourceList 映射回真实下标
                         sourceList: {
+                            var pl = musicManager.playingListIndex
+                            if (pl === 1) return mainWindow.displaySorted(musicManager.favorites)
+                            if (pl === 2) return musicManager.history
+                            return mainWindow.displaySorted(musicManager.playlist)
+                        }
+                        // 原始（未排序）列表：与 sourceList 同内容仅顺序不同，供主页把显示下标映射回播放列表真实下标
+                        rawSourceList: {
                             var pl = musicManager.playingListIndex
                             if (pl === 1) return musicManager.favorites
                             if (pl === 2) return musicManager.history
