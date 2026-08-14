@@ -52,6 +52,8 @@ class MusicManager : public QObject
     Q_PROPERTY(bool titleBarImmersiveSync READ titleBarImmersiveSync WRITE setTitleBarImmersiveSync NOTIFY titleBarImmersiveSyncChanged)
     Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool wasapiExclusive READ wasapiExclusive WRITE setWasapiExclusive NOTIFY wasapiExclusiveChanged)
+    Q_PROPERTY(bool wasapiWarnEnabled READ wasapiWarnEnabled WRITE setWasapiWarnEnabled NOTIFY wasapiWarnEnabledChanged)
+    Q_PROPERTY(bool startupCheckUpdate READ startupCheckUpdate WRITE setStartupCheckUpdate NOTIFY startupCheckUpdateChanged)
     Q_PROPERTY(QString lyricFont READ lyricFont WRITE setLyricFont NOTIFY lyricFontChanged)
     Q_PROPERTY(QString lyricFontFamily READ lyricFontFamily NOTIFY lyricFontChanged)
     Q_PROPERTY(int seekStep READ seekStep WRITE setSeekStep NOTIFY seekStepChanged)
@@ -176,6 +178,14 @@ public:
     Q_INVOKABLE void forceWasapiExclusive();   // 跳过探测强制开启独占（弹窗"强制开启"，可能导致其他音视频软件崩溃）
     Q_INVOKABLE void disableWasapiExclusive(); // 关闭独占并持久化（弹窗"关闭独占模式"）
 
+    // ---- 开启 WASAPI 独占前是否弹提示窗（默认开启） ----
+    bool wasapiWarnEnabled() const { return m_wasapiWarnEnabled; }
+    void setWasapiWarnEnabled(bool v);
+
+    // ---- 启动时自动检查更新（默认开启） ----
+    bool startupCheckUpdate() const { return m_startupCheckUpdate; }
+    void setStartupCheckUpdate(bool v);
+
     // ---- 快进 / 快退步长（秒） ----
     int seekStep() const { return m_seekStep; }
     void setSeekStep(int v);
@@ -279,6 +289,8 @@ signals:
     void titleBarImmersiveSyncChanged();
     void volumeChanged();
     void wasapiExclusiveChanged();
+    void wasapiWarnEnabledChanged();
+    void startupCheckUpdateChanged();
     void lyricFontChanged();
     void seekStepChanged();
     void wasapiExclusiveFailed();  // 开启 WASAPI 独占失败（设备被占用）：QML 应弹窗询问用户
@@ -354,6 +366,8 @@ private:
     bool m_titleBarImmersiveSync = true; // 沉浸背景时同步修改系统标题栏颜色（默认开启）
     qreal m_volume = 0.9;
     bool m_wasapiExclusive = false; // 音频输出模式: false=共享(默认), true=WASAPI 独占
+    bool m_wasapiWarnEnabled = true; // 开启 WASAPI 独占前是否弹提示窗（默认开启）
+    bool m_startupCheckUpdate = true; // 启动时自动检查更新（默认开启）
     QString m_lyricFont = QStringLiteral("builtin:HarmonyOS_Sans_SC_Regular.ttf"); // 歌词字体选择键
     int m_seekStep = 5;              // 快进/快退步长（秒），范围 1~10
     QMap<QString, QString> m_builtinFontFamilies;  // 内置字体 qrc 路径 -> 族名

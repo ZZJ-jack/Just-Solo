@@ -41,7 +41,6 @@ Rectangle {
     }
 
     function checkUpdate() {
-        checkingLabel.visible = true
         statusLabel.text = ""
         statusLabel.color = "#ffffff"
         updateChecker.checkForUpdates()
@@ -85,24 +84,55 @@ Rectangle {
             Layout.alignment: Qt.AlignTop
             spacing: 0
 
-            // 软件版本卡片
-            Rectangle {
-                Layout.fillWidth: true; Layout.maximumWidth: 520
-                Layout.preferredHeight: 80; radius: 8
-                color: "#222222"; border.color: "#3A3A3A"
-                ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 20; spacing: 6
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: "软件版本"; font.family: updateFont.name; font.pixelSize: 15; color: "#ffffff"; Layout.preferredWidth: 72 }
-                        Item { Layout.fillWidth: true }
-                        Label { text: APP_VERSION; font.family: updateFont.name; font.pixelSize: 15; font.bold: true; color: "#ffffff" }
+            // 软件版本卡片 + 启动时检查更新（横排）
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 14
+
+                // 软件版本卡片
+                Rectangle {
+                    Layout.fillWidth: true; Layout.maximumWidth: 520
+                    Layout.preferredHeight: 80; radius: 8
+                    color: "#222222"; border.color: "#3A3A3A"
+                    ColumnLayout {
+                        anchors.fill: parent; anchors.margins: 20; spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "软件版本"; font.family: updateFont.name; font.pixelSize: 15; color: "#ffffff"; Layout.preferredWidth: 72 }
+                            Item { Layout.fillWidth: true }
+                            Label { text: APP_VERSION; font.family: updateFont.name; font.pixelSize: 15; font.bold: true; color: "#ffffff" }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "构建版本"; font.family: updateFont.name; font.pixelSize: 13; color: "#777777"; Layout.preferredWidth: 72 }
+                            Item { Layout.fillWidth: true }
+                            Label { text: BUILD_VERSION; font.family: updateFont.name; font.pixelSize: 13; color: "#ffffff" }
+                        }
                     }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: "构建版本"; font.family: updateFont.name; font.pixelSize: 13; color: "#777777"; Layout.preferredWidth: 72 }
-                        Item { Layout.fillWidth: true }
-                        Label { text: BUILD_VERSION; font.family: updateFont.name; font.pixelSize: 13; color: "#ffffff" }
+                }
+
+                // 启动时检查更新
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 80; radius: 8
+                    color: "#222222"; border.color: "#3A3A3A"
+                    ColumnLayout {
+                        anchors.fill: parent; anchors.leftMargin: 20; anchors.rightMargin: 20; anchors.topMargin: 12; anchors.bottomMargin: 12; spacing: 8
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label { text: "启动时检查更新"; font.family: updateFont.name; font.pixelSize: 15; color: "#ffffff" }
+                            Item { Layout.fillWidth: true }
+                            ToggleSwitch {
+                                Layout.alignment: Qt.AlignVCenter
+                                checked: musicManager.startupCheckUpdate
+                                onToggled: musicManager.startupCheckUpdate = checked
+                            }
+                        }
+                        Label {
+                            text: "每次启动软件时自动检查是否有新版本"
+                            font.family: updateFont.name; font.pixelSize: 11; color: "#777777"
+                            wrapMode: Text.WordWrap; Layout.fillWidth: true
+                        }
                     }
                 }
             }
@@ -187,7 +217,7 @@ Rectangle {
                     id: checkingLabel
                     text: "正在检查更新…"
                     font.family: updateFont.name; font.pixelSize: 13; color: "#ffffff"
-                    visible: false
+                    visible: updateChecker.checking
                 }
 
                 Item { Layout.fillWidth: true }
@@ -362,7 +392,6 @@ Rectangle {
         enabled: settingsSubMenu === "update"
 
         function onInfoChanged() {
-            checkingLabel.visible = false
             statusLabel.text = ""
             latestVerLabel.text = updateChecker.latestVersion
             var rawDate = updateChecker.releaseDate
@@ -390,7 +419,6 @@ Rectangle {
         }
 
         function onNotifyMessage(title, message) {
-            checkingLabel.visible = false
             statusLabel.text = title + "：" + message
             statusLabel.color = "#3B82F6"
         }
@@ -569,12 +597,16 @@ Rectangle {
                         checked: musicManager.wasapiExclusive || false
                         onToggled: {
                             if (checked) {
-                                // 开启独占前先弹窗提示检测限制，确认后再真正开启
-                                mainWindow.openExclusiveWarnDialog(function(ok) {
-                                    wasapiSwitch.checked = musicManager.wasapiExclusive || false
-                                    if (ok)
-                                        musicManager.wasapiExclusive = true
-                                })
+                                // 开启独占前先弹窗提示检测限制（可在下方关闭该弹窗），确认后再真正开启
+                                if (musicManager.wasapiWarnEnabled) {
+                                    mainWindow.openExclusiveWarnDialog(function(ok) {
+                                        wasapiSwitch.checked = musicManager.wasapiExclusive || false
+                                        if (ok)
+                                            musicManager.wasapiExclusive = true
+                                    })
+                                } else {
+                                    musicManager.wasapiExclusive = true
+                                }
                             } else {
                                 musicManager.wasapiExclusive = false
                             }
@@ -594,6 +626,39 @@ Rectangle {
                     text: musicManager.wasapiExclusive
                           ? "已开启：独占音频输出设备，延迟更低、音质更稳定，但其他应用将无法使用该设备发声。（热插拔自动暂停/恢复播放）"
                           : "关闭时使用共享模式（默认），可与其他应用同时发声。切换后立即生效并自动恢复播放。（热插拔不影响播放）"
+                    font.family: fontFamily; font.pixelSize: 11; color: "#777777"
+                    wrapMode: Text.WordWrap; Layout.fillWidth: true
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 14 }
+
+        // 启用 WASAPI 独占提示弹窗
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 96; radius: 8
+            color: "#222222"; border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.leftMargin: 20; anchors.rightMargin: 20; anchors.topMargin: 14; anchors.bottomMargin: 16; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "启用WASAPI独占提示弹窗"
+                        font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                    }
+                    Item { Layout.fillWidth: true }
+                    ToggleSwitch {
+                        Layout.alignment: Qt.AlignVCenter
+                        checked: musicManager.wasapiWarnEnabled
+                        onToggled: musicManager.wasapiWarnEnabled = checked
+                    }
+                }
+
+                Label {
+                    text: "启用则表示每次启动WASAPI独占就弹出\"本软件仅检测…\"这个弹窗，确认后才真正开启；关闭后直接开启独占不再弹窗。"
                     font.family: fontFamily; font.pixelSize: 11; color: "#777777"
                     wrapMode: Text.WordWrap; Layout.fillWidth: true
                 }

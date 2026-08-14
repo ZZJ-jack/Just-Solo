@@ -4336,6 +4336,32 @@ Window {
     // ---- 启动时初始化分类索引 ----
     Component.onCompleted: {
         _rebuildPlaylistIndices()
+        // 启动时自动检查更新（可在 设置-软件更新 中关闭）
+        if (musicManager.startupCheckUpdate) {
+            mainWindow._startupCheckPending = true
+            updateChecker.checkForUpdates()
+        }
+    }
+
+    // ---- 启动时自动检查更新的结果（有新版本则弹窗提示） ----
+    property bool _startupCheckPending: false
+
+    Connections {
+        target: updateChecker
+        function onInfoChanged() {
+            if (!mainWindow._startupCheckPending) return
+            mainWindow._startupCheckPending = false
+            if (updateChecker.isNewer) {
+                var v = updateChecker.latestVersion
+                if (v && v.charAt(0).toLowerCase() !== "v") v = "v" + v
+                newVersionMsgLabel.text = "检测到新版本：" + v + "，请点进设置-软件更新中查看"
+                updateAvailableDialog.open()
+            }
+        }
+        function onNotifyMessage(title, message) {
+            // 检查失败：结束启动检查流程，不弹新版本提示
+            mainWindow._startupCheckPending = false
+        }
     }
 
     // ---- WASAPI 独占启动失败提示 ----
@@ -4350,6 +4376,11 @@ Window {
     Connections {
         target: musicManager
         function onExclusiveConfirmRequested() {
+            // 若用户关闭了提示弹窗，直接开启独占
+            if (!musicManager.wasapiWarnEnabled) {
+                musicManager.wasapiExclusive = true
+                return
+            }
             mainWindow.openExclusiveWarnDialog(function(ok) {
                 if (ok)
                     musicManager.wasapiExclusive = true
@@ -4443,6 +4474,68 @@ Window {
                 var cb = mainWindow.exclusiveWarnCallback
                 mainWindow.exclusiveWarnCallback = null
                 cb(false)
+            }
+        }
+    }
+
+    // ---- 检测到新版本提示（启动时自动检查发现新版本） ----
+    Dialog {
+        id: updateAvailableDialog
+        modal: true
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 460
+        padding: 26
+
+        Overlay.modal: Rectangle { color: "transparent" }
+
+        background: Rectangle {
+            color: "#222222"
+            radius: 10
+            border.color: "#3A3A3A"
+            border.width: 1
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            Label {
+                text: "检测到新版本"
+                font.family: appFont.name
+                font.pixelSize: 17
+                font.bold: true
+                color: "#dddddd"
+            }
+
+            Label {
+                id: newVersionMsgLabel
+                text: ""
+                font.family: appFont.name
+                font.pixelSize: 13
+                color: "#aaaaaa"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 8
+                spacing: 10
+                Item { Layout.fillWidth: true }
+
+                Rectangle {
+                    Layout.preferredHeight: 34; Layout.preferredWidth: 110; radius: 6
+                    color: newVerOkMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                    Label { text: "跳转设置"; anchors.centerIn: parent; font.family: appFont.name; font.pixelSize: 13; color: "#fff" }
+                    MouseArea {
+                        id: newVerOkMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            updateAvailableDialog.close()
+                            mainWindow.currentMenu = "settings"
+                            mainWindow.settingsSubMenu = "update"
+                        }
+                    }
+                }
             }
         }
     }

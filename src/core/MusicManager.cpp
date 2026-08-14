@@ -444,7 +444,11 @@ void MusicManager::clearUserData() {
 void MusicManager::loadSettings() {
     if (m_cacheDir.isEmpty()) return;
     QFile file(m_cacheDir + "/settings.json");
-    if (!file.open(QIODevice::ReadOnly)) return;
+    if (!file.open(QIODevice::ReadOnly)) {
+        // 无缓存文件（首次使用）：新设置默认开启，直接写入缓存
+        saveSettings();
+        return;
+    }
     QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     file.close();
     if (!doc.isObject()) return;
@@ -522,6 +526,14 @@ void MusicManager::loadSettings() {
             emit wasapiExclusiveChanged();
         }
     }
+    if (obj.contains("wasapiWarnEnabled")) {
+        m_wasapiWarnEnabled = obj.value("wasapiWarnEnabled").toBool(true);
+        emit wasapiWarnEnabledChanged();
+    }
+    if (obj.contains("startupCheckUpdate")) {
+        m_startupCheckUpdate = obj.value("startupCheckUpdate").toBool(true);
+        emit startupCheckUpdateChanged();
+    }
     if (obj.contains("lyricFont")) {
         m_lyricFont = obj.value("lyricFont").toString(m_lyricFont);
         emit lyricFontChanged();
@@ -530,6 +542,9 @@ void MusicManager::loadSettings() {
         m_seekStep = qBound(1, obj.value("seekStep").toInt(m_seekStep), 10);
         emit seekStepChanged();
     }
+    // 旧版本缓存没有以上两项：默认开启并写入缓存
+    if (!obj.contains("wasapiWarnEnabled") || !obj.contains("startupCheckUpdate"))
+        saveSettings();
 }
 
 void MusicManager::saveSettings() {
@@ -549,6 +564,8 @@ void MusicManager::saveSettings() {
     obj["titleBarImmersiveSync"] = m_titleBarImmersiveSync;
     obj["volume"] = m_volume;
     obj["wasapiExclusive"] = m_wasapiExclusive;
+    obj["wasapiWarnEnabled"] = m_wasapiWarnEnabled;
+    obj["startupCheckUpdate"] = m_startupCheckUpdate;
     obj["lyricFont"] = m_lyricFont;
     obj["seekStep"] = m_seekStep;
     QJsonDocument doc(obj);
@@ -726,6 +743,20 @@ void MusicManager::disableWasapiExclusive() {
     emit wasapiExclusiveChanged();
     if (m_audioEngine && m_audioEngine->exclusive())
         m_audioEngine->setExclusiveMode(false);
+    saveSettings();
+}
+
+void MusicManager::setWasapiWarnEnabled(bool v) {
+    if (v == m_wasapiWarnEnabled) return;
+    m_wasapiWarnEnabled = v;
+    emit wasapiWarnEnabledChanged();
+    saveSettings();
+}
+
+void MusicManager::setStartupCheckUpdate(bool v) {
+    if (v == m_startupCheckUpdate) return;
+    m_startupCheckUpdate = v;
+    emit startupCheckUpdateChanged();
     saveSettings();
 }
 
