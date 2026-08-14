@@ -1014,6 +1014,7 @@ void MusicManager::savePlaylistState() {
             arr.append(p);
     }
     obj["playlist"] = arr;
+    obj["source"] = m_playlistSource;   // 播放来源（0=播放列表, 1=收藏, 2=历史, 3=自定义歌单）
     QString current;
     if (m_currentIndex >= 0 && m_currentIndex < list.size())
         current = list[m_currentIndex].toMap()["path"].toString();
@@ -1059,18 +1060,24 @@ void MusicManager::loadPlaylistState() {
     }
     m_playlist = newPlaylist;
 
-    // 恢复退出前播放的歌曲（找不到则从音乐库补入队列末尾）
+    // 恢复退出前的播放来源（0=播放列表, 1=收藏, 2=历史, 3=自定义歌单），
+    // 旧缓存没有该字段时 toInt() 返回 0（保持旧行为）
+    const int source = obj.value("source").toInt();
+    m_playlistSource = (source >= 0 && source <= 3) ? source : 0;
+
+    // 恢复退出前播放的歌曲：按路径在真正的播放来源列表中定位
     m_currentIndex = -1;
     const QString current = obj.value("current").toString();
     if (!current.isEmpty()) {
-        for (int i = 0; i < m_playlist.size(); i++) {
-            if (m_playlist[i].toMap()["path"].toString() == current) {
+        QVariantList &srcList = currentPlaylist();
+        for (int i = 0; i < srcList.size(); i++) {
+            if (srcList[i].toMap()["path"].toString() == current) {
                 m_currentIndex = i;
                 break;
             }
         }
-        if (m_currentIndex < 0) {
-            // 当前歌曲不在播放列表中（退出前在收藏/历史等源播放）→ 从音乐库补入队列
+        if (m_currentIndex < 0 && (m_playlistSource == 0 || m_playlistSource == 3)) {
+            // 当前歌曲不在播放来源列表中 → 从音乐库补入队列末尾
             for (const QVariant &item : m_library) {
                 if (item.toMap()["path"].toString() == current) {
                     m_playlist.append(item);
@@ -1080,10 +1087,38 @@ void MusicManager::loadPlaylistState() {
             }
         }
     }
+
+    // 同步播放列表索引（0=库, 1=收藏, 2=历史, 3+n=自定义）
+    if (m_playlistSource == 1 || m_playlistSource == 2) {
+        m_playingListIndex = m_playlistSource;
+    } else if (m_playlistSource == 3) {
+        // 自定义歌单：按保存时的歌曲路径顺序匹配对应歌单
+        m_playingListIndex = -1;
+        for (int i = 0; i < m_customPlaylists.size(); i++) {
+            const QVariantList songs = m_customPlaylists[i].toMap()["songs"].toList();
+            QStringList sp;
+            for (const QVariant &s : songs) sp << s.toMap()["path"].toString();
+            if (sp == seen) {
+                m_playingListIndex = 3 + i;
+                break;
+            }
+        }
+    } else {
+        m_playingListIndex = 0;
+    }
+
     emit playlistChanged();
     emit currentIndexChanged();
-    if (m_currentIndex >= 0)
+    emit playlistSourceChanged();
+    emit playingListIndexChanged();
+    if (m_currentIndex >= 0) {
         updateCurrentTrack();  // 同步封面/歌词等界面信息（不自动播放）
+        // 预载当前歌曲到音频引擎（不自动播放），否则恢复后点击当前歌曲
+        // （走 play() 播放/暂停切换）会因引擎未加载媒体而无法播放
+        const QVariantList &srcList = currentPlaylist();
+        if (m_currentIndex < srcList.size())
+            m_audioEngine->load(srcList[m_currentIndex].toMap()["path"].toString());
+    }
 }
 
 // ---- 自定义排序操作 ----

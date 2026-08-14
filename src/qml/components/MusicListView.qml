@@ -224,7 +224,11 @@ ColumnLayout {
             isDragged: root.draggedTrack && model && model.path && model.path === root.draggedTrack.path
             showDropAbove: {
                 var targetIdx = root._autoScrollFinalIndex >= 0 ? root._autoScrollFinalIndex : root.dropTargetIndex
-                return targetIdx === index && root.draggedIndex !== index
+                // 原行上方（targetIdx==draggedIndex）与下方（targetIdx==draggedIndex+1）
+                // 都是无操作位置，不显示放置指示线
+                return targetIdx === index
+                    && targetIdx !== root.draggedIndex
+                    && targetIdx !== root.draggedIndex + 1
             }
             contextMenuOpen: root.contextMenuOpen
 
@@ -294,7 +298,10 @@ ColumnLayout {
                 root.draggedTrack = null
                 root._autoScrollFinalIndex = -1
 
-                if (finalFrom >= 0 && finalTo >= 0 && finalFrom !== finalTo) {
+                if (finalFrom >= 0 && finalTo >= 0
+                        && finalTo !== finalFrom && finalTo !== finalFrom + 1) {
+                    // finalTo 为插入索引：finalTo == finalFrom+1 表示拖回原位
+                    //（插入到原行下方），顺序未变，视为无操作
                     // 保存 contentY：C++ moveSong 返回 QVariantList 副本，
                     // 模型替换会导致 ListView contentY 重置为 0
                     var savedY = musicListView.contentY
@@ -507,7 +514,10 @@ ColumnLayout {
             id: dropEndPlaceholder
             visible: {
                 var targetIdx = root._autoScrollFinalIndex >= 0 ? root._autoScrollFinalIndex : root.dropTargetIndex
-                return targetIdx === musicListView.count && root.draggedIndex >= 0
+                // 拖拽的本身就是最后一行时，拖到列表末尾 = 原位（无操作），不显示放置提示
+                return targetIdx === musicListView.count
+                    && root.draggedIndex >= 0
+                    && root.draggedIndex !== musicListView.count - 1
             }
             z: 998
             anchors.horizontalCenter: parent.horizontalCenter
