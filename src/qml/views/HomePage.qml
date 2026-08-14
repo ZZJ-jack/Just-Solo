@@ -48,6 +48,15 @@ Item {
         // 仅在"同一播放列表内"切歌时滑动；列表切换/点击圆引发的切歌直接更新窗口
         property int _prevBlockIndex: -1
         property string _prevListKey: ""
+        // 初始化“上一状态”为初始显示起点：否则启动后第一次切歌时 _prevBlockIndex 仍为 -1，
+        // 会被误判为“无上一首/列表切换”而直接跳变，导致首帧不滑动
+        Component.onCompleted: {
+            homeCoverStrip._prevBlockIndex = homeCoverStrip.blockSongIndex
+            homeCoverStrip._prevListKey = root.sourceList.length > 0 ? (root.sourceList[0].path || "") : ""
+            // 断开 displayIndex 的初始绑定：否则首次切歌时它会跟随 blockSongIndex 直接跳到新窗口，
+            // 旧窗口未被保留，滑动动画就变成“滚过头再弹回”
+            circlesRow.commitDisplay(homeCoverStrip.blockSongIndex)
+        }
         onBlockSongIndexChanged: {
             var cur = blockSongIndex
             if (cur < 0) { homeCoverStrip._prevBlockIndex = cur; return }
