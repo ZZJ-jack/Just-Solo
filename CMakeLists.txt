@@ -56,8 +56,9 @@ qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
 
 # ---- cmark-gfm（Markdown → HTML 渲染）----
-# cmark-gfm 的 cmake_minimum_required 版本较旧，新版 CMake 需设置此策略避免报错
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+# CMake 4.x 对 cmake_minimum_required 低于 3.10 的旧工程会报弃用警告，
+# 设置策略版本下限规避（vendored 的 cmark-gfm 最低版本也已提升到 3.10）
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 include(FetchContent)
 # 使用本地已下载的源码，避免每次从 GitHub 克隆（国内网络慢）
 set(FETCHCONTENT_SOURCE_DIR_CMARK-GFM "${CMAKE_SOURCE_DIR}/third_party/cmark-gfm-0.29.0.gfm.13" CACHE PATH "Local cmark-gfm source")
