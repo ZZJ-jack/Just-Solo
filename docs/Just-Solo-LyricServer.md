@@ -1,8 +1,8 @@
-# Just Solo LyricServer 协议 v1.1.0
+# Just Solo LyricServer 协议 v1.2.0
 
 ## 简介
 
-Just Solo LyricServer 协议 是 Just Solo 内置的实时歌词推送协议，基于 WebSocket（`ws://127.0.0.1:47290`），将播放器中当前歌曲的歌词时间轴和播放进度以 JSON 单向推送给本地客户端。适用于桌面歌词悬浮窗等任意需实时同步歌词的场景。
+Just Solo LyricServer 协议 是 Just Solo 内置的实时歌词推送协议，基于 WebSocket（`ws://127.0.0.1:47290`），将播放器中当前歌曲的歌词时间轴、播放进度和实时音频频谱以 JSON 单向推送给本地客户端。适用于桌面歌词悬浮窗、频谱可视化等任意需实时同步播放数据的场景。
 
 ---
 
@@ -15,12 +15,14 @@ Just Solo LyricServer 协议 是 Just Solo 内置的实时歌词推送协议，�
    - [4.1 `init` — 歌词时间轴](#41-init--歌词时间轴)
    - [4.2 `progress` — 播放进度](#42-progress--播放进度)
    - [4.3 `playback` — 播放状态变更](#43-playback--播放状态变更)
+   - [4.4 `spectrum` — 音频频谱](#44-spectrum--音频频谱)
 5. [客户端状态机](#5-客户端状态机)
 6. [客户端实现指南](#6-客户端实现指南)
    - [6.1 歌词行定位（二分查找）](#61-歌词行定位二分查找)
    - [6.2 平滑插值](#62-平滑插值)
    - [6.3 滚动行为](#63-滚动行为)
    - [6.4 重连策略](#64-重连策略)
+   - [6.5 频谱渲染（协议v1.2.0+）](#65-频谱渲染协议v120)
 7. [多语言客户端示例](#7-多语言客户端示例)
    - [7.1 JavaScript（浏览器）](#71-javascript浏览器)
    - [7.2 Python](#72-python)
@@ -32,7 +34,7 @@ Just Solo LyricServer 协议 是 Just Solo 内置的实时歌词推送协议，�
 
 ## 1. 概述
 
-Just Solo LyricServer 是 Just Solo 音乐播放器内置的 **单向 WebSocket 歌词推送服务**。它在本地回环地址上监听，将当前播放歌曲的歌词时间轴和播放进度实时推送给连接的客户端。
+Just Solo LyricServer 是 Just Solo 音乐播放器内置的 **单向 WebSocket 歌词推送服务**。它在本地回环地址上监听，将当前播放歌曲的歌词时间轴、播放进度和实时音频频谱推送给连接的客户端。
 
 ```
 ┌──────────────────┐      WebSocket JSON       ┌─────────────────┐
@@ -51,10 +53,11 @@ Just Solo LyricServer 是 Just Solo 音乐播放器内置的 **单向 WebSocket 
 |------|------|
 | 单向推送 | 客户端只接收消息，不发送任何指令；所有播放控制通过 Just Solo 本体 |
 | 本地环回 | 仅监听 `127.0.0.1`，不暴露到局域网或公网 |
-| 最小开销 | 每帧约 40–100 字节 JSON；无客户端时自动停推 |
+| 最小开销 | `progress` / `spectrum` 每帧约 40–100 字节 JSON；无客户端时自动停推 |
 | 即连即用 | 连接后立即补推当前完整状态，零握手 |
 | 无状态服务端 | 不维护客户端会话，任意数量客户端并发连接 |
 | 客户端名称（协议v1.1.0+） | 客户端可在连接后发送可选的 `hello` 消息声明名称；旧客户端不发送也完全兼容 |
+| 实时频谱（协议v1.2.0+） | 播放时以 100ms 周期推送 `spectrum` 消息（12 频段电平 0~1）；暂停 / 无客户端自动停推 |
 
 ---
 
@@ -194,7 +197,7 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `type` | `string` | 消息类型标识：`init` / `progress` / `playback` |
+| `type` | `string` | 消息类型标识：`init` / `progress` / `playback` / `spectrum` |
 
 ---
 
@@ -262,10 +265,10 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
 
 | 场景 | 行为 |
 |------|------|
-| 播放中 | 每 300ms（±5ms 系统调度误差）广播一帧 |
+| 播放中 | 每 400ms（±5ms 系统调度误差）广播一帧 |
 | 暂停 | 立即停止推送 |
 | 停止 / 切歌 | 停止推送 |
-| 恢复播放 | 立即推一帧 + 恢复 300ms 周期 |
+| 恢复播放 | 立即推一帧 + 恢复 400ms 周期 |
 | 无客户端连接 | 定时器自动停转 |
 
 #### 消息结构
@@ -287,8 +290,9 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
 #### 精度说明
 
 - 时间来源：Qt `QMediaPlayer::position()`，精度取决于后端（Windows Media Foundation 通常 ±10ms）
-- 推送间隔：300ms（不是 position 本身的精度窗口）
-- 首次恢复播放时，`progress` 在 `playback` 消息**之后**立即发出，不等 300ms 定时器
+- 推送间隔：400ms（不是 position 本身的精度窗口）
+- 首次恢复播放时，`progress` 在 `playback` 消息**之后**立即发出，不等 400ms 定时器
+- `progress` 与 `spectrum`（见 [4.4](#44-spectrum--音频频谱)）各自独立推送、互不影响
 
 ---
 
@@ -322,6 +326,50 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
 
 ---
 
+### 4.4 `spectrum` — 音频频谱（协议v1.2.0+）
+
+#### 触发条件
+
+| 场景 | 行为 |
+|------|------|
+| 播放中 | 每 100ms（±5ms 系统调度误差）广播一帧 |
+| 暂停 / 停止 / 切歌 | 立即停止推送；客户端应在收到 `playback("paused")` 时清空频谱显示 |
+| 恢复播放 | 立即推一帧 + 恢复 100ms 周期 |
+| 无客户端连接 | 定时器自动停转 |
+
+#### 消息结构
+
+```json
+{
+  "type": "spectrum",
+  "bands": [0.12, 0.35, 0.58, 0.71, 0.66, 0.49, 0.38, 0.29, 0.21, 0.15, 0.12, 0.08]
+}
+```
+
+#### 字段规范
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | `string` | 是 | 固定 `"spectrum"` |
+| `bands` | `array<number>` | 是 | 12 个频段电平（0.0 ~ 1.0），从低频到高频排列；暂无数据时为空数组 `[]` |
+
+#### 频段说明
+
+- 数据来源：Just Solo `AudioEngine` 对实际输出帧做 FFT（1024 点 Hann 窗），按对数刻度聚合为 12 个频段（约 40Hz ~ 16kHz），各频段取峰值。
+- 取值范围：0.0 ~ 1.0（满幅正弦 ≈ 1.0），保留 3 位小数。
+- 数量固定：始终 12 个元素（v1.2.0 起固定），客户端可直接按 12 柱渲染。
+- 与播放进度解耦：`spectrum` 与 `progress` 各自独立推送，客户端可分开使用。
+
+#### 边界情况
+
+| 场景 | `bands` 内容 |
+|------|---------------|
+| 播放中（有真实频谱数据） | 12 个 0.0 ~ 1.0 的数值 |
+| 刚恢复播放（音频缓冲未填满） | 可能为空数组 `[]` |
+| 暂停 / 停止 | 不再推送（客户端配合 `playback("paused")` 清空） |
+
+---
+
 ## 5. 客户端状态机
 
 ```
@@ -338,14 +386,14 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
            │  │     └──┬──────┬──────┘
            │  │        │      │
            │  │   ← init    ← playback     （立即收到）
-           │  │   ← progress（若播放中）
+           │  │   ← progress / spectrum（若播放中）
            │  │        │      │
            │  │   ┌────▼──────▼──────┐
-           │  │   │    RUNNING       │◄── 每 300ms: progress
+           │  │   │    RUNNING       │◄── 每 400ms: progress / 每 100ms: spectrum
            │  │   └────┬──────┬──────┘◄── 事件驱动: init / playback
            │  │        │      │
            │  │   切歌: init  暂停: playback("paused")
-           │  │   恢复: playback("playing") + progress
+           │  │   恢复: playback("playing") + progress + spectrum
            │  │        │      │
            │  │   ┌────▼──────▼──────┐
            │  └──►│   DISCONNECTED   │  （ws 断开 / 错误）
@@ -370,7 +418,7 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
 
 ### 6.1 歌词行定位（二分查找）
 
-服务端每 300ms 推送 `progress`。客户端��要在 `lyrics` 数组中定位当前位置对应的歌词行。
+服务端每 400ms 推送 `progress`。客户端需要在 `lyrics` 数组中定位当前位置对应的歌词行。
 
 **算法：**二分查找最后一个 `time <= position` 的索引。
 
@@ -402,7 +450,7 @@ function findCurrentLine(lyrics, position):
 
 ### 6.2 平滑插值
 
-`progress` 推送间隔 300ms。若 UI 需要更高帧率（如 60fps 的平滑滚动），客户端可对 `position` 做线性插值：
+`progress` 推送间隔 400ms。若 UI 需要更高帧率（如 60fps 的平滑滚动），客户端可对 `position` 做线性插值：
 
 ```
 estimatedPosition = lastPosition + (Date.now() - lastTimestamp)
@@ -439,6 +487,19 @@ estimatedPosition = lastPosition + (Date.now() - lastTimestamp)
 
 服务端不提供重连服务，重连完全由客户端负责。
 
+### 6.5 频谱渲染（协议v1.2.0+）
+
+`spectrum` 推送周期 100ms（10fps）。客户端渲染频谱柱的推荐策略：
+
+| 场景 | 处理 |
+|------|------|
+| 收到 `spectrum` 且 `bands` 非空 | 将 12 个 0.0~1.0 数值直接映射为柱高（0.0=0%、1.0=100%） |
+| 收到 `spectrum` 且 `bands` 为空 `[]` | 保持当前画面或短暂归零（刚恢复播放时缓冲未填满） |
+| 收到 `playback("paused")` | 清空频谱（柱高归零），不依赖最后一帧残留 |
+| 渲染帧率 | 频谱动画建议用 `requestAnimationFrame` 在 10fps 数据间做插值/衰减，避免柱高跳变 |
+
+> 若客户端仅需要歌词，忽略 `spectrum` 消息即可，不影响其他功能。
+
 ---
 
 ## 7. 多语言客户端示例
@@ -451,6 +512,7 @@ class LyricClient {
     this.url = url;
     this.lyrics = [];
     this.position = 0;
+    this.spectrum = [];
     this.isPlaying = false;
     this.reconnectDelay = 1000;
     this.connect();
@@ -479,6 +541,10 @@ class LyricClient {
           this.isPlaying = (msg.status === 'playing');
           this.onPlaybackChange(this.isPlaying);
           break;
+        case 'spectrum':   // v1.2.0+
+          this.spectrum = msg.bands || [];
+          this.onSpectrumChange(this.spectrum);
+          break;
       }
     };
     this.ws.onclose = () => {
@@ -506,6 +572,7 @@ class LyricClient {
   onLyricsChanged(lyrics) {}
   onProgress(position) {}
   onPlaybackChange(playing) {}
+  onSpectrumChange(bands) {}   // v1.2.0+：12 个 0~1 频段电平
   onStatusChange(status) {}
 }
 ```
@@ -522,6 +589,7 @@ class LyricClient:
         self.url = url
         self.lyrics = []
         self.position = 0
+        self.spectrum = []
         self.is_playing = False
         self._reconnect_delay = 1
 
@@ -552,6 +620,9 @@ class LyricClient:
         elif t == "playback":
             self.is_playing = (msg["status"] == "playing")
             await self.on_playback_change(self.is_playing)
+        elif t == "spectrum":  # v1.2.0+
+            self.spectrum = msg.get("bands", [])
+            await self.on_spectrum_change(self.spectrum)
 
     def current_line_index(self):
         lo, hi, ans = 0, len(self.lyrics) - 1, -1
@@ -566,6 +637,7 @@ class LyricClient:
     async def on_lyrics_changed(self, lyrics): pass
     async def on_progress(self, position): pass
     async def on_playback_change(self, playing): pass
+    async def on_spectrum_change(self, bands): pass
     def on_status_change(self, status): pass
 
 # 使用
@@ -594,12 +666,14 @@ public class LyricClient : IDisposable
 
     public LyricEntry[] Lyrics { get; private set; } = Array.Empty<LyricEntry>();
     public int Position { get; private set; }
+    public double[] Spectrum { get; private set; } = Array.Empty<double>();
     public bool IsPlaying { get; private set; }
     public bool Connected => _ws?.State == WebSocketState.Open;
 
     public event Action<LyricEntry[]> OnLyricsChanged;
     public event Action<int> OnProgress;
     public event Action<bool> OnPlaybackChanged;
+    public event Action<double[]> OnSpectrumChanged;
     public event Action<bool> OnConnectionChanged;
 
     public LyricClient(string url = "ws://127.0.0.1:47290")
@@ -666,6 +740,11 @@ public class LyricClient : IDisposable
             case "playback":
                 IsPlaying = doc.RootElement.GetProperty("status").GetString() == "playing";
                 OnPlaybackChanged?.Invoke(IsPlaying);
+                break;
+            case "spectrum":  // v1.2.0+
+                Spectrum = JsonSerializer.Deserialize<double[]>(
+                    doc.RootElement.GetProperty("bands").GetRawText());
+                OnSpectrumChanged?.Invoke(Spectrum);
                 break;
         }
     }
@@ -736,6 +815,7 @@ netstat -ano | findstr 47290
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| v1.2.0 | 2026-08-14 | 新增 `spectrum` 消息：播放时以 100ms 周期推送 12 频段实时音频频谱（0.0~1.0，40Hz~16kHz 对数分布）；`progress` 推送间隔按 v1.0.2 修订为 400ms；向下兼容旧客户端（未知消息类型忽略） |
 | v1.1.0 | 2026-08-05 | 新增可选 `hello` 消息：客户端可声明名称，Just Solo 弹窗提示第三方连接；向下兼容旧客户端 |
 | v1.0.2 | 2026-07-26 | 将`progress` 推送间隔从 300ms 变更为 400ms，修复进度更新过快问题 |
 | v1.0.1 | 2026-07-25 | 修复Just Solo内置的LyricServer问题：将`progress` 推送间隔从 200ms 更改为 300ms，修复进度更新过快问题 |

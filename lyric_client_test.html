@@ -57,6 +57,23 @@
   .reconnect {
     margin-top: 16px; font-size: 13px; color: #888;
   }
+  .spectrum {
+    display: flex; align-items: flex-end;
+    gap: 4px;
+    width: 100%; max-width: 600px;
+    height: 60px; margin-top: 16px;
+    padding: 8px 12px;
+    background: #16162a; border-radius: 12px;
+    border: 1px solid #222222;
+  }
+  .spectrum .bar {
+    flex: 1;
+    background: linear-gradient(180deg, #7c83ff, #4ade80);
+    border-radius: 3px 3px 0 0;
+    height: 0%;
+    transition: height 80ms ease-out;
+  }
+  .spectrum .bar.empty { background: #2a2a4a; }
 </style>
 </head>
 <body>
@@ -70,6 +87,7 @@
 <div class="lyrics" id="lyricsBox">
   <div class="empty">等待歌词数据…</div>
 </div>
+<div class="spectrum" id="spectrumBox" title="实时音频频谱（协议 v1.2.0+）"></div>
 <div class="reconnect" id="reconnectInfo"></div>
 
 <script>
@@ -79,6 +97,14 @@ let ws = null;
 let lyrics = [];       // [{time, text}]
 let activeIdx = -1;
 let reconnectDelay = 1000;
+
+// v1.2.0+: 生成 12 根频谱柱
+const specBox = document.getElementById('spectrumBox');
+for (let i = 0; i < 12; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  specBox.appendChild(bar);
+}
 
 function fmt(ms) {
   if (!ms || ms < 0) ms = 0;
@@ -115,6 +141,11 @@ function connect() {
       const badge = document.getElementById('pbBadge');
       badge.textContent = msg.status;
       badge.className = 'badge ' + msg.status;
+      // v1.2.0+: 非播放状态时清空频谱柱
+      if (msg.status !== 'playing') updateSpectrum([]);
+    }
+    else if (msg.type === 'spectrum') {   // v1.2.0+: 实时频谱
+      updateSpectrum(msg.bands);
     }
   };
 
@@ -169,6 +200,16 @@ function updatePosition(pos) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
+  }
+}
+
+// v1.2.0+: 用 12 个 0~1 频段电平驱动频谱柱高度
+function updateSpectrum(bands) {
+  const bars = specBox.children;
+  for (let i = 0; i < bars.length; i++) {
+    const v = (bands && bands[i] != null) ? bands[i] : 0;
+    bars[i].style.height = (Math.max(0, Math.min(1, v)) * 100) + '%';
+    bars[i].classList.toggle('empty', v === 0);
   }
 }
 

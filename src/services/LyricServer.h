@@ -44,13 +44,15 @@ private slots:
     void onClientDisconnected();
     void onTextMessageReceived(const QString &message); // 接收客户端 hello
     void onLyricsChanged();     // → init
-    void onPlaybackChanged();   // → playback + 控制 progress 定时器
+    void onPlaybackChanged();   // → playback + 控制 progress / spectrum 定时器
     void onProgressTick();      // → progress
+    void onSpectrumTick();      // → spectrum
 
 private:
     void broadcast(const QByteArray &payload);
     QByteArray buildInitPayload() const;
     void sendProgress();         // 构建并广播一帧 progress
+    void sendSpectrum();         // 构建并广播一帧 spectrum
 
     struct ClientInfo {
         QString name;
@@ -63,6 +65,7 @@ private:
     QWebSocketServer *m_server;
     QList<QWebSocket *> m_clients;
     QTimer *m_progressTimer;
+    QTimer *m_spectrumTimer;
     bool m_devMode = false;
     QHash<QWebSocket *, QTimer *> m_helloTimers;  // hello 超时定时器
     QHash<QWebSocket *, ClientInfo> m_clientInfo;  // 客户端详细信息

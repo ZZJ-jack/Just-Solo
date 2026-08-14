@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QHostAddress>
+#include <cmath>
 
 // ============================================================
 // 构造 / 析构
@@ -20,8 +21,12 @@ LyricServer::LyricServer(MusicManager *mgr, bool devMode, QObject *parent)
                                     QWebSocketServer::NonSecureMode, this))
     , m_progressTimer(new QTimer(this))
 {
-    // 推送间隔 300ms（可在 200~500 间调整）
+    // 推送间隔 400ms（可在 200~500 间调整）
     m_progressTimer->setInterval(LYRICSERVER_PROTOCOL_PRE_TIME);
+
+    // 频谱推送间隔 100ms（10fps，视觉平滑且开销小）
+    m_spectrumTimer = new QTimer(this);
+    m_spectrumTimer->setInterval(LYRICSERVER_PROTOCOL_SPECTRUM_TIME);
 
     connect(m_server, &QWebSocketServer::newConnection,
             this, &LyricServer::onNewConnection);
@@ -36,6 +41,9 @@ LyricServer::LyricServer(MusicManager *mgr, bool devMode, QObject *parent)
 
     connect(m_progressTimer, &QTimer::timeout,
             this, &LyricServer::onProgressTick);
+
+    connect(m_spectrumTimer, &QTimer::timeout,
+            this, &LyricServer::onSpectrumTick);
 }
 
 LyricServer::~LyricServer()
@@ -136,12 +144,19 @@ void LyricServer::onNewConnection()
             client->sendTextMessage(QString::fromUtf8(
                 QJsonDocument(pg).toJson(QJsonDocument::Compact)));
         }
+
+        // 补推当前频谱（播放中才有数据，让频谱可视化立刻动起来）
+        if (m_mgr->isPlaying()) {
+            client->sendTextMessage(QString::fromUtf8(buildSpectrumPayload()));
+        }
     }
 
-    // 客户端连上后，若正在播放但定时器已停（之前因无客户端被 onProgressTick 停掉），
-    // 必须重新启动，否则后续 progress 不会实时推送
+    // 客户端连上后，若正在播放但定时器已停（之前因无客户端被 onProgressTick / onSpectrumTick 停掉），
+    // 必须重新启动，否则后续 progress / spectrum 不会实时推送
     if (m_mgr->isPlaying() && !m_progressTimer->isActive())
         m_progressTimer->start();
+    if (m_mgr->isPlaying() && !m_spectrumTimer->isActive())
+        m_spectrumTimer->start();
 }
 
 void LyricServer::onClientDisconnected()
@@ -206,7 +221,7 @@ void LyricServer::onLyricsChanged()
 }
 
 // ============================================================
-// 状态变化：广播 playback + 控制进度推送
+// 状态变化：广播 playback + 控制进度 / 频谱推送
 // ============================================================
 
 void LyricServer::onPlaybackChanged()
@@ -219,17 +234,20 @@ void LyricServer::onPlaybackChanged()
                             : QStringLiteral("paused");
     broadcast(QJsonDocument(msg).toJson(QJsonDocument::Compact));
 
-    // 播放中才推 progress；暂停/停止时停
+    // 播放中才推 progress / spectrum；暂停/停止时停
     if (playing) {
         m_progressTimer->start();
         sendProgress();  // 立即推一帧，不等第一个 tick
+        m_spectrumTimer->start();
+        sendSpectrum();  // 立即推一帧频谱
     } else {
         m_progressTimer->stop();
+        m_spectrumTimer->stop();
     }
 }
 
 // ============================================================
-// 每 300ms：广播 progress
+// 每 400ms：广播 progress
 // ============================================================
 
 void LyricServer::onProgressTick()
@@ -240,6 +258,20 @@ void LyricServer::onProgressTick()
         return;
     }
     sendProgress();
+}
+
+// ============================================================
+// 每 100ms：广播 spectrum
+// ============================================================
+
+void LyricServer::onSpectrumTick()
+{
+    // 没人听就别白跑，等下次 play 再启动
+    if (m_clients.isEmpty()) {
+        m_spectrumTimer->stop();
+        return;
+    }
+    sendSpectrum();
 }
 
 // ============================================================
@@ -262,6 +294,29 @@ void LyricServer::sendProgress()
     msg["type"] = QStringLiteral("progress");
     msg["position"] = qint64(m_mgr->position());  // 毫秒
     broadcast(QJsonDocument(msg).toJson(QJsonDocument::Compact));
+}
+
+// 构建并广播一帧 spectrum
+void LyricServer::sendSpectrum()
+{
+    if (m_clients.isEmpty()) return;
+    broadcast(buildSpectrumPayload());
+}
+
+// 把 MusicManager::spectrum()（12 频段电平 0~1）序列化成 spectrum 消息。
+// 数值保留 3 位小数，控制 JSON 体积（每帧约 90 字节）。
+QByteArray LyricServer::buildSpectrumPayload() const
+{
+    QJsonObject msg;
+    msg["type"] = QStringLiteral("spectrum");
+
+    QJsonArray arr;
+    const QVariantList spectrum = m_mgr->spectrum();
+    for (const QVariant &v : spectrum)
+        arr.append(static_cast<double>(std::round(v.toDouble() * 1000.0) / 1000.0));
+    msg["bands"] = arr;
+
+    return QJsonDocument(msg).toJson(QJsonDocument::Compact);
 }
 
 // 把 MusicManager::currentLyrics() 序列化成 init 接口的 JSON
