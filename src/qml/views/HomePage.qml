@@ -29,8 +29,8 @@ Item {
     Row {
         id: homeCoverStrip
         anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: -170   // 整体上移
+        anchors.top: parent.top
+        anchors.topMargin: 5 // 与顶部边距
         anchors.leftMargin: 0 // 与左侧边距
         spacing: -homeCoverStrip.roundSize / 2   // 负间距让第一个圆露出半边
 
@@ -299,10 +299,10 @@ Item {
                 circlesRow.displayIndex = idx
                 circlesRow._pendingDisplayIndex = -1
             }
-            // 固定窗口：常驻 9 个圆。delegate 数量恒定，切歌时仅更新封面内容
+            // 固定窗口：常驻 10 个圆。delegate 数量恒定，切歌时仅更新封面内容
             // （见 delegate 内 songIndex 绑定 + Image.cache:false 自动清理旧图），
             // 不销毁/创建对象，避免切歌产生垃圾与纹理缓存累积
-            readonly property int windowSize: 9
+            readonly property int windowSize: 10
 
             // ---- 切歌移动动画：旧窗口向切换方向滑一格，结束后切换到新窗口（下一首左滑/上一首右滑）----
             NumberAnimation {
