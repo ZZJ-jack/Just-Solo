@@ -424,11 +424,18 @@ Rectangle {
         }
     }
 
-    // ---- 播放设置 ----
-    ColumnLayout {
-        anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-        spacing: 0
+    // ---- 播放设置（卡片较多，内容超出时滚动） ----
+    ScrollView {
+        id: playbackScroll
+        anchors.fill: parent
         visible: settingsSubMenu === "playback"
+        clip: true
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+        ColumnLayout {
+            width: playbackScroll.availableWidth
+            spacing: 0
 
         // 歌词延时
         Rectangle {
@@ -666,6 +673,7 @@ Rectangle {
         }
 
         Item { Layout.preferredHeight: 14 }
+        }
     }
 
     // ---- 快捷键设置 ----
