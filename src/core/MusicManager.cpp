@@ -352,6 +352,7 @@ MusicManager::MusicManager(QObject *parent)
     });
     connect(m_audioEngine, &AudioEngine::playbackStateChanged, this, &MusicManager::playbackStateChanged);
     connect(m_audioEngine, &AudioEngine::audioInitFailed, this, &MusicManager::audioInitFailed);
+    connect(m_audioEngine, &AudioEngine::spectrumChanged, this, &MusicManager::spectrumChanged);
     connect(m_audioEngine, &AudioEngine::endOfMedia, this, [this]() {
         // 根据播放模式决定下一步
         if (m_playMode == SingleLoop) {

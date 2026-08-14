@@ -1,14 +1,14 @@
 import QtQuick
 
-// 频谱律动组件：模拟 12 条柱子跳动的动画效果（不依赖真实音频频谱）。
-// 每根柱用多组非公度频率的正弦叠加 + 全局呼吸包络，产生不规则、不重复的律动；
+// 频谱律动组件：显示真实音频频谱（musicManager.spectrum，12 个频段电平 0~1）。
+// 数据来自 AudioEngine 对实际输出帧做 FFT 得到的对数频段能量。
 // 高度平滑采用"上升快、回落慢"，模拟真实频谱的攻击/衰减特性。
 Row {
     id: root
     height: root.maxBarHeight
     spacing: root.barSpacing
 
-    // 柱子数量（固定 12 条）
+    // 柱子数量（固定 12 条，与 C++ 频谱频段数一致）
     readonly property int barCount: 12
     property int barWidth: 2
     property int barSpacing: 2
@@ -20,17 +20,9 @@ Row {
     // 是否播放律动动画（页面可见且正在播放时运行）
     property bool running: true
 
-    // 相位：持续递增（不取模），配合非公度频率保证波形不会周期重复
-    property real phase: 0
-
-    Timer {
-        // 80ms ≈ 12.5fps：相比 33ms 减少约 60% 的绑定求值/渲染压力，内存与 CPU 都更省；
-        // 相位步进按比例放大（0.15 × 80/33）保持原律动节奏
-        interval: 80
-        repeat: true
-        running: root.running && root.visible
-        onTriggered: root.phase += 0.36
-    }
+    // 真实频谱数据（随 spectrumChanged 更新）
+    property var levels: (typeof musicManager !== "undefined" && musicManager)
+                         ? musicManager.spectrum : []
 
     Repeater {
         model: root.barCount
@@ -41,15 +33,12 @@ Row {
             color: root.barColor
             anchors.verticalCenter: parent.verticalCenter
 
-            // 目标值：全局呼吸包络 × 多组非公度频率正弦叠加（每根柱独立相位）
+            // 目标值：对应频段的真实电平（0~1），未播放/数据缺失时为 0
             property real target: {
-                var t = root.phase
-                var env = 0.5 + 0.5 * Math.sin(t * 0.37 + 2.0)     // 慢速整体呼吸
-                var v = 0.30
-                v += 0.28 * Math.sin(t * 1.7 + index * 1.3)
-                v += 0.20 * Math.sin(t * 2.9 + index * 2.1 + 0.7)
-                v += 0.14 * Math.sin(t * 4.3 + index * 3.7 + 1.3)
-                v *= 0.4 + 0.6 * env
+                var s = root.levels
+                if (!root.running || !s || index >= s.length) return 0
+                var v = s[index]
+                if (typeof v !== "number" || !isFinite(v)) return 0
                 return Math.max(0, Math.min(1, v))
             }
             // 平滑：上升直达目标，回落按比例衰减（模拟真实频谱攻击快、衰减慢）

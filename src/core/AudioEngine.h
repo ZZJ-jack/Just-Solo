@@ -4,7 +4,10 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QVariantList>
+#include <atomic>
 #include <memory>
+#include <vector>
 
 struct ma_engine;
 struct ma_sound;
@@ -45,6 +48,11 @@ public:
     // 探测 WASAPI 独占通道：0=可用，1=被其他独占客户端占用，2=设备不支持等其他原因不可用
     int exclusiveModeProbe() const;
 
+    // ---- 真实音频频谱 ----
+    Q_PROPERTY(QVariantList spectrum READ spectrum NOTIFY spectrumChanged)  // 12 个频段电平（0~1）
+    QVariantList spectrum() const { return m_spectrum; }
+    static constexpr int spectrumBandCount = 12;
+
 signals:
     void positionChanged(qint64 ms);
     void playbackStateChanged();
@@ -52,6 +60,7 @@ signals:
     void durationChanged();
     // 共享模式音频初始化失败（如通道被占用）：通知 QML 弹窗提示用户检查并重启，不上报 BugReporter
     void audioInitFailed();
+    void spectrumChanged();
 
 private:
     void pollAudio();
@@ -62,6 +71,12 @@ private:
     // 设备回调：驱动引擎混音输出（ma_engine_data_callback 为内部静态函数，这里等价实现）
     static void deviceDataCallback(ma_device *pDevice, void *pFramesOut,
                                    const void *pFramesIn, unsigned int frameCount);
+
+    // ---- 真实频谱 ----
+    void updateSpectrum();     // 频谱定时器：取环形缓冲快照 → FFT → 12 频段电平 → 发信号
+    void captureSpectrumSamples(const float *frames, unsigned int frameCount,
+                                unsigned int channels);   // 输出帧混音为单声道写入环形缓冲
+    static void fftRadix2(float *re, float *im, unsigned int n);  // 原位基2 FFT
 
     bool initAudioDevice();    // 按 m_exclusive 创建 context/device/engine
     void shutdownAudioDevice(); // 逆序销毁 sound/engine/device/context
@@ -97,6 +112,14 @@ private:
     bool m_hotplugWasPlaying = false;
     qint64 m_hotplugDuration = 0;
     QTimer *m_retryTimer = nullptr;
+
+    // ---- 真实频谱 ----
+    static constexpr unsigned int kSpectrumFftSize = 1024;   // FFT 长度（2 的幂）
+    static constexpr unsigned int kSpectrumBufSize = 8192;   // 单声道环形缓冲容量（采样数）
+    std::vector<float> m_spectrumBuf = std::vector<float>(kSpectrumBufSize, 0.f);
+    std::atomic<unsigned int> m_spectrumWrite{0};            // 环形缓冲写位置（音频线程写）
+    QVariantList m_spectrum;                                 // 当前 12 频段电平（0~1）
+    QTimer *m_spectrumTimer = nullptr;
 };
 
 #endif

@@ -1798,6 +1798,19 @@ Window {
                             if (pl === 2) return musicManager.history
                             return musicManager.playlist
                         }
+                        // 列表名：跟随播放来源（自定义歌单用其名称，其余用固定名）
+                        listName: {
+                            var pl = musicManager.playingListIndex
+                            if (pl === 1) return "收藏"
+                            if (pl === 2) return "历史"
+                            if (pl >= 3) {
+                                var ci = pl - 3
+                                if (ci >= 0 && ci < musicManager.customPlaylists.length)
+                                    return musicManager.customPlaylists[ci].name || ""
+                            }
+                            return "所有音乐"   // 0=音乐库（默认）
+                            // 1=收藏 2=历史 3+n=自定义列表
+                        }
                     }
 
                     // 全局通用歌曲列表（所有音乐 & 自建列表共用）

@@ -18,6 +18,8 @@ Item {
     // 封面墙数据源（当前播放/查看的列表）：由 main.qml 按播放来源传入
     // （注意 root.sourceList 属性只读 m_playlist，收藏/历史播放时≠实际播放列表，勿直接用）
     property var sourceList: []
+    // 当前列表名（收藏/历史/自定义歌单名/播放列表），由 main.qml 按播放来源传入
+    property string listName: ""
 
     visible: active && sourceList.length > 0
 
@@ -129,14 +131,55 @@ Item {
             }
             Behavior on color { ColorAnimation { duration: 600 } }
 
-            // ---- 歌名 / 歌手（垂直居中，靠左） ----
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
+            // ---- 列表名（标题）：置顶，距卡片顶部 5px ----
+            Item {
+                id: listNameClip
+                anchors.top: parent.top
+                anchors.topMargin: 15
                 anchors.left: parent.left
                 anchors.leftMargin: 16
                 anchors.right: parent.right
                 anchors.rightMargin: 20
-                spacing: 8
+                height: 20
+                clip: true
+                visible: root.listName !== ""
+
+                property bool needsScroll: listNameText.contentWidth > width
+
+                Text {
+                    id: listNameText
+                    text: root.listName
+                    font.family: root.fontFamily
+                    font.pixelSize: 20
+                    color: "#ffffff"
+                    x: listNameClip.needsScroll ? listNameClip.width : 0
+                    y: (listNameClip.height - height) / 2
+
+                    SequentialAnimation on x {
+                        running: listNameClip.needsScroll && root.visible
+                        loops: Animation.Infinite
+                        // 从右侧滚入 → 匀速滚到左侧滚出 → 空一小下 → 循环
+                        NumberAnimation {
+                            from: listNameClip.width
+                            to: -listNameText.contentWidth
+                            duration: Math.max(6000, (listNameClip.width + listNameText.contentWidth) * 12)
+                            easing.type: Easing.Linear
+                        }
+                        PauseAnimation { duration: 800 }
+                        PropertyAnimation { property: "x"; to: listNameClip.width; duration: 0 }
+                    }
+                }
+            }
+
+            // ---- 歌名 / 歌手（垂直居中，靠左） ----
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.verticalCenterOffset: -3   // 整体上移 3px
+                anchors.left: parent.left
+                anchors.leftMargin: 16
+                anchors.right: parent.right
+                anchors.rightMargin: 20
+                spacing: 6
 
                 Label {
                     width: parent.width
@@ -160,7 +203,7 @@ Item {
                 }
             }
 
-            // ---- 频谱律动（12 条模拟循环动画，仅播放时律动） ----
+            // ---- 频谱律动（真实音频频谱，仅播放时律动） ----
             SpectrumBars {
                 id: homeSpectrum
                 anchors.left: parent.left

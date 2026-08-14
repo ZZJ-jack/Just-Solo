@@ -8,6 +8,9 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <QTimer>
+#include <QVariantList>
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <string>
 
@@ -39,6 +42,12 @@ AudioEngine::AudioEngine(QObject *parent)
     m_retryTimer = new QTimer(this);
     m_retryTimer->setInterval(1000);
     connect(m_retryTimer, &QTimer::timeout, this, &AudioEngine::retryLoad);
+
+    // 频谱定时器：40ms 从环形缓冲取快照做 FFT（25fps，代价极小），仅播放时计算
+    m_spectrumTimer = new QTimer(this);
+    m_spectrumTimer->setInterval(40);
+    connect(m_spectrumTimer, &QTimer::timeout, this, &AudioEngine::updateSpectrum);
+    m_spectrumTimer->start();
 }
 
 AudioEngine::~AudioEngine()
@@ -56,6 +65,136 @@ void AudioEngine::deviceDataCallback(ma_device *pDevice, void *pFramesOut,
     AudioEngine *self = static_cast<AudioEngine *>(pDevice->pUserData);
     if (!self || !self->m_engine) return;
     ma_engine_read_pcm_frames(self->m_engine, pFramesOut, frameCount, nullptr);
+    // 采集实际输出帧用于真实频谱（混音为单声道后写入环形缓冲）
+    if (frameCount > 0 && pDevice->playback.channels > 0)
+        self->captureSpectrumSamples(static_cast<const float *>(pFramesOut), frameCount,
+                                     pDevice->playback.channels);
+}
+
+// ---- 真实频谱：环形缓冲（音频线程写，UI 线程读快照） ----
+void AudioEngine::captureSpectrumSamples(const float *frames, unsigned int frameCount,
+                                         unsigned int channels)
+{
+    const unsigned int bufSize = kSpectrumBufSize;
+    unsigned int w = m_spectrumWrite.load(std::memory_order_relaxed);
+    const float inv = 1.0f / static_cast<float>(channels);
+    for (unsigned int i = 0; i < frameCount; ++i) {
+        float s = 0.f;
+        for (unsigned int c = 0; c < channels; ++c)
+            s += frames[i * channels + c];
+        m_spectrumBuf[w % bufSize] = s * inv;
+        ++w;
+    }
+    m_spectrumWrite.store(w, std::memory_order_relaxed);
+}
+
+// 原位基2 Cooley-Tukey FFT（复数交织存于 re/im 数组，n 须为 2 的幂）
+void AudioEngine::fftRadix2(float *re, float *im, unsigned int n)
+{
+    // 位反转重排
+    for (unsigned int i = 1, j = 0; i < n; ++i) {
+        unsigned int bit = n >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) {
+            std::swap(re[i], re[j]);
+            std::swap(im[i], im[j]);
+        }
+    }
+    for (unsigned int len = 2; len <= n; len <<= 1) {
+        const float ang = -2.0f * 3.14159265358979f / static_cast<float>(len);
+        const float wRe = std::cos(ang);
+        const float wIm = std::sin(ang);
+        for (unsigned int i = 0; i < n; i += len) {
+            float curRe = 1.f, curIm = 0.f;
+            const unsigned int half = len >> 1;
+            for (unsigned int k = 0; k < half; ++k) {
+                const float uRe = re[i + k];
+                const float uIm = im[i + k];
+                const float oRe = re[i + k + half];
+                const float oIm = im[i + k + half];
+                const float vRe = oRe * curRe - oIm * curIm;
+                const float vIm = oRe * curIm + oIm * curRe;
+                re[i + k] = uRe + vRe;
+                im[i + k] = uIm + vIm;
+                re[i + k + half] = uRe - vRe;
+                im[i + k + half] = uIm - vIm;
+                const float nRe = curRe * wRe - curIm * wIm;
+                curIm = curRe * wIm + curIm * wRe;
+                curRe = nRe;
+            }
+        }
+    }
+}
+
+void AudioEngine::updateSpectrum()
+{
+    const unsigned int fftSize = kSpectrumFftSize;
+    const unsigned int bufSize = kSpectrumBufSize;
+    // 未在播放（含暂停/停止）时不计算，QML 侧负责回落为静止
+    if (!m_soundInitialized || !m_wasPlaying) {
+        if (!m_spectrum.isEmpty()) {
+            m_spectrum.clear();
+            emit spectrumChanged();
+        }
+        return;
+    }
+
+    const unsigned int w = m_spectrumWrite.load(std::memory_order_relaxed);
+
+    // 取最近 fftSize 个采样（允许撕裂，仅用于可视化）；数据不足时从头取
+    std::vector<float> x(fftSize, 0.f);
+    const unsigned int start = w >= fftSize ? w - fftSize : 0;
+    for (unsigned int i = 0; i < fftSize; ++i)
+        x[i] = m_spectrumBuf[(start + i) % bufSize];
+
+    // Hann 窗（抑制频谱泄漏）
+    std::vector<float> re(fftSize, 0.f), im(fftSize, 0.f);
+    float wsum = 0.f;
+    for (unsigned int i = 0; i < fftSize; ++i) {
+        const float hann = 0.5f - 0.5f * std::cos(2.0f * 3.14159265358979f
+                                                  * static_cast<float>(i)
+                                                  / static_cast<float>(fftSize - 1));
+        re[i] = x[i] * hann;
+        wsum += hann;
+    }
+    if (wsum <= 0.f) wsum = 1.f;
+
+    fftRadix2(re.data(), im.data(), fftSize);
+
+    // 幅度谱（Hann 窗 + wsum 归一化：满幅正弦在该 bin 的幅度 ≈ 0.5）
+    std::vector<float> mag(fftSize / 2, 0.f);
+    for (unsigned int i = 0; i < fftSize / 2; ++i)
+        mag[i] = std::sqrt(re[i] * re[i] + im[i] * im[i]) / wsum;
+
+    // 12 个对数频段（40Hz ~ 16kHz），按 bin 频率取各频段峰值（经典频谱分析器观感）
+    const float fMin = 40.f, fMax = 16000.f;
+    const float logSpan = std::log(fMax / fMin);
+    const unsigned int sampleRate = m_engine ? ma_engine_get_sample_rate(m_engine) : 48000;
+    float bandPeak[spectrumBandCount] = {0.f};
+    for (unsigned int i = 0; i < fftSize / 2; ++i) {
+        const float freq = sampleRate * static_cast<float>(i) / static_cast<float>(fftSize);
+        if (freq < fMin) continue;
+        float t = std::log(freq / fMin) / logSpan;
+        int band = static_cast<int>(t * static_cast<float>(spectrumBandCount));
+        if (band < 0) band = 0;
+        if (band >= spectrumBandCount) band = spectrumBandCount - 1;
+        if (mag[i] > bandPeak[band]) bandPeak[band] = mag[i];
+    }
+
+    QVariantList out;
+    out.reserve(spectrumBandCount);
+    for (int b = 0; b < spectrumBandCount; ++b) {
+        // 满幅正弦峰值幅度 ≈0.5；用 0.3 作归一化基准并做 sqrt 提亮弱频段，视觉更贴近律动
+        float v = bandPeak[b] / 0.3f;
+        v = v <= 0.f ? 0.f : std::sqrt(v < 1.f ? v : 1.f);
+        out.append(static_cast<double>(v));
+    }
+
+    if (out != m_spectrum) {
+        m_spectrum = out;
+        emit spectrumChanged();
+    }
 }
 
 bool AudioEngine::initAudioDevice()

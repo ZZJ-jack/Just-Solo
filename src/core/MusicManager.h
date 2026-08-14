@@ -57,6 +57,7 @@ class MusicManager : public QObject
     Q_PROPERTY(QString lyricFont READ lyricFont WRITE setLyricFont NOTIFY lyricFontChanged)
     Q_PROPERTY(QString lyricFontFamily READ lyricFontFamily NOTIFY lyricFontChanged)
     Q_PROPERTY(int seekStep READ seekStep WRITE setSeekStep NOTIFY seekStepChanged)
+    Q_PROPERTY(QVariantList spectrum READ spectrum NOTIFY spectrumChanged)  // 真实音频频谱（12 频段 0~1）
 
     // ---- 自定义播放列表 ----
     Q_PROPERTY(QVariantList customPlaylists READ customPlaylists NOTIFY customPlaylistsChanged)
@@ -228,6 +229,9 @@ public:
     Q_INVOKABLE qint64 duration() const { return m_audioEngine ? m_audioEngine->duration() : 0; }
     Q_INVOKABLE void seek(qint64 ms);
 
+    // ---- 真实频谱 ----
+    QVariantList spectrum() const { return m_audioEngine ? m_audioEngine->spectrum() : QVariantList(); }
+
     // ---- 播放模式 ----
     int playMode() const { return m_playMode; }
     Q_INVOKABLE void setPlayMode(int mode);
@@ -303,6 +307,7 @@ signals:
     void durationChanged();
     void isLoadingChanged();
     void importProgressChanged();
+    void spectrumChanged();
 
 private:
     // 预编译歌词缓存：纯整数，播放时零分配

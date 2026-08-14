@@ -5,7 +5,7 @@ project(JustSolo VERSION 0.1.0 LANGUAGES CXX)
 set(APP_VERSION_MAJOR 1)   # X：主版本号
 set(APP_VERSION_MINOR 3)   # Y：次版本号
 set(APP_VERSION_PATCH 0)   # Z：修订版本号
-set(APP_VERSION_PRE   17)   # N：0=正式版, >0=beta.N
+set(APP_VERSION_PRE   18)   # N：0=正式版, >0=beta.N
 # 版本号格式: vX.Y.Z-beta.N
 
 # 格式化显示版本: vX.Y.Z 或 vX.Y.Z-beta.N
