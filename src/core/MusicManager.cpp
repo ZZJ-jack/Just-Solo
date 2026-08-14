@@ -1786,7 +1786,8 @@ void MusicManager::copyToPlaylist(int source) {
 
 void MusicManager::moveSongInLibrary(int from, int to) {
     if (from < 0 || from >= m_library.size()) return;
-    if (to < 0 || to >= m_library.size()) return;
+    // to 允许等于 size：即移动到列表末尾
+    if (to < 0 || to > m_library.size()) return;
     if (from == to) return;
 
     QVariantMap item = m_library[from].toMap();
@@ -1813,7 +1814,8 @@ void MusicManager::moveSongInLibrary(int from, int to) {
 
 void MusicManager::moveSongInFavorites(int from, int to) {
     if (from < 0 || from >= m_favorites.size()) return;
-    if (to < 0 || to >= m_favorites.size()) return;
+    // to 允许等于 size：即移动到列表末尾
+    if (to < 0 || to > m_favorites.size()) return;
     if (from == to) return;
 
     QVariantMap item = m_favorites[from].toMap();
@@ -1844,7 +1846,8 @@ void MusicManager::moveSongInFavorites(int from, int to) {
 
 void MusicManager::moveSongInHistory(int from, int to) {
     if (from < 0 || from >= m_history.size()) return;
-    if (to < 0 || to >= m_history.size()) return;
+    // to 允许等于 size：即移动到列表末尾
+    if (to < 0 || to > m_history.size()) return;
     if (from == to) return;
 
     QVariantMap item = m_history[from].toMap();
@@ -1880,7 +1883,8 @@ void MusicManager::moveSongInCustomPlaylist(int playlistIndex, int from, int to)
     QVariantList songs = pl["songs"].toList();
 
     if (from < 0 || from >= songs.size()) return;
-    if (to < 0 || to >= songs.size()) return;
+    // to 允许等于 size：即移动到列表末尾
+    if (to < 0 || to > songs.size()) return;
     if (from == to) return;
 
     QVariantMap entry = songs[from].toMap();
@@ -1924,7 +1928,8 @@ void MusicManager::moveSongInCustomPlaylist(int playlistIndex, int from, int to)
 
 void MusicManager::moveSongInPlaylist(int from, int to) {
     if (from < 0 || from >= m_playlist.size()) return;
-    if (to < 0 || to >= m_playlist.size()) return;
+    // to 允许等于 size：即移动到列表末尾
+    if (to < 0 || to > m_playlist.size()) return;
     if (from == to) return;
 
     QVariantMap item = m_playlist[from].toMap();

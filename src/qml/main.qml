@@ -213,7 +213,8 @@ Window {
         if (!list || fromIdx < 0 || toIdx < 0) return
         var paths = []
         for (var i = 0; i < list.length; i++) paths.push(list[i].path || "")
-        if (fromIdx >= paths.length || toIdx >= paths.length) return
+        // toIdx 允许等于 paths.length：即移动到列表末尾
+        if (fromIdx >= paths.length || toIdx > paths.length) return
         var item = paths.splice(fromIdx, 1)[0]
         var adj = toIdx > fromIdx ? toIdx - 1 : toIdx
         paths.splice(adj, 0, item)
@@ -1606,7 +1607,8 @@ Window {
                             id: sortBtnMA
                             anchors.fill: parent; hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: sortMenu.visible ? sortMenu.close() : sortMenu.open()
+                            // 只负责打开：第二次点击不再关闭菜单（关闭由点击菜单外部/选择项/Esc 处理）
+                            onClicked: sortMenu.open()
                         }
 
                         // ---- 排序菜单弹窗 ----
@@ -1616,7 +1618,9 @@ Window {
                             x: parent.width - width
                             y: parent.height + 6
                             padding: 0
-                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                            // 去掉 CloseOnPressOutside：由下方全窗口点击层负责关闭，
+                            // 避免点击排序按钮时被"点击外部"逻辑误关
+                            closePolicy: Popup.CloseOnEscape
 
                             background: Rectangle {
                                 color: "#222222"
@@ -5000,6 +5004,28 @@ Window {
                     }
                 }
             }
+        }
+    }
+
+    // ============================================================
+    // 排序菜单点击外部关闭层
+    // 仅排序菜单打开时显示。点击排序按钮区域放行（菜单保持打开），
+    // 点击其余任意位置关闭排序菜单。
+    // ============================================================
+    MouseArea {
+        id: sortMenuDismissLayer
+        anchors.fill: parent
+        visible: sortMenu.visible
+        z: 9997
+
+        onPressed: function(mouse) {
+            var btnPos = sortBtnMA.mapToItem(sortMenuDismissLayer, 0, 0)
+            if (mouse.x >= btnPos.x && mouse.x <= btnPos.x + sortBtnMA.width
+                    && mouse.y >= btnPos.y && mouse.y <= btnPos.y + sortBtnMA.height) {
+                mouse.accepted = false  // 放行给排序按钮，不关闭菜单
+                return
+            }
+            sortMenu.close()
         }
     }
 }

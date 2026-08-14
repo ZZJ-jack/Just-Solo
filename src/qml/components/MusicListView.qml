@@ -58,12 +58,14 @@ ColumnLayout {
     property int _autoScrollFinalIndex: -1 // 自动滚动期间计算的最终目标索引
     property bool _suppressAutoScroll: false // reorder 期间抑制自动定位
     property real _savedContentY: 0          // reorder 前保存的滚动位置
+    property real rowHeight: 50 + musicListView.spacing  // 行高（50）+ 间距（8）= 行距，拖拽定位用
 
     function reorderSong(fromIdx, toIdx) {
         if (fromIdx === toIdx) return
         if (fromIdx < 0 || toIdx < 0) return
         var list = songList
-        if (!list || fromIdx >= list.length || toIdx >= list.length) return
+        // toIdx 允许等于 list.length：即移动到列表末尾
+        if (!list || fromIdx >= list.length || toIdx > list.length) return
 
         if (pageListIndex >= 3) {
             musicManager.moveSongInCustomPlaylist(pageListIndex - 3, fromIdx, toIdx)
@@ -253,10 +255,11 @@ ColumnLayout {
                     musicListView.height - 50))
 
                 // 计算目标索引（viewport Y + contentY → content Y）
-                var rowHeight = 50 + musicListView.spacing
+                var rowHeight = root.rowHeight
                 var targetY = lvPt.y + musicListView.contentY
                 var targetIdx = Math.floor((targetY + rowHeight / 2) / rowHeight)
-                targetIdx = Math.max(0, Math.min(targetIdx, musicListView.count - 1))
+                // 允许 count：即插入到列表末尾（最后一行下方）
+                targetIdx = Math.max(0, Math.min(targetIdx, musicListView.count))
                 if (targetIdx !== root.dropTargetIndex) {
                     root.dropTargetIndex = targetIdx
                 }
@@ -498,6 +501,33 @@ ColumnLayout {
                 }
             }
         }
+
+        // ---- 拖到列表末尾时的放置提示（显示在最后一行下方） ----
+        Rectangle {
+            id: dropEndPlaceholder
+            visible: {
+                var targetIdx = root._autoScrollFinalIndex >= 0 ? root._autoScrollFinalIndex : root.dropTargetIndex
+                return targetIdx === musicListView.count && root.draggedIndex >= 0
+            }
+            z: 998
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: musicListView.width
+            height: 50
+            radius: 8
+            color: "#3A3A3A"
+            border.color: "#555555"
+            border.width: 1.5
+            opacity: 0.9
+            y: musicListView.count * root.rowHeight - musicListView.contentY
+
+            Label {
+                anchors.centerIn: parent
+                text: "放置到此处"
+                font.family: root.fontFamily
+                font.pixelSize: 15
+                color: "#777"
+            }
+        }
     }
 
     // ---- 拖拽自动滚动定时器 ----
@@ -517,10 +547,10 @@ ColumnLayout {
                 musicListView.height - 50))
 
             // 重新计算放置目标（viewport Y + contentY → content Y）
-            var rowHeight = 50 + musicListView.spacing
+            var rowHeight = root.rowHeight
             var targetY = root._dragEdgeY + musicListView.contentY
             var targetIdx = Math.floor((targetY + rowHeight / 2) / rowHeight)
-            targetIdx = Math.max(0, Math.min(targetIdx, musicListView.count - 1))
+            targetIdx = Math.max(0, Math.min(targetIdx, musicListView.count))
             // 自动滚动期间不修改 dropTargetIndex（避免触发 per-delegate 动画导致闪烁）
             root._autoScrollFinalIndex = targetIdx
             // 仅更新浮动指示线位置
