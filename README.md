@@ -12,9 +12,13 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://www.microsoft.com/windows)
 
+<img src="./data/image/photo-6.png" alt="Photo 6"/>
+
 <img src="./data/image/photo-1.png" alt="Photo 1"/>
 
 <img src="./data/image/photo-4.png" alt="Photo 4"/>
+
+<img src="./data/image/photo-7.png" alt="Photo 7"/>
 
 <img src="./data/image/photo-3.png" alt="Photo 3"/>
 
