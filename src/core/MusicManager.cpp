@@ -410,8 +410,8 @@ void MusicManager::setUseCache(bool use) {
     // 历史版本封面缓存是全尺寸（可达 36MB/张），启动后异步压缩到 512px 内
     if (use)
         QTimer::singleShot(0, this, &MusicManager::shrinkLegacyCoverCache);
-    // 启动软件时同步音乐库文件夹（QML 加载完成后才执行，复用导入进度覆盖层）
-    if (use && m_syncOnStartup && !m_syncFolder.isEmpty())
+    // 启动软件时同步音乐库文件夹（QML 加载完成后才执行，复用右下角同步小卡片）
+    if (use && m_syncOnStartup && !m_syncFolders.isEmpty())
         QTimer::singleShot(0, this, &MusicManager::syncLibraryFolder);
 }
 
@@ -546,8 +546,12 @@ void MusicManager::loadSettings() {
         m_seekStep = qBound(1, obj.value("seekStep").toInt(m_seekStep), 10);
         emit seekStepChanged();
     }
-    if (obj.contains("syncFolder"))
-        m_syncFolder = obj.value("syncFolder").toString();
+    if (obj.contains("syncFolders")) {
+        m_syncFolders.clear();
+        const QJsonArray arr = obj.value("syncFolders").toArray();
+        for (const QJsonValue &v : arr)
+            m_syncFolders.append(v.toString());
+    }
     if (obj.contains("syncOnStartup"))
         m_syncOnStartup = obj.value("syncOnStartup").toBool(true);
     if (obj.contains("lastSyncTime"))
@@ -578,7 +582,10 @@ void MusicManager::saveSettings() {
     obj["startupCheckUpdate"] = m_startupCheckUpdate;
     obj["lyricFont"] = m_lyricFont;
     obj["seekStep"] = m_seekStep;
-    obj["syncFolder"] = m_syncFolder;
+    QJsonArray syncArr;
+    for (const QString &folder : m_syncFolders)
+        syncArr.append(folder);
+    obj["syncFolders"] = syncArr;
     obj["syncOnStartup"] = m_syncOnStartup;
     obj["lastSyncTime"] = m_lastSyncTime;
     QJsonDocument doc(obj);
@@ -871,11 +878,26 @@ void MusicManager::setSeekStep(int v) {
     saveSettings();
 }
 
-void MusicManager::setSyncFolder(const QString &v) {
-    QString p = QDir::cleanPath(v.trimmed());
-    if (p == m_syncFolder) return;
-    m_syncFolder = p;
-    emit syncFolderChanged();
+QVariantList MusicManager::syncFolders() const {
+    QVariantList list;
+    for (const QString &folder : m_syncFolders)
+        list.append(folder);
+    return list;
+}
+
+void MusicManager::addSyncFolder(const QString &path) {
+    QString p = QDir::cleanPath(path.trimmed());
+    if (p.isEmpty()) return;
+    if (m_syncFolders.contains(p)) return;  // 重复忽略
+    m_syncFolders.append(p);
+    emit syncFoldersChanged();
+    saveSettings();
+}
+
+void MusicManager::removeSyncFolder(int index) {
+    if (index < 0 || index >= m_syncFolders.size()) return;
+    m_syncFolders.removeAt(index);
+    emit syncFoldersChanged();
     saveSettings();
 }
 
@@ -886,38 +908,25 @@ void MusicManager::setSyncOnStartup(bool v) {
     saveSettings();
 }
 
-void MusicManager::clearSyncFolder() {
-    if (m_syncFolder.isEmpty() && m_lastSyncTime == 0 && m_syncStatus.isEmpty()) return;
-    m_syncFolder.clear();
-    m_lastSyncTime = 0;
-    m_syncStatus.clear();
-    emit syncFolderChanged();
-    emit lastSyncTimeChanged();
-    emit syncStatusChanged();
-    saveSettings();
-}
-
 void MusicManager::syncLibraryFolder() {
-    if (m_syncFolder.isEmpty()) {
-        m_syncStatus = "请先在设置中选择同步文件夹";
+    if (m_syncFolders.isEmpty()) {
+        m_syncStatus = "请先在设置中添加同步文件夹";
         emit syncStatusChanged();
         return;
     }
-    QDir dir(m_syncFolder);
-    if (!dir.exists()) {
-        m_syncStatus = "同步文件夹不存在，已跳过本次同步";
-        emit syncStatusChanged();
-        return;
-    }
+    if (m_isSyncing) return;  // 防止重复触发
 
-    // 只收集上次同步之后新增/修改的音频文件（首次同步 lastSyncTime=0 全量收集）
+    // 收集同步文件夹下所有音频文件，交给 addFiles 统一去重：
+    // 已存在同路径 → 跳过；同歌名歌手且新文件音质更高 → 替换为高音质版本；否则 → 新增
     QStringList paths;
-    for (const QString &ext : supportedAudioExtensions()) {
-        QDirIterator it(m_syncFolder, QStringList{ext}, QDir::Files | QDir::Readable, QDirIterator::Subdirectories);
-        while (it.hasNext()) {
-            const QString filePath = it.next();
-            if (QFileInfo(filePath).lastModified().toMSecsSinceEpoch() >= m_lastSyncTime)
-                paths.append(filePath);
+    for (const QString &folder : m_syncFolders) {
+        QDir dir(folder);
+        if (!dir.exists())
+            continue;
+        for (const QString &ext : supportedAudioExtensions()) {
+            QDirIterator it(folder, QStringList{ext}, QDir::Files | QDir::Readable, QDirIterator::Subdirectories);
+            while (it.hasNext())
+                paths.append(it.next());
         }
     }
 
@@ -926,13 +935,18 @@ void MusicManager::syncLibraryFolder() {
     saveSettings();
 
     if (paths.isEmpty()) {
-        m_syncStatus = "同步完成，没有发现新增或修改的音乐文件";
+        m_syncStatus = "同步完成，文件夹中未发现音乐文件";
         emit syncStatusChanged();
         return;
     }
 
-    m_syncStatus = QString("发现 %1 个新增/修改的音乐文件，正在导入…").arg(paths.size());
+    // 标记为同步导入：QML 用右下角小卡片显示进度，不遮挡界面
+    m_syncStatus = QString("正在检查 %1 个音乐文件…").arg(paths.size());
+    m_syncImported = 0;
+    m_syncUpdated = 0;
+    m_isSyncing = true;
     emit syncStatusChanged();
+    emit isSyncingChanged();
     addFiles(paths);
 }
 
@@ -1536,6 +1550,13 @@ void MusicManager::processNextPending() {
         m_importProcessed = m_importTotal;
         emit isLoadingChanged();
         emit importProgressChanged();
+        // 同步扫描导入结束：结束右下角小卡片状态并更新提示
+        if (m_isSyncing) {
+            m_isSyncing = false;
+            m_syncStatus = QString("同步完成，新增 %1 首，更新 %2 首").arg(m_syncImported).arg(m_syncUpdated);
+            emit isSyncingChanged();
+            emit syncStatusChanged();
+        }
         return;
     }
 
@@ -1592,6 +1613,8 @@ void MusicManager::processNextPending() {
                 if (newQualityRank > existingQualityRank) {
                     m_library[i] = track;
                     m_playlist[i] = track;  // 同步更新播放列表中的高音质版本
+                    if (m_isSyncing)
+                        m_syncUpdated++;
                     if (m_currentIndex == i) {
                         bool wasPlaying = m_audioEngine && m_audioEngine->isPlaying();
                         qint64 oldPos = m_audioEngine ? m_audioEngine->position() : 0;
@@ -1617,6 +1640,8 @@ void MusicManager::processNextPending() {
             if (m_playlistSource == 0 && m_currentIndex >= 0)
                 m_currentIndex++;
             playlistModified = true;
+            if (m_isSyncing)
+                m_syncImported++;
         }
 
         m_importProcessed++;

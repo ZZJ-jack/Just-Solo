@@ -882,81 +882,106 @@ Rectangle {
             width: syncScroll.availableWidth
             spacing: 0
 
-        // 同步文件夹
+        // 同步文件夹列表
         Rectangle {
             Layout.fillWidth: true; Layout.maximumWidth: 520
-            Layout.preferredHeight: 150; radius: 8
+            Layout.preferredHeight: {
+                var c = musicManager.syncFolders.length
+                var listH = c > 0 ? c * 42 - 8 : 30
+                return 120 + listH
+            }
+            radius: 8
             color: "#222222"; border.color: "#3A3A3A"
 
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 20; spacing: 10
 
-                Label {
-                    text: "音乐库同步文件夹"
-                    font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
-                }
-
-                // 当前文件夹路径
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 34; radius: 6
-                    color: "#1E1E1E"; border.color: "#3A3A3A"
-                    Label {
-                        anchors.fill: parent
-                        anchors.leftMargin: 12; anchors.rightMargin: 12
-                        verticalAlignment: Text.AlignVCenter
-                        text: musicManager.syncFolder.length > 0 ? musicManager.syncFolder : "未选择文件夹"
-                        font.family: fontFamily; font.pixelSize: 12
-                        color: musicManager.syncFolder.length > 0 ? "#dddddd" : "#666666"
-                        elide: Text.ElideMiddle
-                    }
-                }
-
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 10
-
+                    Label {
+                        text: "音乐库同步文件夹"
+                        font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                    }
+                    Item { Layout.fillWidth: true }
                     Rectangle {
-                        Layout.preferredWidth: 120; Layout.preferredHeight: 34; radius: 8
-                        color: selSyncMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                        Layout.preferredWidth: 116; Layout.preferredHeight: 32; radius: 8
+                        color: addSyncMA.containsMouse ? "#5B9EF6" : "#3B82F6"
                         Label {
                             anchors.centerIn: parent
-                            text: "选择文件夹"
+                            text: "+ 添加文件夹"
                             font.family: fontFamily; font.pixelSize: 13; color: "#ffffff"
                         }
                         MouseArea {
-                            id: selSyncMA
+                            id: addSyncMA
                             anchors.fill: parent; hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: syncFolderDialog.open()
                         }
                     }
+                }
 
-                    Rectangle {
-                        Layout.preferredWidth: 90; Layout.preferredHeight: 34; radius: 8
-                        color: clrSyncMA.containsMouse ? "#3A3A3A" : "#2A2A2A"
-                        border.color: "#3A3A3A"
-                        visible: musicManager.syncFolder.length > 0
-                        Label {
-                            anchors.centerIn: parent
-                            text: "清除"
-                            font.family: fontFamily; font.pixelSize: 13; color: "#bbbbbb"
-                        }
-                        MouseArea {
-                            id: clrSyncMA
-                            anchors.fill: parent; hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: musicManager.clearSyncFolder()
+                // 文件夹列表
+                Column {
+                    id: syncFolderList
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Repeater {
+                        model: musicManager.syncFolders
+
+                        delegate: Rectangle {
+                            id: folderRow
+                            width: syncFolderList.width
+                            height: 34
+                            radius: 6
+                            color: "#1E1E1E"
+                            border.color: "#3A3A3A"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12; anchors.rightMargin: 8
+                                spacing: 8
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: modelData
+                                    font.family: fontFamily; font.pixelSize: 12; color: "#dddddd"
+                                    elide: Text.ElideMiddle
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 22; Layout.preferredHeight: 22; radius: 4
+                                    color: delSyncMA.containsMouse ? "#3A3A3A" : "transparent"
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "✕"
+                                        font.family: fontFamily; font.pixelSize: 12; color: "#999999"
+                                    }
+                                    MouseArea {
+                                        id: delSyncMA
+                                        anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: musicManager.removeSyncFolder(index)
+                                    }
+                                }
+                            }
                         }
                     }
 
+                    // 空状态提示
                     Label {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignVCenter
-                        text: "所选文件夹及其所有子文件夹中的音乐都会被同步导入"
-                        font.family: fontFamily; font.pixelSize: 11; color: "#777777"
-                        wrapMode: Text.WordWrap
+                        visible: musicManager.syncFolders.length === 0
+                        text: "未添加同步文件夹"
+                        font.family: fontFamily; font.pixelSize: 12; color: "#666666"
+                        height: 30
+                        verticalAlignment: Text.AlignVCenter
+                        horizontalAlignment: Text.AlignHCenter
+                        width: syncFolderList.width
                     }
+                }
+
+                Label {
+                    text: "所选文件夹及其所有子文件夹中的音乐都会被同步导入，可添加多个文件夹"
+                    font.family: fontFamily; font.pixelSize: 11; color: "#777777"
+                    wrapMode: Text.WordWrap; Layout.fillWidth: true
                 }
             }
         }
@@ -987,7 +1012,7 @@ Rectangle {
                 }
 
                 Label {
-                    text: "开启后每次启动软件自动扫描同步文件夹，导入上次同步之后新增或修改的音乐"
+                    text: "开启后每次启动软件自动扫描同步文件夹，检查并导入缺失的音乐或更高音质版本"
                     font.family: fontFamily; font.pixelSize: 11; color: "#777777"
                     wrapMode: Text.WordWrap; Layout.fillWidth: true
                 }
@@ -1046,9 +1071,10 @@ Rectangle {
         }
 
         Label {
-            text: "同步会将文件夹中新增或修改的音乐导入音乐库，已存在的歌曲不会重复添加"
+            text: "同步会检查文件夹中的音乐是否已在音乐库中：缺失则导入，音质更高则更新为高音质版本（右下角小卡片显示进度）"
             font.family: fontFamily; font.pixelSize: 12; color: "#777777"
             Layout.topMargin: 8
+            wrapMode: Text.WordWrap; Layout.fillWidth: true
         }
         Item { Layout.preferredHeight: 14 }
         }
@@ -1732,7 +1758,7 @@ Rectangle {
             var path = syncFolderDialog.selectedFolder.toString()
             if (path.startsWith("file:///")) path = path.substring(8)
             else if (path.startsWith("file://")) path = path.substring(7)
-            musicManager.syncFolder = path
+            musicManager.addSyncFolder(path)
         }
     }
 

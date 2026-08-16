@@ -1918,13 +1918,28 @@ Window {
 
             // ==================================================
             // 导入加载覆盖层（按需创建，导入完毕自动销毁释放内存）
+            // 仅正常导入显示全屏覆盖层；同步扫描导入走右下角小卡片
             // ==================================================
             Loader {
                 id: importOverlay
                 anchors.fill: parent
                 z: 10
-                active: musicManager.isLoading
+                active: musicManager.isLoading && !musicManager.isSyncing
                 sourceComponent: importOverlayComp
+            }
+
+            // ==================================================
+            // 音乐库同步小卡片（右下角，同步扫描导入时显示，不遮挡界面）
+            // ==================================================
+            Loader {
+                id: syncCard
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 20
+                anchors.bottomMargin: 18
+                z: 20
+                active: musicManager.isSyncing
+                sourceComponent: syncCardComp
             }
 
             // --------------------------------------------------
@@ -2003,6 +2018,57 @@ Window {
                     font.pixelSize: 13
                     color: "#666"
                     Layout.alignment: Qt.AlignHCenter
+                }
+            }
+        }
+    }
+
+    // ---- 音乐库同步小卡片组件（右下角，进度条 + 计数，同步结束自动销毁） ----
+    Component {
+        id: syncCardComp
+        Rectangle {
+            width: 300
+            height: 78
+            radius: 10
+            color: "#222222"
+            border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 14
+                spacing: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Label {
+                        text: "正在同步音乐库"
+                        font.family: appFont.name
+                        font.pixelSize: 14
+                        color: "#ffffff"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: {
+                            var total = musicManager.importTotal
+                            var done = musicManager.importProcessed
+                            return total > 0 ? done + " / " + total : ""
+                        }
+                        font.family: appFont.name
+                        font.pixelSize: 12
+                        color: "#3B82F6"
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 6; radius: 3
+                    color: "#3A3A3A"
+                    Rectangle {
+                        height: parent.height; radius: 3; color: "#3B82F6"
+                        width: parent.width * musicManager.importProgress
+                        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                    }
                 }
             }
         }
