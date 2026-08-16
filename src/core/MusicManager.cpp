@@ -2020,6 +2020,33 @@ void MusicManager::shutdown() {
     releaseOriginalCover();
 }
 
+void MusicManager::setDisplayOrder(const QStringList &paths, int source) {
+    m_displayOrder = paths;
+    m_displayOrderSource = source;
+}
+
+// 在显示（排序）顺序中定位当前歌曲的下一首/上一首的真实下标；无法定位返回 -1
+// （顺序为 QML 排序后推入，播放列表本身保持原始顺序，二者内容相同仅顺序不同）
+int MusicManager::displayOrderStepIndex(const QVariantList &list, bool forward) const {
+    if (m_displayOrder.isEmpty() || m_displayOrder.size() != list.size())
+        return -1;
+    // 仅当顺序对应当前播放来源时生效，防止其他来源/历史的旧顺序误用
+    if (m_displayOrderSource != m_playingListIndex)
+        return -1;
+    if (m_currentIndex < 0 || m_currentIndex >= list.size())
+        return -1;
+    const QString curPath = list[m_currentIndex].toMap()["path"].toString();
+    const int pos = m_displayOrder.indexOf(curPath);
+    if (pos < 0) return -1;
+    const int n = m_displayOrder.size();
+    const int targetPos = forward ? (pos + 1) % n : (pos - 1 + n) % n;
+    const QString targetPath = m_displayOrder[targetPos];
+    for (int i = 0; i < list.size(); i++) {
+        if (list[i].toMap()["path"].toString() == targetPath) return i;
+    }
+    return -1;
+}
+
 void MusicManager::next() {
     // 队列为空时回退到音乐库（兜底）；独立播放列表不再被强制重置为全库
     if (m_playlistSource == 0 && m_playlist.isEmpty() && !m_library.isEmpty()) {
@@ -2041,7 +2068,10 @@ void MusicManager::next() {
             if (nextIdx >= m_currentIndex) nextIdx++;
         }
     } else {
-        nextIdx = (m_currentIndex + 1) % list.size();
+        // 优先按显示（排序）顺序导航：列表页/主页封面墙按排序模式显示，
+        // 播放列表保持原始顺序。若按原始顺序 next，会与显示顺序错位（表现为"下一首变成了上一首"）
+        nextIdx = displayOrderStepIndex(list, true);
+        if (nextIdx < 0) nextIdx = (m_currentIndex + 1) % list.size();
     }
     playIndex(nextIdx);
 }
@@ -2054,10 +2084,13 @@ void MusicManager::previous() {
     }
     QVariantList &list = currentPlaylist();
     if (list.isEmpty()) return;
-    int prevIdx = m_currentIndex <= 0 ? list.size() - 1 : m_currentIndex - 1;
-    // 防御：索引被异常污染（如历史 bug 导致越界）时夹取到合法范围，
-    // 避免 playIndex 的边界检查直接吞掉，用户点上一曲却毫无反应
-    prevIdx = qBound(0, prevIdx, list.size() - 1);
+    int prevIdx = displayOrderStepIndex(list, false);
+    if (prevIdx < 0) {
+        prevIdx = m_currentIndex <= 0 ? list.size() - 1 : m_currentIndex - 1;
+        // 防御：索引被异常污染（如历史 bug 导致越界）时夹取到合法范围，
+        // 避免 playIndex 的边界检查直接吞掉，用户点上一曲却毫无反应
+        prevIdx = qBound(0, prevIdx, list.size() - 1);
+    }
     playIndex(prevIdx);
 }
 

@@ -26,6 +26,19 @@ Item {
 
     visible: active && sourceList.length > 0
 
+    // 当前播放列表的显示（排序）顺序同步给 MusicManager：
+    // 列表页/封面墙按排序模式显示，而播放列表保持原始顺序；底部栏/迷你播放器/媒体键/热键/
+    // 歌曲结束自动切歌的 next/previous 均按此顺序导航，保证"封面墙显示的下一首"与实际播放一致。
+    // 历史页不参与排序且每次播放都会重排历史，保持原始顺序导航，不推送显示顺序
+    onSourceListChanged: {
+        if (typeof musicManager === "undefined" || !musicManager) return
+        if (musicManager.playingListIndex === 2) return   // 历史页：原始顺序导航
+        var paths = []
+        for (var i = 0; i < root.sourceList.length; i++)
+            paths.push(root.sourceList[i].path || "")
+        musicManager.setDisplayOrder(paths, musicManager.playingListIndex)
+    }
+
     Row {
         id: homeCoverStrip
         anchors.left: parent.left

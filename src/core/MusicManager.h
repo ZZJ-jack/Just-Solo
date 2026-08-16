@@ -110,6 +110,10 @@ public:
     Q_INVOKABLE void shutdown();
     Q_INVOKABLE void next();
     Q_INVOKABLE void previous();
+    // 同步"显示（排序）顺序"：列表页/主页按排序模式显示，但播放列表保持原始顺序。
+    // next/previous 按此顺序导航，保证切歌方向与封面墙显示一致。
+    // source 为播放来源标识（playingListIndex），仅当与当前来源一致时才生效，防止旧顺序误用
+    Q_INVOKABLE void setDisplayOrder(const QStringList &paths, int source);
 
     QVariantList playlist() const { return m_playlist; }
     QVariantList library() const { return m_library; }
@@ -320,6 +324,7 @@ private:
 
     void updateCurrentTrack();
     void updateCurrentCoverColor();          // 从 m_currentCover 提取主色调
+    int displayOrderStepIndex(const QVariantList &list, bool forward) const; // 按显示顺序定位下一首/上一首的真实下标（-1=无法定位）
     static QString extractCoverColor(const QString &coverUrl);
     static QHash<QString, QString> s_coverColorCache;  // 封面URL -> 主色，同一封面只解码一次
     void registerBuiltinFonts();             // 启动时注册当前选用的内置字体，其余按需注册
@@ -378,6 +383,8 @@ private:
     QMap<QString, QString> m_builtinFontFamilies;  // 内置字体 qrc 路径 -> 族名
     QVariantList m_customPlaylists;         // 自定义播放列表
     QVariantList m_sortModes;               // 自定义排序 [{name, order:[path,...]}]
+    QStringList m_displayOrder;             // 当前播放列表的显示（排序后）顺序，next/previous 按此导航
+    int m_displayOrderSource = -1;          // m_displayOrder 对应的播放来源（playingListIndex）
     int m_playingListIndex = -1;            // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义
     void loadSettings();
     void saveSettings();
