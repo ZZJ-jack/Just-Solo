@@ -410,6 +410,9 @@ void MusicManager::setUseCache(bool use) {
     // 历史版本封面缓存是全尺寸（可达 36MB/张），启动后异步压缩到 512px 内
     if (use)
         QTimer::singleShot(0, this, &MusicManager::shrinkLegacyCoverCache);
+    // 启动软件时同步音乐库文件夹（QML 加载完成后才执行，复用导入进度覆盖层）
+    if (use && m_syncOnStartup && !m_syncFolder.isEmpty())
+        QTimer::singleShot(0, this, &MusicManager::syncLibraryFolder);
 }
 
 // 把超过 512px 的历史封面缓存原位重写为缩略图（路径不变，已存储的 URL 仍有效）
@@ -543,6 +546,12 @@ void MusicManager::loadSettings() {
         m_seekStep = qBound(1, obj.value("seekStep").toInt(m_seekStep), 10);
         emit seekStepChanged();
     }
+    if (obj.contains("syncFolder"))
+        m_syncFolder = obj.value("syncFolder").toString();
+    if (obj.contains("syncOnStartup"))
+        m_syncOnStartup = obj.value("syncOnStartup").toBool(true);
+    if (obj.contains("lastSyncTime"))
+        m_lastSyncTime = obj.value("lastSyncTime").toVariant().toLongLong();
     // 旧版本缓存没有以上两项：默认开启并写入缓存
     if (!obj.contains("wasapiWarnEnabled") || !obj.contains("startupCheckUpdate"))
         saveSettings();
@@ -569,6 +578,9 @@ void MusicManager::saveSettings() {
     obj["startupCheckUpdate"] = m_startupCheckUpdate;
     obj["lyricFont"] = m_lyricFont;
     obj["seekStep"] = m_seekStep;
+    obj["syncFolder"] = m_syncFolder;
+    obj["syncOnStartup"] = m_syncOnStartup;
+    obj["lastSyncTime"] = m_lastSyncTime;
     QJsonDocument doc(obj);
     QFile file(m_cacheDir + "/settings.json");
     if (file.open(QIODevice::WriteOnly)) {
@@ -857,6 +869,71 @@ void MusicManager::setSeekStep(int v) {
     m_seekStep = v;
     emit seekStepChanged();
     saveSettings();
+}
+
+void MusicManager::setSyncFolder(const QString &v) {
+    QString p = QDir::cleanPath(v.trimmed());
+    if (p == m_syncFolder) return;
+    m_syncFolder = p;
+    emit syncFolderChanged();
+    saveSettings();
+}
+
+void MusicManager::setSyncOnStartup(bool v) {
+    if (v == m_syncOnStartup) return;
+    m_syncOnStartup = v;
+    emit syncOnStartupChanged();
+    saveSettings();
+}
+
+void MusicManager::clearSyncFolder() {
+    if (m_syncFolder.isEmpty() && m_lastSyncTime == 0 && m_syncStatus.isEmpty()) return;
+    m_syncFolder.clear();
+    m_lastSyncTime = 0;
+    m_syncStatus.clear();
+    emit syncFolderChanged();
+    emit lastSyncTimeChanged();
+    emit syncStatusChanged();
+    saveSettings();
+}
+
+void MusicManager::syncLibraryFolder() {
+    if (m_syncFolder.isEmpty()) {
+        m_syncStatus = "请先在设置中选择同步文件夹";
+        emit syncStatusChanged();
+        return;
+    }
+    QDir dir(m_syncFolder);
+    if (!dir.exists()) {
+        m_syncStatus = "同步文件夹不存在，已跳过本次同步";
+        emit syncStatusChanged();
+        return;
+    }
+
+    // 只收集上次同步之后新增/修改的音频文件（首次同步 lastSyncTime=0 全量收集）
+    QStringList paths;
+    for (const QString &ext : supportedAudioExtensions()) {
+        QDirIterator it(m_syncFolder, QStringList{ext}, QDir::Files | QDir::Readable, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString filePath = it.next();
+            if (QFileInfo(filePath).lastModified().toMSecsSinceEpoch() >= m_lastSyncTime)
+                paths.append(filePath);
+        }
+    }
+
+    m_lastSyncTime = QDateTime::currentMSecsSinceEpoch();
+    emit lastSyncTimeChanged();
+    saveSettings();
+
+    if (paths.isEmpty()) {
+        m_syncStatus = "同步完成，没有发现新增或修改的音乐文件";
+        emit syncStatusChanged();
+        return;
+    }
+
+    m_syncStatus = QString("发现 %1 个新增/修改的音乐文件，正在导入…").arg(paths.size());
+    emit syncStatusChanged();
+    addFiles(paths);
 }
 
 void MusicManager::setPlayMode(int mode) {

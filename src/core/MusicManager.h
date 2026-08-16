@@ -59,6 +59,12 @@ class MusicManager : public QObject
     Q_PROPERTY(int seekStep READ seekStep WRITE setSeekStep NOTIFY seekStepChanged)
     Q_PROPERTY(QVariantList spectrum READ spectrum NOTIFY spectrumChanged)  // 真实音频频谱（12 频段 0~1）
 
+    // ---- 音乐库同步 ----
+    Q_PROPERTY(QString syncFolder READ syncFolder WRITE setSyncFolder NOTIFY syncFolderChanged)
+    Q_PROPERTY(bool syncOnStartup READ syncOnStartup WRITE setSyncOnStartup NOTIFY syncOnStartupChanged)
+    Q_PROPERTY(qint64 lastSyncTime READ lastSyncTime NOTIFY lastSyncTimeChanged)  // 上次同步时间 (ms)，0=从未同步
+    Q_PROPERTY(QString syncStatus READ syncStatus NOTIFY syncStatusChanged)
+
     // ---- 自定义播放列表 ----
     Q_PROPERTY(QVariantList customPlaylists READ customPlaylists NOTIFY customPlaylistsChanged)
     Q_PROPERTY(int playingListIndex READ playingListIndex NOTIFY playingListIndexChanged)  // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义
@@ -195,6 +201,16 @@ public:
     int seekStep() const { return m_seekStep; }
     void setSeekStep(int v);
 
+    // ---- 音乐库同步 ----
+    QString syncFolder() const { return m_syncFolder; }
+    void setSyncFolder(const QString &v);
+    bool syncOnStartup() const { return m_syncOnStartup; }
+    void setSyncOnStartup(bool v);
+    qint64 lastSyncTime() const { return m_lastSyncTime; }
+    QString syncStatus() const { return m_syncStatus; }
+    Q_INVOKABLE void syncLibraryFolder();  // 扫描同步文件夹，导入上次同步后新增/修改的音频
+    Q_INVOKABLE void clearSyncFolder();    // 清除同步文件夹设置
+
     // ---- 歌词字体 ----
     QString lyricFont() const { return m_lyricFont; }
     QString lyricFontFamily() const;             // 解析当前选择为可用字体族名（空串=回退默认）
@@ -312,6 +328,10 @@ signals:
     void isLoadingChanged();
     void importProgressChanged();
     void spectrumChanged();
+    void syncFolderChanged();
+    void syncOnStartupChanged();
+    void lastSyncTimeChanged();
+    void syncStatusChanged();
 
 private:
     // 预编译歌词缓存：纯整数，播放时零分配
@@ -386,6 +406,10 @@ private:
     QStringList m_displayOrder;             // 当前播放列表的显示（排序后）顺序，next/previous 按此导航
     int m_displayOrderSource = -1;          // m_displayOrder 对应的播放来源（playingListIndex）
     int m_playingListIndex = -1;            // -1=无, 0=库, 1=收藏, 2=历史, 3+n=自定义
+    QString m_syncFolder;                   // 音乐库同步文件夹
+    bool m_syncOnStartup = true;            // 启动软件时自动同步（默认开启）
+    qint64 m_lastSyncTime = 0;              // 上次同步时间 (ms)，0=从未同步（首次全量导入）
+    QString m_syncStatus;                   // 同步状态提示文本
     void loadSettings();
     void saveSettings();
     int m_currentIndex = -1;

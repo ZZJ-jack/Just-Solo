@@ -35,6 +35,13 @@ Rectangle {
         return "鸿蒙字体（默认）"
     }
 
+    // 上次音乐库同步时间展示
+    function formatSyncTime() {
+        if (!musicManager.lastSyncTime) return "从未同步"
+        var d = new Date(musicManager.lastSyncTime)
+        return d.toLocaleString(Qt.locale("zh_CN"), "yyyy-MM-dd HH:mm:ss")
+    }
+
     FontLoader {
         id: updateFont
         source: "qrc:/qt/qml/JustSolo/data/font/HarmonyOS_Sans_SC_Regular.ttf"
@@ -862,6 +869,191 @@ Rectangle {
         Item { Layout.fillHeight: true }
     }
 
+    // ---- 音乐库同步（卡片较多，内容超出时滚动） ----
+    ScrollView {
+        id: syncScroll
+        anchors.fill: parent
+        visible: settingsSubMenu === "sync"
+        clip: true
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+        ColumnLayout {
+            width: syncScroll.availableWidth
+            spacing: 0
+
+        // 同步文件夹
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 150; radius: 8
+            color: "#222222"; border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                Label {
+                    text: "音乐库同步文件夹"
+                    font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                }
+
+                // 当前文件夹路径
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 34; radius: 6
+                    color: "#1E1E1E"; border.color: "#3A3A3A"
+                    Label {
+                        anchors.fill: parent
+                        anchors.leftMargin: 12; anchors.rightMargin: 12
+                        verticalAlignment: Text.AlignVCenter
+                        text: musicManager.syncFolder.length > 0 ? musicManager.syncFolder : "未选择文件夹"
+                        font.family: fontFamily; font.pixelSize: 12
+                        color: musicManager.syncFolder.length > 0 ? "#dddddd" : "#666666"
+                        elide: Text.ElideMiddle
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    Rectangle {
+                        Layout.preferredWidth: 120; Layout.preferredHeight: 34; radius: 8
+                        color: selSyncMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                        Label {
+                            anchors.centerIn: parent
+                            text: "选择文件夹"
+                            font.family: fontFamily; font.pixelSize: 13; color: "#ffffff"
+                        }
+                        MouseArea {
+                            id: selSyncMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: syncFolderDialog.open()
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: 90; Layout.preferredHeight: 34; radius: 8
+                        color: clrSyncMA.containsMouse ? "#3A3A3A" : "#2A2A2A"
+                        border.color: "#3A3A3A"
+                        visible: musicManager.syncFolder.length > 0
+                        Label {
+                            anchors.centerIn: parent
+                            text: "清除"
+                            font.family: fontFamily; font.pixelSize: 13; color: "#bbbbbb"
+                        }
+                        MouseArea {
+                            id: clrSyncMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: musicManager.clearSyncFolder()
+                        }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        text: "所选文件夹及其所有子文件夹中的音乐都会被同步导入"
+                        font.family: fontFamily; font.pixelSize: 11; color: "#777777"
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 14 }
+
+        // 启动软件时自动同步
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 96; radius: 8
+            color: "#222222"; border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.leftMargin: 20; anchors.rightMargin: 20; anchors.topMargin: 14; anchors.bottomMargin: 16; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "启动软件时自动同步"
+                        font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                    }
+                    Item { Layout.fillWidth: true }
+                    ToggleSwitch {
+                        Layout.alignment: Qt.AlignVCenter
+                        checked: musicManager.syncOnStartup
+                        onToggled: musicManager.syncOnStartup = checked
+                    }
+                }
+
+                Label {
+                    text: "开启后每次启动软件自动扫描同步文件夹，导入上次同步之后新增或修改的音乐"
+                    font.family: fontFamily; font.pixelSize: 11; color: "#777777"
+                    wrapMode: Text.WordWrap; Layout.fillWidth: true
+                }
+            }
+        }
+
+        Item { Layout.preferredHeight: 14 }
+
+        // 手动同步
+        Rectangle {
+            Layout.fillWidth: true; Layout.maximumWidth: 520
+            Layout.preferredHeight: 150; radius: 8
+            color: "#222222"; border.color: "#3A3A3A"
+
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 20; spacing: 10
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: "手动同步"
+                        font.family: fontFamily; font.pixelSize: 15; color: "#ffffff"
+                    }
+                    Item { Layout.fillWidth: true }
+
+                    Rectangle {
+                        Layout.preferredWidth: 130; Layout.preferredHeight: 34; radius: 8
+                        color: syncNowMA.containsMouse ? "#5B9EF6" : "#3B82F6"
+                        Label {
+                            anchors.centerIn: parent
+                            text: "立即同步"
+                            font.family: fontFamily; font.pixelSize: 13; color: "#ffffff"
+                        }
+                        MouseArea {
+                            id: syncNowMA
+                            anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: musicManager.syncLibraryFolder()
+                        }
+                    }
+                }
+
+                Label {
+                    text: "上次同步时间：" + settingsRoot.formatSyncTime()
+                    font.family: fontFamily; font.pixelSize: 12; color: "#3B82F6"
+                }
+
+                Label {
+                    id: syncStatusLabel
+                    text: musicManager.syncStatus
+                    font.family: fontFamily; font.pixelSize: 12; color: "#aaaaaa"
+                    wrapMode: Text.WordWrap; Layout.fillWidth: true
+                    visible: text.length > 0
+                }
+            }
+        }
+
+        Label {
+            text: "同步会将文件夹中新增或修改的音乐导入音乐库，已存在的歌曲不会重复添加"
+            font.family: fontFamily; font.pixelSize: 12; color: "#777777"
+            Layout.topMargin: 8
+        }
+        Item { Layout.preferredHeight: 14 }
+        }
+    }
+
     // ---- 外观（卡片较多，内容超出时滚动） ----
     ScrollView {
         id: appearanceScroll
@@ -1528,6 +1720,19 @@ Rectangle {
             } else {
                 updateChecker.downloadInstaller(path)
             }
+        }
+    }
+
+    // ---- 文件夹选择对话框（音乐库同步用） ----
+    FolderDialog {
+        id: syncFolderDialog
+        title: "选择音乐库同步文件夹"
+
+        onAccepted: {
+            var path = syncFolderDialog.selectedFolder.toString()
+            if (path.startsWith("file:///")) path = path.substring(8)
+            else if (path.startsWith("file://")) path = path.substring(7)
+            musicManager.syncFolder = path
         }
     }
 

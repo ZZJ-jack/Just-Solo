@@ -759,6 +759,12 @@ Window {
                         onClicked: settingsSubMenu = "hotkeys"
                     }
                     SubNavItem {
+                        label: "音乐库同步"
+                        active: settingsSubMenu === "sync"
+                        fontFamily: appFont.name
+                        onClicked: settingsSubMenu = "sync"
+                    }
+                    SubNavItem {
                         label: "LyricServer管理"
                         active: settingsSubMenu === "lyricserver"
                         fontFamily: appFont.name
