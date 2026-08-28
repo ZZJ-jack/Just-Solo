@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 将 Qt 安装到 C:/Qt/6.8.3/msvc2022_64，与 CMakeLists.txt 及 ps1 脚本中的默认路径一致
+      - name: Cache Qt
+        uses: actions/cache@v4
+        with:
+          path: C:/Qt
+          key: qt-6.8.3-win64_msvc2022_64
+
+      - name: Install Qt 6.8.3 (if not cached)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "C:/Qt/6.8.3/msvc2022_64")) {
+            python -m pip install --quiet aqtinstall
+            python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O C:/Qt
+          }
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      # 步骤 1：用 run.ps1 编译 Release
+      - name: Build (run.ps1)
+        shell: pwsh
+        run: ./run.ps1
+
+      # 步骤 2：用 package.ps1 组装 release/ 目录（exe + fonts.rcc + windeployqt 依赖）
+      - name: Assemble release folder (package.ps1)
+        shell: pwsh
+        run: ./package.ps1
+
+      # 步骤 3：用 setup.iss 打包安装程序，输出到 release/ 目录
+      - name: Compile installer (setup.iss)
+        shell: pwsh
+        run: |
+          $iscc = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = (Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue |
+                     Select-Object -First 1).FullName
+          }
+          if (-not (Test-Path $iscc)) { throw "找不到 ISCC.exe" }
+          & $iscc "setup.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC 打包失败" }
+
+      # 上传 release/ 目录（含 JustSolo.exe、安装包及全部依赖），可在 Actions 页面下载
+      - name: Upload release folder artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release
+          if-no-files-found: error

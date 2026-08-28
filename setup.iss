@@ -33,15 +33,15 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; 取消注释以下行以使用 64 位安装程序。
 SetupArchitecture=x64
 DisableProgramGroupPage=yes
-LicenseFile=F:\Coding\1-Code\C++\Just-Solo\LICENSE
-InfoBeforeFile=F:\Coding\1-Code\C++\Just-Solo\安装说明.txt
-InfoAfterFile=F:\Coding\1-Code\C++\Just-Solo\CHANGELOG.md
+LicenseFile={#SourcePath}LICENSE
+InfoBeforeFile={#SourcePath}安装说明.txt
+InfoAfterFile={#SourcePath}CHANGELOG.md
 ;取消下行前面 ; 符号，在非管理安装模式下运行（仅为当前用户安装）.
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-OutputDir=F:\Users\ZZJ-JACK\Desktop
+OutputDir={#SourcePath}release
 OutputBaseFilename=Just Solo V{#MyAppVersion}
-SetupIconFile=F:\Coding\1-Code\C++\Just-Solo\data\image\logo.ico
+SetupIconFile={#SourcePath}data\image\logo.ico
 SolidCompression=yes
 WizardStyle=classic dynamic windows11
 
@@ -49,9 +49,10 @@ WizardStyle=classic dynamic windows11
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkablealone
 
 [Files]
-Source: "F:\Coding\1-Code\C++\Just-Solo\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "F:\Coding\1-Code\C++\Just-Solo\release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "F:\Coding\1-Code\C++\Just-Solo\third_party\curl\bin\libcurl-x64.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourcePath}release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; Excludes 排除 *.exe：避免上一版本安装包（也放在 release/ 下）被打进新安装包
+Source: "{#SourcePath}release\*"; DestDir: "{app}"; Excludes: "*.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourcePath}third_party\curl\bin\libcurl-x64.dll"; DestDir: "{app}"; Flags: ignoreversion
 [code]
 
 [Icons]

@@ -1,18 +1,22 @@
 name: Sync to GitCode
 
 on:
-  push:
-    branches: [ main, master ]   # 监听 main 或 master 分支推送
+  # 等 Build（打包）工作流跑完且成功后，再把代码镜像推送到 GitCode
+  workflow_run:
+    workflows: [ "Build" ]
+    types: [ completed ]
   workflow_dispatch:             # 支持手动触发
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master')) }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0          # 拉取完整历史，保证 mirror 完整
+          ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}
 
       - name: Push to GitCode
         env:

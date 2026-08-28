@@ -2,6 +2,7 @@
 build/
 out/
 release/
+release_installer/
 .workbuddy/
 
 # IDE
