@@ -357,6 +357,7 @@ private:
     void onMetaDataChanged();
     void scanFolder(const QString &path);
     void processNextPending();
+    void clearCurrentTrackState();  // 清空当前播放状态（播放控制栏归零），同步删除正在播放/恢复的歌曲时调用
     QVariantList parseEmbeddedLyrics(const QString &text);
     static QStringList supportedExtensions();
 

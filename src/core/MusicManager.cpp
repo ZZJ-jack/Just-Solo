@@ -908,6 +908,19 @@ void MusicManager::setSyncOnStartup(bool v) {
     saveSettings();
 }
 
+// 判断歌曲路径是否位于同步文件夹内（Windows 文件系统路径大小写不敏感）
+static bool isPathInsideFolder(const QString &path, const QString &folder) {
+    const QString p = QDir::cleanPath(path);
+    const QString f = QDir::cleanPath(folder);
+    if (p.isEmpty() || f.isEmpty()) return false;
+    const QString prefix = f + QLatin1Char('/');
+#ifdef Q_OS_WIN
+    return p.startsWith(prefix, Qt::CaseInsensitive);
+#else
+    return p.startsWith(prefix);
+#endif
+}
+
 void MusicManager::syncLibraryFolder() {
     if (m_syncFolders.isEmpty()) {
         m_syncStatus = "请先在设置中添加同步文件夹";
@@ -928,6 +941,41 @@ void MusicManager::syncLibraryFolder() {
             while (it.hasNext())
                 paths.append(it.next());
         }
+    }
+
+    // 清理：同步文件夹内的某首歌已被删除 → 从音乐库/播放列表/收藏/历史/自定义列表全部移除；
+    // 若上次退出前（或当前）播放的正是这首歌，则清空播放控制栏
+    QSet<QString> present;
+    present.reserve(paths.size());
+    for (const QString &p : paths)
+        present.insert(QDir::cleanPath(p));
+
+    QStringList missing;   // 已不存在于同步文件夹中的歌曲路径
+    QSet<QString> checked; // 各列表间去重，避免同一首歌重复加入
+    auto collectMissing = [&](const QVariantList &list) {
+        for (const QVariant &v : list) {
+            const QString p = QDir::cleanPath(v.toMap()["path"].toString());
+            if (p.isEmpty() || checked.contains(p) || present.contains(p)) continue;
+            checked.insert(p);
+            for (const QString &folder : m_syncFolders) {
+                if (isPathInsideFolder(p, folder)) {
+                    missing.append(p);
+                    break;
+                }
+            }
+        }
+    };
+    collectMissing(m_library);
+    collectMissing(m_favorites);
+    collectMissing(m_history);
+    for (const QVariant &pl : m_customPlaylists)
+        collectMissing(pl.toMap()["songs"].toList());
+
+    for (const QString &p : missing) {
+        const bool wasCurrent = (QDir::cleanPath(m_currentMediaPath) == p);
+        deleteSongByPath(p);           // 从所有列表删除（库/播放列表/收藏/历史/自定义）
+        if (wasCurrent)
+            clearCurrentTrackState();  // 上次退出前播的是这首歌 → 清空播放控制栏
     }
 
     m_lastSyncTime = QDateTime::currentMSecsSinceEpoch();
@@ -1785,6 +1833,28 @@ void MusicManager::deleteSongByPath(const QString &path) {
     }
 
     saveCache();
+}
+
+// 清空当前播放状态：上次退出前（或当前）播放的歌曲在同步时被删除 → 播放控制栏归零
+void MusicManager::clearCurrentTrackState() {
+    m_lyricTimer->stop();  // 停止待触发的歌词索引更新
+    m_currentIndex = -1;
+    m_playingListIndex = -1;
+    m_currentCover.clear();
+    m_currentAlbum.clear();
+    m_currentMediaPath.clear();
+    m_currentLyrics.clear();
+    m_lyricCache.clear();
+    m_lyricIndex = -1;
+    m_embeddedLyricsLoaded = false;
+    if (m_audioEngine)
+        m_audioEngine->stop();
+    updateCurrentCoverColor();  // 封面已清空 → 主色同步归零
+    emit playingListIndexChanged();
+    emit currentIndexChanged();
+    emit currentTrackChanged();
+    emit currentLyricsChanged();
+    savePlaylistState();  // 立即落盘，避免下次启动又恢复这首歌
 }
 
 void MusicManager::clearPlaylist() {
