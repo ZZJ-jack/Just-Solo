@@ -1954,7 +1954,7 @@ Window {
                 onAccepted: {
                     var paths = []
                     for (var i = 0; i < fileDialog.selectedFiles.length; i++) {
-                        paths.push(fileDialog.selectedFiles[i].toString().replace("file:///", ""))
+                        paths.push(decodeURIComponent(fileDialog.selectedFiles[i].toString().replace(/^file:\/\/\//, "")))
                     }
                     musicManager.addFiles(paths)
                     // 如果是从自建列表右键调用的，同时加入该列表
@@ -4934,7 +4934,7 @@ Window {
             var files = [], folders = []
             for (var i = 0; i < drop.urls.length; i++) {
                 var url = drop.urls[i].toString()
-                var path = url.replace(/^file:\/\/\//, "")
+                var path = decodeURIComponent(url.replace(/^file:\/\/\//, ""))
                 if (musicManager.isDirectory(path))
                     folders.push(path)
                 else if (musicManager.isAudioFile(path))

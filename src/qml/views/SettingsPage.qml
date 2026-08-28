@@ -1739,6 +1739,7 @@ Rectangle {
             var path = folderDialog.selectedFolder.toString()
             if (path.startsWith("file:///")) path = path.substring(8)
             else if (path.startsWith("file://")) path = path.substring(7)
+            path = decodeURIComponent(path)
             progressRow.visible = true
             if (selectedDownloadUrl) {
                 updateChecker.downloadInstaller(path, selectedDownloadUrl)
@@ -1758,6 +1759,7 @@ Rectangle {
             var path = syncFolderDialog.selectedFolder.toString()
             if (path.startsWith("file:///")) path = path.substring(8)
             else if (path.startsWith("file://")) path = path.substring(7)
+            path = decodeURIComponent(path)
             musicManager.addSyncFolder(path)
         }
     }

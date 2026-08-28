@@ -30,8 +30,8 @@ ArchitecturesAllowed=x64compatible
 ;WizardSmallImageFile=顶图54x54.bmp
 ;下行注释，强制安装程序在 64 位系统上，但不强制以 64 位模式运行.
 ArchitecturesInstallIn64BitMode=x64compatible
-; 取消注释以下行以使用 64 位安装程序。
-SetupArchitecture=x64
+; 取消注释以下行以使用 64 位安装程序（仅 Inno Setup 7 支持，CI 用的 IS6 无法识别，故保持注释）
+;SetupArchitecture=x64
 DisableProgramGroupPage=yes
 LicenseFile={#SourcePath}LICENSE
 InfoBeforeFile={#SourcePath}安装说明.txt
