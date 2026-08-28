@@ -57,7 +57,7 @@ jobs:
           & $iscc "setup.iss"
           if ($LASTEXITCODE -ne 0) { throw "ISCC 打包失败" }
 
-      # 步骤 4：把安装包 commit 回当前分支的 release/ 目录
+      # 步骤 4：把安装包 commit 回当前分支的 setup/ 目录
       # 用 GITHUB_TOKEN 提交的 push 不会再次触发本工作流（GitHub 官方防递归机制）
       - name: Commit installer to repo
         if: github.ref_type == 'branch'
@@ -70,7 +70,7 @@ jobs:
           $version = $installer.BaseName -replace '^Just Solo V', ''
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f "release/$($installer.Name)"
+          git add -f "setup/$($installer.Name)"
           if (git diff --cached --quiet) {
             Write-Host "安装包无变化，跳过提交"
             exit 0
