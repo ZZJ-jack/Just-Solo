@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
@@ -16,18 +16,19 @@ jobs:
         uses: actions/checkout@v4
 
       # 将 Qt 安装到 C:/Qt/6.8.3/msvc2022_64，与 CMakeLists.txt 及 ps1 脚本中的默认路径一致
+      # -m 追加 add-on 模块：qtmultimedia（Qt6Multimedia）、qtwebsockets（Qt6WebSockets）
       - name: Cache Qt
         uses: actions/cache@v4
         with:
           path: C:/Qt
-          key: qt-6.8.3-win64_msvc2022_64
+          key: qt-6.8.3-win64_msvc2022_64-full
 
       - name: Install Qt 6.8.3 (if not cached)
         shell: pwsh
         run: |
           if (-not (Test-Path "C:/Qt/6.8.3/msvc2022_64")) {
             python -m pip install --quiet aqtinstall
-            python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O C:/Qt
+            python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O C:/Qt -m qtmultimedia qtwebsockets
           }
 
       - name: Install Inno Setup
@@ -55,6 +56,27 @@ jobs:
           if (-not (Test-Path $iscc)) { throw "找不到 ISCC.exe" }
           & $iscc "setup.iss"
           if ($LASTEXITCODE -ne 0) { throw "ISCC 打包失败" }
+
+      # 步骤 4：把安装包 commit 回当前分支的 release/ 目录
+      # 用 GITHUB_TOKEN 提交的 push 不会再次触发本工作流（GitHub 官方防递归机制）
+      - name: Commit installer to repo
+        if: github.ref_type == 'branch'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "release" -Filter "*.exe" |
+                       Where-Object { $_.Name -ne "JustSolo.exe" } |
+                       Select-Object -First 1
+          if (-not $installer) { throw "未找到安装包" }
+          $version = $installer.BaseName -replace '^Just Solo V', ''
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "release/$($installer.Name)"
+          if (git diff --cached --quiet) {
+            Write-Host "安装包无变化，跳过提交"
+            exit 0
+          }
+          git commit -m "chore: 更新安装包 v$version"
+          git push origin HEAD:${{ github.ref_name }}
 
       # 上传 release/ 目录（含 JustSolo.exe、安装包及全部依赖），可在 Actions 页面下载
       - name: Upload release folder artifact
