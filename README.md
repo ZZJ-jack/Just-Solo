@@ -61,7 +61,7 @@ Just Solo 内置了 **Just Solo LyricServer 媒体信息传输协议** ，深度
 
 | 指标         | 数值            | 说明                                           |
 | ------------ | --------------- | ---------------------------------------------- |
-| 平均内存占用 | < 150MB         | vs Electron 类播放器 500MB+                    |
+| 平均内存占用 | < 200MB         | vs Electron 类播放器 500MB+                    |
 | 冷启动       | < 0.5s          | 无 Electron 依赖，纯原生启动                   |
 | 元数据解析   | 快路径 ~1ms/文件    | `MetadataReader` 二进制解析，批处理 10 文件/轮 |
 | 歌词缓存     | 零分配          | QVariantMap 深拷贝 → 纯整数数组预编译缓存      |
@@ -210,6 +210,10 @@ Just-Solo/
 ├── LICENSE                         # MIT 许可证
 ├── README.md
 ├── CHANGELOG.md                    # 版本更新日志
+├── .github/
+│   └── workflows/
+│       ├── build-release.yml       # CI 自动打包工作流（编译 → 组装 → Inno Setup 打包 → 提交安装包）
+│       └── sync_to_gitcode.yml     # GitCode 镜像同步工作流
 ├── 安装说明.txt                     # 安装与部署说明
 ├── run.ps1                         # 编译 + 部署 + 运行脚本
 ├── package.ps1                     # 一键打包脚本
@@ -268,13 +272,14 @@ Just-Solo/
 │   │   ├── play.png / playing.png / next.png / prve.png / back.png / volume-logo.png # 播放控制与音量图标
 │   │   ├── mode_sequential.png / mode_loop.png / mode_single.png / mode_shuffle.png / mode_stop.png # 播放模式图标
 │   │   ├── sort.png / speed_change.png      # 排序与变速图标
-│   │   └── photo-1.png / photo-2.png / photo-3.png / photo-4.png / photo-5.png / switch.png # 展示图与切换图标
+│   │   └── photo-1.png ~ photo-7.png / switch.png # 展示图与切换图标
 │   └── font/
 │       ├── HarmonyOS_Sans_SC_Regular.ttf    # 默认字体（HarmonyOS Sans SC）
 │       ├── AaZhuNiWoMingMeiXiangChunTian-2.ttf  # 内置部分字体（独立 rcc 运行时加载，按需注册）
 │       └── fonts.qrc                        # 字体资源注册表
 ├── third_party/
 │   ├── curl/                   # libcurl 依赖（bin/include/lib）
+│   ├── innosetup/              # Inno Setup 中文语言包（简体 / 繁体）
 │   ├── cmark-gfm-0.29.0.gfm.13/ # cmark-gfm 源码（Markdown 解析）
 │   ├── ogg/                    # libogg 源码（Opus 容器依赖）
 │   ├── opus/                   # libopus 源码（Opus 解码）
@@ -283,7 +288,7 @@ Just-Solo/
 │   └── alac/                   # 苹果 ALAC 参考解码器（.m4a 无损，Apache 2.0）
 ├── resources/
 │   └── app.rc                  # Windows 资源文件（嵌入 ico）
-└── release/                    # 打包输出目录（由 package.ps1 生成）
+└── setup/                      # 安装包输出目录（由 setup.iss 生成，CI 自动提交最新安装包）
 ```
 
 ---
