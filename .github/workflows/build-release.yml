@@ -2,6 +2,8 @@ name: Build
 
 on:
   push:
+    branches:
+      - '**'   # 分支推送时触发
     tags-ignore:
       - '**'   # 发布新标签时不触发本工作流
   workflow_dispatch:
