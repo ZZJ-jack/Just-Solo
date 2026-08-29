@@ -2,6 +2,8 @@ name: Build
 
 on:
   push:
+    tags-ignore:
+      - '**'   # 发布新标签时不触发本工作流
   workflow_dispatch:
 
 permissions:
