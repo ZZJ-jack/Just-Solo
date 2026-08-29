@@ -1,6 +1,9 @@
 name: Sync to GitCode
 
 on:
+  # 发布 Release 时立即把代码镜像（含新标签）推送到 GitCode
+  release:
+    types: [ published ]
   # 等 Build（打包）工作流跑完且成功后，再把代码镜像推送到 GitCode
   workflow_run:
     workflows: [ "Build" ]
@@ -10,7 +13,7 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'release' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'master')) }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
