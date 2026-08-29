@@ -39,7 +39,7 @@ InfoAfterFile={#SourcePath}CHANGELOG.md
 ;取消下行前面 ; 符号，在非管理安装模式下运行（仅为当前用户安装）.
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-OutputDir={#SourcePath}release
+OutputDir={#SourcePath}setup
 OutputBaseFilename=Just Solo V{#MyAppVersion}
 SetupIconFile={#SourcePath}data\image\logo.ico
 SolidCompression=yes
@@ -50,7 +50,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#SourcePath}release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-; Excludes 排除 *.exe：避免上一版本安装包（也放在 release/ 下）被打进新安装包
+; Excludes 排除 *.exe：JustSolo.exe 已在上一行单独添加，避免重复打包
 Source: "{#SourcePath}release\*"; DestDir: "{app}"; Excludes: "*.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourcePath}third_party\curl\bin\libcurl-x64.dll"; DestDir: "{app}"; Flags: ignoreversion
 [code]

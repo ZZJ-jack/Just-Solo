@@ -34,17 +34,12 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      # 步骤 1：用 run.ps1 编译 Release
-      - name: Build (run.ps1)
-        shell: pwsh
-        run: ./run.ps1
-
-      # 步骤 2：用 package.ps1 组装 release/ 目录（exe + fonts.rcc + windeployqt 依赖）
-      - name: Assemble release folder (package.ps1)
+      # 步骤 1：用 package.ps1 编译 Release 并组装 release/ 目录（exe + fonts.rcc + windeployqt 依赖）
+      - name: Build and assemble release folder (package.ps1)
         shell: pwsh
         run: ./package.ps1
 
-      # 步骤 3：用 setup.iss 打包安装程序，输出到 release/ 目录
+      # 步骤 2：用 setup.iss 打包安装程序，输出到 setup/ 目录
       - name: Compile installer (setup.iss)
         shell: pwsh
         run: |
@@ -57,20 +52,23 @@ jobs:
           & $iscc "setup.iss"
           if ($LASTEXITCODE -ne 0) { throw "ISCC 打包失败" }
 
-      # 步骤 4：把安装包 commit 回当前分支的 setup/ 目录
+      # 步骤 3：把安装包 commit 回当前分支的 setup/ 目录
       # 用 GITHUB_TOKEN 提交的 push 不会再次触发本工作流（GitHub 官方防递归机制）
       - name: Commit installer to repo
         if: github.ref_type == 'branch'
         shell: pwsh
         run: |
-          $installer = Get-ChildItem "release" -Filter "*.exe" |
-                       Where-Object { $_.Name -ne "JustSolo.exe" } |
+          $installers = Get-ChildItem "setup" -Filter "*.exe"
+          if (-not $installers) { throw "未找到安装包" }
+          $installer = $installers | Sort-Object LastWriteTime -Descending |
                        Select-Object -First 1
-          if (-not $installer) { throw "未找到安装包" }
+          # 只保留最新安装包，删除 setup/ 下其他 exe
+          $installers | Where-Object { $_.FullName -ne $installer.FullName } |
+                       Remove-Item -Force
           $version = $installer.BaseName -replace '^Just Solo V', ''
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f "setup/$($installer.Name)"
+          git add -A "setup"
           if (git diff --cached --quiet) {
             Write-Host "安装包无变化，跳过提交"
             exit 0
@@ -78,7 +76,7 @@ jobs:
           git commit -m "chore: 更新安装包 v$version"
           git push origin HEAD:${{ github.ref_name }}
 
-      # 上传 release/ 目录（含 JustSolo.exe、安装包及全部依赖），可在 Actions 页面下载
+      # 上传 release/ 目录（含 JustSolo.exe 及全部依赖），可在 Actions 页面下载
       - name: Upload release folder artifact
         uses: actions/upload-artifact@v4
         with:
