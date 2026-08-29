@@ -34,6 +34,21 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
+      # 将 third_party/innosetup 下的中文语言包复制到 Inno Setup 的 Languages 目录，
+      # 配合 setup.iss 中的 #expr EmitLanguagesSection 自动生成 [Languages] 段，实现安装界面中文
+      - name: Copy Chinese language files to Inno Setup
+        shell: pwsh
+        run: |
+          $innoDir = "$env:ProgramFiles(x86)\Inno Setup 6"
+          if (-not (Test-Path $innoDir)) {
+            $innoDir = (Get-ChildItem "C:\Program Files*\Inno Setup*" -Directory -ErrorAction SilentlyContinue |
+                        Select-Object -First 1).FullName
+          }
+          $langDir = Join-Path $innoDir "Languages"
+          if (-not (Test-Path $langDir)) { throw "找不到 Inno Setup Languages 目录: $langDir" }
+          Copy-Item "third_party\innosetup\*.isl" -Destination $langDir -Force
+          Get-ChildItem $langDir -Filter "*.isl" | Select-Object -ExpandProperty Name
+
       # 步骤 1：用 package.ps1 编译 Release 并组装 release/ 目录（exe + fonts.rcc + windeployqt 依赖）
       - name: Build and assemble release folder (package.ps1)
         shell: pwsh
