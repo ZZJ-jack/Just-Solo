@@ -104,6 +104,7 @@ struct SMTCManager::Impl
     ComPtr<ISystemMediaTransportControls> controls;
     ComPtr<ISystemMediaTransportControlsDisplayUpdater> display;
     EventRegistrationToken buttonToken;
+    EventRegistrationToken positionToken;   // 进度条拖拽请求
     bool initialized = false;
 };
 
@@ -143,6 +144,9 @@ SMTCManager::~SMTCManager()
     m_destroying = true;
     if (m_impl && m_impl->controls) {
         m_impl->controls->remove_ButtonPressed(m_impl->buttonToken);
+        ComPtr<ISystemMediaTransportControls2> controls2;
+        if (SUCCEEDED(m_impl->controls.As(&controls2)))
+            controls2->remove_PlaybackPositionChangeRequested(m_impl->positionToken);
     }
     delete m_impl;
 }
@@ -222,6 +226,49 @@ HRESULT SMTCManager::initialize(HWND hwnd)
     if (FAILED(hr)) {
         qDebug() << "[SMTC] add_ButtonPressed 失败:" << Qt::hex << (unsigned long)hr;
         return hr;
+    }
+
+    // --- 5.1 系统进度条拖拽回调（ISystemMediaTransportControls2）---
+    // 用户在任务栏媒体弹窗 / 锁屏界面拖动进度条时触发，转发给 MusicManager::seek
+    ComPtr<ISystemMediaTransportControls2> controls2;
+    hr = m_impl->controls.As(&controls2);
+    if (SUCCEEDED(hr)) {
+        auto positionHandler = Callback<
+            ITypedEventHandler<
+                SystemMediaTransportControls*,
+                PlaybackPositionChangeRequestedEventArgs*>>
+        ([this](ISystemMediaTransportControls *,
+                IPlaybackPositionChangeRequestedEventArgs *args) -> HRESULT
+        {
+            if (m_destroying) return S_OK;
+
+            ABI::Windows::Foundation::TimeSpan span = { 0 };
+            HRESULT hrPos = args->get_RequestedPlaybackPosition(&span);
+            if (FAILED(hrPos)) return hrPos;
+
+            // TimeSpan 单位 100ns → 毫秒
+            qint64 requestedMs = static_cast<qint64>(span.Duration / 10000);
+
+            QMetaObject::invokeMethod(this, [this, requestedMs]() {
+                qint64 dur = m_cachedDuration > 0 ? m_cachedDuration
+                                                  : m_musicManager->duration();
+                qint64 target = requestedMs;
+                if (target < 0) target = 0;
+                if (dur > 0 && target > dur) target = dur;
+
+                m_musicManager->seek(target);
+                // 立即回写进度：暂停时定时器已停，若不回写系统进度条会停在旧位置
+                updateTimeline(target, dur);
+            }, Qt::QueuedConnection);
+            return S_OK;
+        });
+
+        hr = controls2->add_PlaybackPositionChangeRequested(
+            positionHandler.Get(), &m_impl->positionToken);
+        if (FAILED(hr))
+            qDebug() << "[SMTC] add_PlaybackPositionChangeRequested 失败:" << Qt::hex << (unsigned long)hr;
+    } else {
+        qDebug() << "[SMTC] QI ISystemMediaTransportControls2 失败:" << Qt::hex << (unsigned long)hr;
     }
 
     // --- 6. 启用控件 ---

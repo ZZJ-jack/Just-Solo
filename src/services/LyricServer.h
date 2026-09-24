@@ -42,7 +42,7 @@ signals:
 private slots:
     void onNewConnection();
     void onClientDisconnected();
-    void onTextMessageReceived(const QString &message); // 接收客户端 hello
+    void onTextMessageReceived(const QString &message); // 接收客户端消息：hello 声明名称 / volume 调节音量
     void onLyricsChanged();     // → init
     void onPlaybackChanged();   // → playback + 控制 progress / spectrum 定时器
     void onProgressTick();      // → progress
@@ -60,6 +60,7 @@ private:
         QString address;
         quint16 port = 0;
         QDateTime connectTime;
+        bool greeted = false;   // 是否已发出 clientConnected 通知（hello 或超时兜底）
     };
 
     MusicManager *m_mgr;

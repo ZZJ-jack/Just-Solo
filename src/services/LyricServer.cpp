@@ -100,6 +100,7 @@ void LyricServer::onNewConnection()
                 this, &LyricServer::onClientDisconnected);
 
         // v1.1.0: 监听客户端 hello 消息（声明客户端名称）
+        // v1.3.0: 同一通道接收 volume 音量调节指令，故连接期间持续监听
         connect(client, &QWebSocket::textMessageReceived,
                 this, &LyricServer::onTextMessageReceived);
 
@@ -118,10 +119,12 @@ void LyricServer::onNewConnection()
         m_helloTimers[client] = helloTimer;
         connect(helloTimer, &QTimer::timeout, this, [this, client]() {
             m_helloTimers.remove(client);
-            // 超时仍未收到 hello，断开监听
-            disconnect(client, &QWebSocket::textMessageReceived,
-                       this, &LyricServer::onTextMessageReceived);
-            emit clientConnected(QStringLiteral("未知客户端"));
+            // 超时仍未收到 hello，按"未知客户端"兜底通知；
+            // 消息监听不解除，客户端后续仍可发送 volume 指令
+            if (m_clientInfo.contains(client) && !m_clientInfo[client].greeted) {
+                m_clientInfo[client].greeted = true;
+                emit clientConnected(QStringLiteral("未知客户端"));
+            }
         });
         helloTimer->start(500);
 
@@ -181,14 +184,13 @@ void LyricServer::onTextMessageReceived(const QString &message)
     QWebSocket *client = qobject_cast<QWebSocket *>(sender());
     if (!client) return;
 
-    // 只处理第一条消息（hello），之后不再监听
-    disconnect(client, &QWebSocket::textMessageReceived,
-               this, &LyricServer::onTextMessageReceived);
-
-    // 尝试解析 hello 消息: {"type":"hello","client":"客户端名称"}
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
+    if (!doc.isObject()) return;
     QJsonObject obj = doc.object();
-    if (obj.value("type").toString() == "hello") {
+    const QString type = obj.value("type").toString();
+
+    // ---- v1.1.0: hello — 声明客户端名称 ----
+    if (type == QStringLiteral("hello")) {
         QString name = obj.value("client").toString().trimmed();
         if (name.isEmpty()) name = QStringLiteral("未知客户端");
 
@@ -205,10 +207,31 @@ void LyricServer::onTextMessageReceived(const QString &message)
         if (m_devMode)
             qDebug("JustSolo LyricServer: 客户端 hello — %s", qPrintable(name));
 
-        emit connectedClientsChanged();
-        emit clientConnected(name);
+        // 超时兜底已通知过则不重复弹通知，仅刷新客户端列表
+        if (m_clientInfo.contains(client) && !m_clientInfo[client].greeted) {
+            m_clientInfo[client].greeted = true;
+            emit connectedClientsChanged();
+            emit clientConnected(name);
+        } else {
+            emit connectedClientsChanged();
+        }
+        return;
     }
-    // 非 hello 消息：忽略（向下兼容，旧客户端不发送任何消息）
+
+    // ---- v1.3.0: volume — 客户端调节播放器音量 ----
+    // 双向能力仅此一项：其余消息仍为服务端单向推送
+    if (type == QStringLiteral("volume")) {
+        const QJsonValue value = obj.value("value");
+        if (!value.isDouble()) return;   // 非法消息忽略（向下兼容）
+
+        m_mgr->setVolume(qBound(0.0, value.toDouble(), 1.0));
+
+        if (m_devMode)
+            qDebug("JustSolo LyricServer: 客户端调节音量 — %.2f", double(m_mgr->volume()));
+        return;
+    }
+
+    // 其他类型：忽略（向下兼容，旧客户端不发送任何消息）
 }
 
 // ============================================================

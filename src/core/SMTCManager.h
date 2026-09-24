@@ -19,7 +19,8 @@ namespace ABI {
 class MusicManager;
 
 /// Windows 系统媒体传输控件（SMTC）管理器
-/// 在任务栏音量弹窗、锁屏界面、蓝牙耳机等位置显示歌名/歌手并提供播放控制
+/// 在任务栏音量弹窗、锁屏界面、蓝牙耳机等位置显示歌名/歌手并提供播放控制，
+/// 同时支持拖动系统进度条定位播放位置（PlaybackPositionChangeRequested → MusicManager::seek）
 /// 仅编译于 Windows（.cpp 由 #ifdef Q_OS_WIN 守卫）
 class SMTCManager : public QObject
 {
