@@ -45,6 +45,7 @@ private slots:
     void onTextMessageReceived(const QString &message); // 接收客户端消息：hello 声明名称 / volume 调节音量
     void onLyricsChanged();     // → init
     void onPlaybackChanged();   // → playback + 控制 progress / spectrum 定时器
+    void onVolumeChanged();     // → volume（音量双向同步）
     void onProgressTick();      // → progress
     void onSpectrumTick();      // → spectrum
 
@@ -52,6 +53,7 @@ private:
     void broadcast(const QByteArray &payload);
     QByteArray buildInitPayload() const;
     QByteArray buildSpectrumPayload() const;  // 构建一帧 spectrum
+    QByteArray buildVolumePayload() const;    // 构建一帧 volume
     void sendProgress();         // 构建并广播一帧 progress
     void sendSpectrum();         // 构建并广播一帧 spectrum
 

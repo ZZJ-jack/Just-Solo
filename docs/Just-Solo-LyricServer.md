@@ -2,7 +2,7 @@
 
 ## 简介
 
-Just Solo LyricServer 协议 是 Just Solo 内置的实时歌词推送协议，基于 WebSocket（`ws://127.0.0.1:47290`），将播放器中当前歌曲的歌词时间轴、播放进度和实时音频频谱以 JSON 单向推送给本地客户端。适用于桌面歌词悬浮窗、频谱可视化等任意需实时同步播放数据的场景。自 v1.3.0 起，协议额外支持客户端下发 `volume` 指令调节播放器音量。
+Just Solo LyricServer 协议 是 Just Solo 内置的实时歌词推送协议，基于 WebSocket（`ws://127.0.0.1:47290`），将播放器中当前歌曲的歌词时间轴、播放进度和实时音频频谱以 JSON 推送给本地客户端。适用于桌面歌词悬浮窗、频谱可视化等任意需实时同步播放数据的场景。自 v1.3.0 起，协议额外支持 `volume` 音量双向同步：客户端可下发 `volume` 指令调节播放器音量，服务端也会在音量变化时向所有客户端回推 `volume`。
 
 ---
 
@@ -16,7 +16,7 @@ Just Solo LyricServer 协议 是 Just Solo 内置的实时歌词推送协议，�
    - [4.2 `progress` — 播放进度](#42-progress--播放进度)
    - [4.3 `playback` — 播放状态变更](#43-playback--播放状态变更)
    - [4.4 `spectrum` — 音频频谱](#44-spectrum--音频频谱)
-   - [4.5 `volume` — 音量调节（客户端→服务端，协议v1.3.0+）](#45-volume--音量调节)
+   - [4.5 `volume` — 音量双向同步（协议v1.3.0+）](#45-volume--音量双向同步)
 5. [客户端状态机](#5-客户端状态机)
 6. [客户端实现指南](#6-客户端实现指南)
    - [6.1 歌词行定位（二分查找）](#61-歌词行定位二分查找)
@@ -35,13 +35,13 @@ Just Solo LyricServer 协议 是 Just Solo 内置的实时歌词推送协议，�
 
 ## 1. 概述
 
-Just Solo LyricServer 是 Just Solo 音乐播放器内置的 **单向 WebSocket 歌词推送服务**。它在本地回环地址上监听，将当前播放歌曲的歌词时间轴、播放进度和实时音频频谱推送给连接的客户端。
+Just Solo LyricServer 是 Just Solo 音乐播放器内置的 **WebSocket 播放状态推送服务**。它在本地回环地址上监听，将当前播放歌曲的歌词时间轴、播放进度和实时音频频谱推送给连接的客户端；调用方还可通过 `volume` 消息双向同步播放器音量。
 
 ```
 ┌──────────────────┐      WebSocket JSON       ┌─────────────────┐
 │   Just Solo      │ ◄══════════════════════►  │  第三方客户端    │
 │   (播放器)        │     ws://127.0.0.1:47290   │  (桌面歌词等)    │
-│                  │     单向推送 (→ only)       │                 │
+│                  │   推送 (→) + volume (↔)    │                 │
 │  ┌────────────┐  │                           └─────────────────┘
 │  │MusicManager│──┼── signals ──► LyricServer
 │  └────────────┘  │
@@ -52,10 +52,11 @@ Just Solo LyricServer 是 Just Solo 音乐播放器内置的 **单向 WebSocket 
 
 | 原则 | 说明 |
 |------|------|
-| 单向推送 | 客户端默认只接收消息，播放控制通过 Just Solo 本体完成；自 v1.3.0 起仅开放 `volume` 一项客户端指令（见 [4.5](#45-volume--音量调节)） |
+| 推送为主 | 服务端主动推送 `init` / `progress` / `playback` / `spectrum`，播放控制通过 Just Solo 本体完成 |
+| 音量双向（协议v1.3.0+） | `volume` 是唯一的双向消息：客户端可下发调节播放器音量，服务端也会在音量变化时回推给所有客户端（见 [4.5](#45-volume--音量双向同步)） |
 | 本地环回 | 仅监听 `127.0.0.1`，不暴露到局域网或公网 |
 | 最小开销 | `progress` / `spectrum` 每帧约 40–100 字节 JSON；无客户端时自动停推 |
-| 即连即用 | 连接后立即补推当前完整状态，零握手 |
+| 即连即用 | 连接后立即补推当前完整状态（含当前音量），零握手 |
 | 无状态服务端 | 不维护客户端会话，任意数量客户端并发连接 |
 | 客户端名称（协议v1.1.0+） | 客户端可在连接后发送可选的 `hello` 消息声明名称；旧客户端不发送也完全兼容 |
 | 实时频谱（协议v1.2.0+） | 播放时以 100ms 周期推送 `spectrum` 消息（12 频段电平 0~1）；暂停 / 无客户端自动停推 |
@@ -198,9 +199,9 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `type` | `string` | 消息类型标识：`init` / `progress` / `playback` / `spectrum` |
+| `type` | `string` | 消息类型标识：`init` / `progress` / `playback` / `spectrum` / `volume` |
 
-**方向说明：** `init` / `progress` / `playback` / `spectrum` 由服务端发往客户端（4.1 ~ 4.4）；`hello`（见 [2.3](#23-客户端名称声明协议v110可选)）与 `volume`（见 [4.5](#45-volume--音量调节)）由客户端发往服务端。
+**方向说明：** `init` / `progress` / `playback` / `spectrum` 由服务端发往客户端（4.1 ~ 4.4）；`hello`（见 [2.3](#23-客户端名称声明协议v110可选)）为客户端发往服务端；`volume`（见 [4.5](#45-volume--音量双向同步)）为**双向**消息，两个方向都使用同一结构。
 
 ---
 
@@ -373,17 +374,20 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
 
 ---
 
-### 4.5 `volume` — 音量调节（客户端→服务端，协议v1.3.0+）
+### 4.5 `volume` — 音量双向同步（协议v1.3.0+）
 
-本节是协议中 **唯一** 由客户端发往服务端的播放控制指令。除 `volume`（及 v1.1.0 的 `hello`）外，客户端无需也不应发送其他消息。
+`volume` 是协议中 **唯一** 的双向消息：客户端可用它调节 Just Solo 播放器音量，服务端也会在音量变化时向所有客户端回推当前音量。除 `volume`（及 v1.1.0 的 `hello`）外，客户端无需也不应发送其他消息。
 
 #### 触发条件
 
-| 场景 | 行为 |
-|------|------|
-| 客户端拖动音量条 | 客户端发送 `volume` 消息 |
-| 服务端收到 | 立即设置播放器音量，Just Solo 界面音量条同步变化 |
-| 连接已断开 / Just Solo 未运行 | 消息无法送达，由客户端自行处理 |
+| 方向 | 场景 | 行为 |
+|------|------|------|
+| 客户端 → 服务端 | 客户端拖动音量条 | 客户端发送 `volume` 消息 |
+| 客户端 → 服务端 | 服务端收到 | 立即设置播放器音量，Just Solo 界面音量条同步变化 |
+| 服务端 → 客户端 | Just Solo 界面音量条被拖动 / 快捷键调节 | 广播 `volume`，所有客户端音量条同步 |
+| 服务端 → 客户端 | 任一客户端下发 `volume` 成功后 | 广播 `volume` 给全部客户端（含发送方），保证多客户端一致 |
+| 服务端 → 客户端 | 新客户端连接 | 立即单独推送当前音量（不广播） |
+| — | 连接已断开 / Just Solo 未运行 | 消息无法送达，由客户端自行处理 |
 
 #### 消息结构
 
@@ -396,36 +400,45 @@ Just Solo 设置页提供「歌词预读偏移」滑块（范围 50–350ms，�
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `type` | `string` | 是 | 固定 `"volume"` |
-| `value` | `number` | 是 | 目标音量，`0.0` ~ `1.0`，超出范围自动裁剪到边界值 |
+| `value` | `number` | 是 | 音量值，`0.0` ~ `1.0`；客户端下发时超出范围自动裁剪到边界值，服务端回推时始终为当前实际音量 |
 
 #### 交互说明
 
-- **不推送音量状态：** 服务端不会回推当前音量（单向设计不变）。客户端应自行保存最后一次设置的 `value` 用于渲染音量条。
-- **无回执：** 服务端不返回成功 / 失败响应，静默应用，客户端无需等待确认。
+- **双向同步：** 服务端会在音量变化时回推 `volume`，客户端应直接采用该值刷新音量条，**不要**在收到服务端 `volume` 后再次回发（否则可能造成来回抖动）。仅当用户拖动客户端音量条时才需要发送。
+- **无回执：** 音量变化会以 `volume` 广播的形式自然体现（发送方同样会收到），客户端无需额外等待成功 / 失败确认。
 - **无独立静音态：** `value = 0.0` 即静音，Just Solo 不额外维护静音标志。
-- **幂等：** 重复发送相同 `value` 无副作用（值未变化时不产生任何变更）。
+- **幂等：** 重复发送相同 `value` 无副作用（值未变化时服务端不产生任何变更，也不会广播）。
 - **非法消息：** `value` 缺失或非数字时整条消息被忽略，不影响 `init` / `progress` / `spectrum` 等推送。
 - **多次发送：** 拖动过程中可高频发送，服务端按到达顺序依次应用；如需限流，建议客户端在 50~100ms 内合并一次。
 
-#### 发送示例
+#### 发送 / 接收示例
 
 ```javascript
-// JavaScript
+// JavaScript：发送（用户拖动音量条）
 ws.send(JSON.stringify({ type: 'volume', value: 0.5 }));   // 50%
+
+// JavaScript：接收（服务端音量变化时）
+// case 'volume': slider.value = msg.value * 100; break;
 ```
 
 ```python
-# Python
+# Python：发送
 await ws.send(json.dumps({"type": "volume", "value": 0.5}))
+
+# Python：接收
+# elif t == "volume": self.volume = msg["value"]
 ```
 
 ```csharp
-// C#
+// C#：发送
 var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "volume", value = 0.5 }));
 await _ws.SendAsync(msg, WebSocketMessageType.Text, true, _cts.Token);
+
+// C#：接收
+// case "volume": Volume = doc.RootElement.GetProperty("value").GetDouble(); break;
 ```
 
-> 对应地，拖动 Just Solo 界面上的音量条不会向客户端推送任何消息，客户端音量条与服务端实际音量可能不同步。
+> 客户端连接建立后即会收到当前音量的 `volume` 消息，无需主动查询；此后 Just Solo 端或任意客户端的音量变化都会实时同步过来。
 
 ---
 
@@ -445,14 +458,15 @@ await _ws.SendAsync(msg, WebSocketMessageType.Text, true, _cts.Token);
            │  │     └──┬──────┬──────┘
            │  │        │      │
            │  │   ← init    ← playback     （立即收到）
-           │  │   ← progress / spectrum（若播放中）
+           │  │   ← volume    ← progress / spectrum（若播放中）
            │  │        │      │
            │  │   ┌────▼──────▼──────┐
            │  │   │    RUNNING       │◄── 每 400ms: progress / 每 100ms: spectrum
-           │  │   └────┬──────┬──────┘◄── 事件驱动: init / playback
+           │  │   └────┬──────┬──────┘◄── 事件驱动: init / playback / volume
            │  │        │      │
            │  │   切歌: init  暂停: playback("paused")
            │  │   恢复: playback("playing") + progress + spectrum
+           │  │   音量变化: volume（双向）
            │  │        │      │
            │  │   ┌────▼──────▼──────┐
            │  └──►│   DISCONNECTED   │  （ws 断开 / 错误）
@@ -573,6 +587,7 @@ class LyricClient {
     this.position = 0;
     this.spectrum = [];
     this.isPlaying = false;
+    this.volume = 1.0;              // v1.3.0+：播放器音量（0.0~1.0），连接后由服务端补推
     this.reconnectDelay = 1000;
     this.connect();
   }
@@ -604,6 +619,10 @@ class LyricClient {
           this.spectrum = msg.bands || [];
           this.onSpectrumChange(this.spectrum);
           break;
+        case 'volume':     // v1.3.0+：音量双向同步（直接采用服务端值，不要回发）
+          this.volume = msg.value;
+          this.onVolumeChange(this.volume);
+          break;
       }
     };
     this.ws.onclose = () => {
@@ -632,7 +651,15 @@ class LyricClient {
   onProgress(position) {}
   onPlaybackChange(playing) {}
   onSpectrumChange(bands) {}   // v1.2.0+：12 个 0~1 频段电平
+  onVolumeChange(volume) {}    // v1.3.0+：播放器音量（含 Just Solo 端与其他客户端触发的变化）
   onStatusChange(status) {}
+
+  // v1.3.0+：用户拖动音量条时下发目标音量（收到服务端 volume 时不要调用本方法）
+  setVolume(value) {
+    this.volume = value;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN)
+      this.ws.send(JSON.stringify({ type: 'volume', value: value }));
+  }
 }
 ```
 
@@ -650,12 +677,15 @@ class LyricClient:
         self.position = 0
         self.spectrum = []
         self.is_playing = False
+        self.volume = 1.0            # v1.3.0+：播放器音量（0.0~1.0）
+        self._ws = None
         self._reconnect_delay = 1
 
     async def connect(self):
         while True:
             try:
                 async with websockets.connect(self.url) as ws:
+                    self._ws = ws
                     self._reconnect_delay = 1
                     self.on_status_change("connected")
                     # v1.1.0+: 声明客户端名称（可选，向下兼容）
@@ -664,6 +694,7 @@ class LyricClient:
                         msg = json.loads(raw)
                         await self._handle(msg)
             except (OSError, websockets.ConnectionClosed):
+                self._ws = None
                 self.on_status_change("disconnected")
                 await asyncio.sleep(self._reconnect_delay)
                 self._reconnect_delay = min(self._reconnect_delay * 2, 30)
@@ -682,6 +713,15 @@ class LyricClient:
         elif t == "spectrum":  # v1.2.0+
             self.spectrum = msg.get("bands", [])
             await self.on_spectrum_change(self.spectrum)
+        elif t == "volume":    # v1.3.0+：音量双向同步（直接采用服务端值，不要回发）
+            self.volume = msg["value"]
+            await self.on_volume_change(self.volume)
+
+    async def set_volume(self, value):
+        """v1.3.0+：用户拖动音量条时下发目标音量"""
+        self.volume = value
+        if self._ws is not None:
+            await self._ws.send(json.dumps({"type": "volume", "value": value}))
 
     def current_line_index(self):
         lo, hi, ans = 0, len(self.lyrics) - 1, -1
@@ -697,6 +737,7 @@ class LyricClient:
     async def on_progress(self, position): pass
     async def on_playback_change(self, playing): pass
     async def on_spectrum_change(self, bands): pass
+    async def on_volume_change(self, volume): pass    # v1.3.0+
     def on_status_change(self, status): pass
 
 # 使用
@@ -727,12 +768,14 @@ public class LyricClient : IDisposable
     public int Position { get; private set; }
     public double[] Spectrum { get; private set; } = Array.Empty<double>();
     public bool IsPlaying { get; private set; }
+    public double Volume { get; private set; } = 1.0;   // v1.3.0+：播放器音量（0.0~1.0）
     public bool Connected => _ws?.State == WebSocketState.Open;
 
     public event Action<LyricEntry[]> OnLyricsChanged;
     public event Action<int> OnProgress;
     public event Action<bool> OnPlaybackChanged;
     public event Action<double[]> OnSpectrumChanged;
+    public event Action<double> OnVolumeChanged;        // v1.3.0+
     public event Action<bool> OnConnectionChanged;
 
     public LyricClient(string url = "ws://127.0.0.1:47290")
@@ -805,7 +848,21 @@ public class LyricClient : IDisposable
                     doc.RootElement.GetProperty("bands").GetRawText());
                 OnSpectrumChanged?.Invoke(Spectrum);
                 break;
+            case "volume":    // v1.3.0+：音量双向同步（直接采用服务端值，不要回发）
+                Volume = doc.RootElement.GetProperty("value").GetDouble();
+                OnVolumeChanged?.Invoke(Volume);
+                break;
         }
+    }
+
+    /// <summary>v1.3.0+：用户拖动音量条时下发目标音量</summary>
+    public async Task SetVolumeAsync(double value)
+    {
+        Volume = value;
+        if (!Connected) return;
+        var msg = Encoding.UTF8.GetBytes(
+            JsonSerializer.Serialize(new { type = "volume", value }));
+        await _ws.SendAsync(msg, WebSocketMessageType.Text, true, _cts.Token);
     }
 
     public int CurrentLineIndex()
@@ -874,7 +931,7 @@ netstat -ano | findstr 47290
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| v1.3.0 | 2026-09-24 | 新增客户端 → 服务端 `volume` 消息：客户端可下发 `{"type":"volume","value":0.0~1.0}` 调节 Just Solo 播放器音量，用于第三方客户端实现音量条调节；服务端不回推音量状态，其余推送能力与单向设计不变；向下兼容旧客户端（不发送该消息即可） |
+| v1.3.0 | 2026-09-24 | 新增双向 `volume` 消息（`{"type":"volume","value":0.0~1.0}`）：客户端可下发调节 Just Solo 播放器音量（超范围自动裁剪），服务端在音量变化时（含 Just Solo 界面调节、其他客户端下发）向所有客户端广播当前音量，新客户端连接时单独补推当前音量，用于第三方客户端实现音量条双向同步；其余推送能力不变；向下兼容旧客户端（不发送该消息即可，收到未知类型可忽略） |
 | v1.2.0 | 2026-08-14 | 新增 `spectrum` 消息：播放时以 100ms 周期推送 12 频段实时音频频谱（0.0~1.0，40Hz~16kHz 对数分布），用于解决独占音频时其他软件无法获取频谱的问题；`progress` 推送间隔按 v1.0.2 修订为 400ms；向下兼容旧客户端（未知消息类型忽略） |
 | v1.1.0 | 2026-08-05 | 新增可选 `hello` 消息：客户端可声明名称，Just Solo 弹窗提示第三方连接；向下兼容旧客户端 |
 | v1.0.2 | 2026-07-26 | 将`progress` 推送间隔从 300ms 变更为 400ms，修复进度更新过快问题 |

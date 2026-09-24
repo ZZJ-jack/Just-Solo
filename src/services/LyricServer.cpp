@@ -39,6 +39,10 @@ LyricServer::LyricServer(MusicManager *mgr, bool devMode, QObject *parent)
     connect(m_mgr, &MusicManager::playbackStateChanged,
             this, &LyricServer::onPlaybackChanged);
 
+    // 音量变化（界面拖动或客户端下发）→ 广播 volume，实现音量双向同步
+    connect(m_mgr, &MusicManager::volumeChanged,
+            this, &LyricServer::onVolumeChanged);
+
     connect(m_progressTimer, &QTimer::timeout,
             this, &LyricServer::onProgressTick);
 
@@ -152,6 +156,9 @@ void LyricServer::onNewConnection()
         if (m_mgr->isPlaying()) {
             client->sendTextMessage(QString::fromUtf8(buildSpectrumPayload()));
         }
+
+        // 补推当前音量（v1.3.0：音量双向同步，客户端音量条与 Just Solo 保持一致）
+        client->sendTextMessage(QString::fromUtf8(buildVolumePayload()));
     }
 
     // 客户端连上后，若正在播放但定时器已停（之前因无客户端被 onProgressTick / onSpectrumTick 停掉），
@@ -219,11 +226,13 @@ void LyricServer::onTextMessageReceived(const QString &message)
     }
 
     // ---- v1.3.0: volume — 客户端调节播放器音量 ----
-    // 双向能力仅此一项：其余消息仍为服务端单向推送
+    // 音量是协议中唯一的双向能力：客户端可下发，服务端也会回推当前值
     if (type == QStringLiteral("volume")) {
         const QJsonValue value = obj.value("value");
         if (!value.isDouble()) return;   // 非法消息忽略（向下兼容）
 
+        // 设置成功后 volumeChanged 会触发 onVolumeChanged，
+        // 由该槽统一广播给所有客户端（含本次发送方），避免重复推送逻辑
         m_mgr->setVolume(qBound(0.0, value.toDouble(), 1.0));
 
         if (m_devMode)
@@ -267,6 +276,17 @@ void LyricServer::onPlaybackChanged()
         m_progressTimer->stop();
         m_spectrumTimer->stop();
     }
+}
+
+// ============================================================
+// 音量变化：广播 volume（服务端 → 客户端）
+// 无论变化来自 Just Solo 界面拖动还是客户端下发，都会广播给全部客户端，
+// 从而保证所有客户端音量条与播放器实际音量一致（双向同步）
+// ============================================================
+
+void LyricServer::onVolumeChanged()
+{
+    broadcast(buildVolumePayload());
 }
 
 // ============================================================
@@ -339,6 +359,15 @@ QByteArray LyricServer::buildSpectrumPayload() const
         arr.append(static_cast<double>(std::round(v.toDouble() * 1000.0) / 1000.0));
     msg["bands"] = arr;
 
+    return QJsonDocument(msg).toJson(QJsonDocument::Compact);
+}
+
+// 把 MusicManager::volume()（0.0~1.0）序列化成 volume 消息
+QByteArray LyricServer::buildVolumePayload() const
+{
+    QJsonObject msg;
+    msg["type"] = QStringLiteral("volume");
+    msg["value"] = static_cast<double>(m_mgr->volume());
     return QJsonDocument(msg).toJson(QJsonDocument::Compact);
 }
 
