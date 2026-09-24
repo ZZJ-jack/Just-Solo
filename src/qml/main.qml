@@ -1159,13 +1159,12 @@ Window {
                                         searchPopup.close()
                                 }
                                 onActiveFocusChanged: {
-                                    // 获得焦点且有文字时弹出下拉；失去焦点时收起
-                                    if (activeFocus) {
-                                        if (text.trim().length > 0 && !musicManager.isLoading)
-                                            searchPopup.open()
-                                    } else {
+                                    // 失去焦点时收起下拉
+                                    // 获得焦点不自动弹出：窗口从后台恢复时焦点会被自动还原，
+                                    // 若此处弹出会表现为"呼出到前台后自己弹出搜索框"，
+                                    // 弹出改由下方点击搜索框的 TapHandler 触发
+                                    if (!activeFocus)
                                         searchPopup.close()
-                                    }
                                 }
 
                                 // 点击搜索框文字区域时弹出下拉（与 TextInput 光标定位共存）
@@ -2104,6 +2103,8 @@ Window {
     // 从托盘恢复 / 小窗退出时，播放主窗口出现动画并打开播放详情页
     onVisibleChanged: {
         if (!visible) {
+            // 窗口进入后台：收起搜索下拉，否则回到前台时下拉会残留在界面上
+            searchPopup.close()
             // 窗口进入后台（隐藏到托盘）：记住详情页是否打开
             if (playerDetail.visible)
                 _detailWasOpen = true
