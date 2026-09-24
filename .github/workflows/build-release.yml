@@ -9,8 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
   build:
@@ -74,29 +73,14 @@ jobs:
           & $iscc "setup.iss"
           if ($LASTEXITCODE -ne 0) { throw "ISCC 打包失败" }
 
-      # 步骤 3：把安装包 commit 回当前分支的 setup/ 目录
-      # 用 GITHUB_TOKEN 提交的 push 不会再次触发本工作流（GitHub 官方防递归机制）
-      - name: Commit installer to repo
-        if: github.ref_type == 'branch'
-        shell: pwsh
-        run: |
-          $installers = Get-ChildItem "setup" -Filter "*.exe"
-          if (-not $installers) { throw "未找到安装包" }
-          $installer = $installers | Sort-Object LastWriteTime -Descending |
-                       Select-Object -First 1
-          # 只保留最新安装包，删除 setup/ 下其他 exe
-          $installers | Where-Object { $_.FullName -ne $installer.FullName } |
-                       Remove-Item -Force
-          $version = $installer.BaseName -replace '^Just Solo V', ''
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A "setup"
-          if (git diff --cached --quiet) {
-            Write-Host "安装包无变化，跳过提交"
-            exit 0
-          }
-          git commit -m "chore: 更新安装包 v$version"
-          git push origin HEAD:${{ github.ref_name }}
+      # 步骤 3：上传安装程序（setup/ 下的 .exe）为工作流产物，不再提交到仓库
+      # 在 Actions 页面进入本次运行，于页面底部「Artifacts」区域即可下载
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: setup/*.exe
+          if-no-files-found: error
 
       # 上传 release/ 目录（含 JustSolo.exe 及全部依赖），可在 Actions 页面下载
       - name: Upload release folder artifact

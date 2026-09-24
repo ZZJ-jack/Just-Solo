@@ -51,7 +51,7 @@ Just Solo 内置了 **Just Solo LyricServer 媒体信息传输协议** ，深度
 
 **注意**：Just Solo 仅对Windows平台提供支持并深度适配，内置OTA在线更新功能，支持检查更新并下载安装最新版本。前往 [Releases](releases) 下载最新安装包。
 
-现在已经启用自动打包功能，每个提交后 Github Actions 会自动打包安装程序，并提交至仓库根目录的setup文件夹（大部分提交为测试版，bug可能存在，欢迎体验）
+现在已经启用自动打包功能，每个提交后 Github Actions 会自动编译并打包安装程序。安装包不再提交至仓库，请前往 [Actions](https://github.com/ZZJ-jack/Just-Solo/actions/workflows/build-release.yml) 页面，进入对应分支最近一次成功运行的详情页，在页面底部「Artifacts」区域下载 `installer`（安装程序）或 `release`（免安装版）产物（大部分提交为测试版，bug可能存在，欢迎体验）
 
 本项目的知识产权说明、免责声明等详见文末。
 
@@ -212,7 +212,7 @@ Just-Solo/
 ├── CHANGELOG.md                    # 版本更新日志
 ├── .github/
 │   └── workflows/
-│       ├── build-release.yml       # CI 自动打包工作流（编译 → 组装 → Inno Setup 打包 → 提交安装包）
+│       ├── build-release.yml       # CI 自动打包工作流（编译 → 组装 → Inno Setup 打包 → 上传产物供下载）
 │       └── sync_to_gitcode.yml     # GitCode 镜像同步工作流
 ├── 安装说明.txt                     # 安装与部署说明
 ├── run.ps1                         # 编译 + 部署 + 运行脚本
@@ -288,7 +288,7 @@ Just-Solo/
 │   └── alac/                   # 苹果 ALAC 参考解码器（.m4a 无损，Apache 2.0）
 ├── resources/
 │   └── app.rc                  # Windows 资源文件（嵌入 ico）
-└── setup/                      # 安装包输出目录（由 setup.iss 生成，CI 自动提交最新安装包）
+└── setup/                      # 安装包输出目录（由 setup.iss 生成，仅作本地/CI 构建产物，不入库）
 ```
 
 ---
