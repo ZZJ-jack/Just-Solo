@@ -31,7 +31,9 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path "C:/Qt/6.8.3/msvc2022_64")) {
-            python -m pip install --quiet aqtinstall
+            # py7zr 1.1.1+ 的符号链接安全校验会误判 Qt 官方 .7z 包，导致 Bad7zFile: Specified path is bad
+            # 参见 https://github.com/miurahr/aqtinstall/issues/995 ，固定到 1.1.0 规避
+            python -m pip install --quiet aqtinstall "py7zr==1.1.0"
             python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O C:/Qt -m qtmultimedia qtwebsockets
           }
 
