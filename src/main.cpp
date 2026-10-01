@@ -313,6 +313,39 @@ static void activateMainWindow(QQuickWindow *window) {
 #endif
 }
 
+#ifdef Q_OS_WIN
+// 应用 AUMID：与安装包 setup.iss 中快捷方式写入的 AppUserModelID 保持一致
+static const wchar_t *const kAppUserModelId = L"JustSolo.JustSolo";
+
+// 把 AUMID 注册到当前用户（HKCU，无需管理员）：写入 DisplayName / IconUri，
+// 让 shell 能解析出本应用的显示名与图标。配合安装时写入开始菜单的带 AUMID 快捷方式，
+// 其他应用即可用 shell:AppsFolder\JustSolo.JustSolo 拉起本应用；若改为直接启动本 exe，
+// 单实例机制同样会把"再次启动"转成把已运行窗口激活到前台。
+static void registerAppUserModelId() {
+    HKEY key = nullptr;
+    if (::RegCreateKeyExW(HKEY_CURRENT_USER,
+                          L"Software\\Classes\\AppUserModelId\\JustSolo.JustSolo",
+                          0, nullptr, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE,
+                          nullptr, &key, nullptr) != ERROR_SUCCESS) {
+        qWarning("AppUserModelId: failed to create registry key");
+        return;
+    }
+
+    // IconUri 指向 exe 内嵌图标资源（resources/app.rc 的 IDI_ICON1，索引 0）
+    const QString iconUri = QCoreApplication::applicationFilePath() + QStringLiteral(",0");
+
+    auto setString = [key](const wchar_t *name, const QString &value) {
+        const auto w = value.toStdWString();
+        ::RegSetValueExW(key, name, 0, REG_SZ,
+                         reinterpret_cast<const BYTE *>(w.c_str()),
+                         static_cast<DWORD>((w.size() + 1) * sizeof(wchar_t)));
+    };
+    setString(L"DisplayName", QStringLiteral("Just Solo"));
+    setString(L"IconUri", iconUri);
+    ::RegCloseKey(key);
+}
+#endif
+
 // 单实例通信管道名（带版本号，升级后可强制走新通道）
 static const QString kSingleInstanceName = QStringLiteral("JustSolo.SingleInstance.v1");
 
@@ -394,7 +427,7 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_WIN
     // SetCurrentProcessExplicitAppUserModelID 必须在创建任何窗口/UI 之前调用
     // 否则 SMTC 无法正确解析 DisplayName，始终显示"未知应用"
-    SetCurrentProcessExplicitAppUserModelID(L"JustSolo.JustSolo");
+    SetCurrentProcessExplicitAppUserModelID(kAppUserModelId);
     // miniaudio 已替代 Qt Multimedia 作为音频引擎，无需设置媒体后端
 #endif
 
@@ -420,6 +453,11 @@ int main(int argc, char *argv[])
     if (tryActivateRunningInstance()) {
         return 0;
     }
+
+#ifdef Q_OS_WIN
+    // 确认本进程是唯一实例后再注册 AUMID（避免临时进程也写注册表）
+    registerAppUserModelId();
+#endif
 
     // ---- GPU 可用性探测（DXGI）----
     // 通过 DXGI 枚举显卡判断 GPU 是否可用；若不可用（无 GPU、驱动故障、远程桌面等），

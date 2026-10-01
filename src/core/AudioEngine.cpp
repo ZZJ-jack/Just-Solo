@@ -23,6 +23,42 @@
 #include <endpointvolume.h>   // IAudioMeterInformation：设备级峰值检测
 #endif
 
+#ifdef Q_OS_WIN
+// 用 Win32 API 单独探一次文件可读性，拿到确定性的错误码。
+// 不能直接读 ma_sound_init_from_file_w 之后的 GetLastError()：miniaudio 内部走 _wfopen_s
+// 失败时设置的是 errno 而非 last-error，且回程还会被其他 Win32 调用覆盖，取到的值不可信。
+static DWORD probeFileWin32Error(const QString &filePath)
+{
+    HANDLE h = ::CreateFileW(reinterpret_cast<const wchar_t *>(filePath.utf16()),
+                             GENERIC_READ,
+                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                             nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE)
+        return ::GetLastError();
+    ::CloseHandle(h);
+    return ERROR_SUCCESS;
+}
+#endif
+
+// 组装加载失败的诊断信息：单行 key=value，作为既有 traceback 字段上报，
+// 不新增 JSON 字段、不引入换行，保持日志服务端（及 QML 弹窗）解析兼容
+static QString buildLoadFailureTrace(const QString &filePath, bool deviceLost, bool exclusive)
+{
+    const QFileInfo fi(filePath);
+    const bool exists = fi.exists();
+    QString trace = QStringLiteral("hotplug=%1 exclusive=%2 exists=%3 size=%4")
+                        .arg(deviceLost ? QStringLiteral("true") : QStringLiteral("false"))
+                        .arg(exclusive ? 1 : 0)
+                        .arg(exists ? QStringLiteral("true") : QStringLiteral("false"))
+                        .arg(exists ? fi.size() : static_cast<qint64>(-1));
+#ifdef Q_OS_WIN
+    trace += QStringLiteral(" winErr=%1").arg(probeFileWin32Error(filePath));
+#else
+    trace += QStringLiteral(" winErr=-");
+#endif
+    return trace;
+}
+
 AudioEngine::AudioEngine(QObject *parent)
     : QObject(parent)
 {
@@ -325,6 +361,10 @@ void AudioEngine::unloadSound()
     // ma_sound_init_from_data_source 不接管数据源所有权，需自行释放
     m_stretchSource.reset();
     m_usingStretchSource = false;
+    // 声音已卸载，文件绑定状态必须一并清空：否则残留的旧路径会让后续加载失败
+    // 被误判为"设备热插拔"（冻结播放现场并无限重试），duration() 也会返回上一首的时长
+    m_currentFilePath.clear();
+    m_cachedDuration = 0;
 }
 
 void AudioEngine::shutdownAudioDevice()
@@ -589,13 +629,14 @@ bool AudioEngine::setExclusiveMode(bool exclusive, bool force)
     // 恢复播放现场
     if (path.isEmpty()) return m_exclusive == exclusive;
     if (!load(path)) {
-        // 文件暂不可用（如设备切换期间被拔出）：保留现场进入热插拔重试
-        m_hotplugMode = true;
-        m_hotplugFilePath = path;
-        m_hotplugPosition = pos;
-        m_hotplugWasPlaying = wasPlaying;
-        m_hotplugDuration = dur;
-        m_retryTimer->start();
+        // load() 已判定本次失败是否属于设备热插拔：属于时用切换前保存的现场覆盖
+        // （load() 内部此刻读到的 position() 已因引擎重建而归零），非热插拔则保持未加载状态
+        if (m_hotplugMode) {
+            m_hotplugFilePath = path;
+            m_hotplugPosition = pos;
+            m_hotplugWasPlaying = wasPlaying;
+            m_hotplugDuration = dur;
+        }
         return m_exclusive == exclusive;
     }
     if (pos > 0) seek(pos);
@@ -625,7 +666,7 @@ bool AudioEngine::load(const QString &filePath)
         // 音调补偿：解码 → SoundTouch 时间拉伸数据源（变速不变调）
         m_stretchSource = std::make_unique<TimeStretchSource>();
         if (!m_stretchSource->open(filePath)) {
-            result = MA_DOES_NOT_EXIST;
+            result = m_stretchSource->lastError();   // 真实错误码，不再一律谎报为"文件不存在"
         } else {
             m_usingStretchSource = true;
             result = ma_sound_init_from_data_source(
@@ -653,17 +694,18 @@ bool AudioEngine::load(const QString &filePath)
 
     if (result != MA_SUCCESS) {
         qWarning() << "AudioEngine: Failed to load file:" << filePath << "error:" << result;
+        // 是否属于设备热插拔：仅当文件当前不可访问（音乐所在盘被拔出）时成立。
+        // 文件存在却加载失败是文件自身损坏，重试不可能成功，不能冻结播放现场
+        const bool deviceLost = !QFileInfo::exists(filePath);
         // 上报加载失败（节流机制会防止热插拔重试期间刷屏）
         BugReporter::submit(QStringLiteral("音频加载失败"),
                             QStringLiteral("无法加载文件: %1 [错误码: %2]").arg(filePath).arg(result),
-                            QStringLiteral("hotplug=%1 exclusive=%2")
-                                .arg(!m_currentFilePath.isEmpty() ? QStringLiteral("true") : QStringLiteral("false"))
-                                .arg(m_exclusive));
+                            buildLoadFailureTrace(filePath, deviceLost, m_exclusive));
         // 释放失败的时间拉伸数据源
         m_stretchSource.reset();
         m_usingStretchSource = false;
         // 进入热插拔重试模式：冻结旧状态，定时尝试重新加载
-        if (!m_currentFilePath.isEmpty()) {
+        if (deviceLost) {
             m_hotplugMode = true;
             m_hotplugFilePath = filePath;
             m_hotplugPosition = oldPos;
@@ -915,7 +957,7 @@ void AudioEngine::retryLoad()
     if (m_pitchCompensation) {
         m_stretchSource = std::make_unique<TimeStretchSource>();
         if (!m_stretchSource->open(m_hotplugFilePath)) {
-            result = MA_DOES_NOT_EXIST;
+            result = m_stretchSource->lastError();   // 真实错误码，不再一律谎报为"文件不存在"
         } else {
             m_usingStretchSource = true;
             result = ma_sound_init_from_data_source(

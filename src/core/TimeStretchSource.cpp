@@ -26,6 +26,7 @@ TimeStretchSource::~TimeStretchSource()
 bool TimeStretchSource::open(const QString &filePath)
 {
     close();
+    m_lastOpenError = MA_SUCCESS;
 
     ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, 0, 0); // 原生声道/采样率，输出 f32
     ma_decoding_backend_vtable *backends[] = {
@@ -42,6 +43,7 @@ bool TimeStretchSource::open(const QString &filePath)
     r = ma_decoder_init_file(filePath.toUtf8().constData(), &cfg, &m_decoder);
 #endif
     if (r != MA_SUCCESS) {
+        m_lastOpenError = r;   // 保留真实错误码（MA_DOES_NOT_EXIST / MA_INVALID_FILE ...）
         return false;
     }
 
@@ -49,6 +51,7 @@ bool TimeStretchSource::open(const QString &filePath)
     if (ma_decoder_get_data_format(&m_decoder, &fmt, &channels, &sampleRate,
                                    nullptr, 0) != MA_SUCCESS
         || fmt != ma_format_f32 || channels == 0 || sampleRate == 0) {
+        m_lastOpenError = MA_INVALID_FILE;   // 文件可打开，但输出格式不可用
         close();
         return false;
     }
@@ -61,6 +64,7 @@ bool TimeStretchSource::open(const QString &filePath)
         // 关闭快速搜索以获得更好音质（变速倍率范围不大，CPU 开销可接受）
         m_st->setSetting(SETTING_USE_QUICKSEEK, 0);
     } catch (...) {
+        m_lastOpenError = MA_OUT_OF_MEMORY;
         delete m_st;
         m_st = nullptr;
         ma_decoder_uninit(&m_decoder);

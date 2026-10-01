@@ -30,6 +30,9 @@ public:
     bool open(const QString &filePath);
     void close();
 
+    // 最近一次 open() 失败的真实 miniaudio 错误码（供调用方上报，避免误报成"文件不存在"）
+    ma_result lastError() const { return m_lastOpenError; }
+
     // 设置变速倍率（0.5 ~ 2.0），线程安全
     void setTempo(float tempo);
 
@@ -51,6 +54,7 @@ private:
     float m_tempo = 1.0f;                 // 当前变速倍率（源帧 = 输出帧 × tempo）
     bool m_eof = false;              // 解码器已读完且已 flush
     bool m_opened = false;
+    ma_result m_lastOpenError = MA_SUCCESS;  // 最近一次 open() 的失败原因（close() 不清除）
 
     // ma_data_source 回调
     static ma_result onRead(ma_data_source *pDS, void *pFramesOut,
